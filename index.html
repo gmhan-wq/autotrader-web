@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>내 자동매매</title>
+<meta name="theme-color" content="#14322b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="자동매매">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 레이아웃: 위에 계정 줄 + 탭, 아래 카드 한 줄 세로 쌓기 (폰 우선, 넓으면 가운데 680px) */
+:root {
+  --bg: #f3f5f2; --panel: #ffffff; --ink: #18211e; --muted: #5d6b66; --line: #dde3df;
+  --accent: #14322b; --accent-ink: #ffffff; --soft: #e6eee9;
+  --buy: #c62f2f; --sell: #1f5fbf; --ok: #2b7a4b; --warn: #a96a00; --bad: #b3261e;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1513; --panel: #17201d; --ink: #e5ece8; --muted: #93a39c; --line: #2a3632;
+  --accent: #8fd1b6; --accent-ink: #0f1513; --soft: #1f2b27;
+  --buy: #ff7b72; --sell: #79a8ff; --ok: #6fcf97; --warn: #f2b84b; --bad: #ff8a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1513; --panel: #17201d; --ink: #e5ece8; --muted: #93a39c; --line: #2a3632;
+  --accent: #8fd1b6; --accent-ink: #0f1513; --soft: #1f2b27;
+  --buy: #ff7b72; --sell: #79a8ff; --ok: #6fcf97; --warn: #f2b84b; --bad: #ff8a80; color-scheme: dark }
+* { box-sizing: border-box }
+html, body { margin: 0 }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans);
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px) }
+.wrap { max-width: 680px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 40px;
+  display: flex; flex-direction: column; gap: 14px }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em }
+h2 { font-size: 16px; margin: 0; text-wrap: balance }
+.num, td.n, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.muted { color: var(--muted) } .small { font-size: 13px }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap }
+.top .who { display: flex; flex-direction: column; min-width: 0 }
+.tabs { display: flex; gap: 4px; background: var(--soft); padding: 4px; border-radius: 10px; position: sticky;
+  top: env(safe-area-inset-top, 0px); z-index: 5 }
+.tabs button { flex: 1; border: 0; background: transparent; color: var(--muted); font: 500 14px var(--sans);
+  padding: 9px 4px; border-radius: 7px; cursor: pointer; position: relative }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px;
+  background: var(--buy); color: #fff; font-size: 12px; line-height: 18px }
+#view { display: flex; flex-direction: column; gap: 14px }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+.between { justify-content: space-between }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap }
+.chip.ok { color: var(--ok); border-color: currentColor } .chip.warn { color: var(--warn); border-color: currentColor }
+.chip.bad { color: var(--bad); border-color: currentColor }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 4px 4px; border-bottom: 1px solid var(--line); white-space: nowrap }
+td { padding: 6px 4px; border-bottom: 1px solid var(--line); white-space: nowrap }
+td.n, th.n { text-align: right }
+tr:last-child td { border-bottom: 0 }
+.buy { color: var(--buy) } .sell { color: var(--sell) }
+.line { display: grid; grid-template-columns: 26px 44px 58px 1fr auto; gap: 6px; align-items: center;
+  padding: 7px 4px; border-bottom: 1px solid var(--line) }
+.line:last-child { border-bottom: 0 }
+.line.off { opacity: .45 } .line.off .px { text-decoration: line-through }
+.line input { width: 20px; height: 20px; accent-color: var(--accent) }
+button.btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: 500 14px var(--sans);
+  padding: 9px 14px; border-radius: 9px; cursor: pointer }
+button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+button.btn.danger { color: var(--bad) }
+button.btn:disabled { opacity: .5; cursor: default }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input[type=email], input[type=password], input[type=text], select { width: 100%; font: 15px var(--sans); padding: 10px 12px;
+  border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink) }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted) }
+.notice { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px }
+.notice:last-child { border-bottom: 0 }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--soft) }
+.msg.bad { color: var(--bad) }
+.empty { color: var(--muted); font-size: 14px; padding: 6px 0 }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px; border-radius: 9px; background: var(--soft) }
+.login { max-width: 380px; margin: 8vh auto 0; width: 100% }
+.kv { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px }
+.kv div { display: flex; flex-direction: column; min-width: 0 } .kv b { font: 500 15px var(--mono) }
+@media (prefers-reduced-motion: no-preference) { .tabs button { transition: background .15s } }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="card login" id="loading"><div class="muted">불러오는 중…</div></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+"use strict";
+// 공개용 값(웹 화면에 넣도록 만든 키). 데이터는 로그인 + 행 단위 권한(RLS)으로 지켜진다.
+const SUPABASE_URL = "https://yusvlbnlrfawmoqqswso.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1c3ZsYm5scmZhd21vcXFzd3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMDgwNDAsImV4cCI6MjEwODg4NDA0MH0.Vu_HfzTH_VmnkD76rlbzlbzAShHBI4PI4MTO7S3_Zno";
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const $app = document.getElementById("app");
+const S = { user: null, name: "", tab: "home", snap: null, cmds: [], owners: [], grants: [], viewing: null,
+            viewSnap: null, confirm: null, msg: null, busy: false };
+try { S.tab = localStorage.getItem("tab") || "home"; } catch (e) {}
+
+const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (x, d = 2) => (x === null || x === undefined || x === "") ? "-" :
+  Number(x).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const sideKo = (s) => s === "BUY" ? "매수" : s === "SELL" ? "매도" : esc(s);
+const sideCls = (s) => s === "BUY" ? "buy" : "sell";
+const ACC_NAME = { main: "A계좌", b: "B계좌", c: "C계좌" };
+const when = (iso) => { if (!iso) return "-"; const d = new Date(iso);
+  return d.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }); };
+
+// ── 데이터 ──
+async function loadMine() {
+  const { data } = await sb.from("status_snapshots").select("taken_at,host,summary,detail")
+    .eq("user_id", S.user.id).order("taken_at", { ascending: false }).limit(1);
+  S.snap = data && data[0] || null;
+  const c = await sb.from("web_commands").select("id,command,payload,status,result,created_at")
+    .order("id", { ascending: false }).limit(8);
+  S.cmds = c.data || [];
+}
+async function loadFamily() {
+  const o = await sb.rpc("viewable_owners"); S.owners = (o.data || []).filter((x) => x.owner_id !== S.user.id);
+  const g = await sb.rpc("my_grants"); S.grants = g.data || [];
+}
+async function refresh() {
+  if (!S.user) return;
+  try { await loadMine(); if (S.tab === "family") await loadFamily(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  render();
+}
+async function send(command, payload) {
+  S.busy = true; render();
+  const { error } = await sb.from("web_commands").insert({ command, payload });
+  S.busy = false;
+  S.msg = error ? { bad: true, text: "보내지 못했습니다: " + error.message }
+                : { text: "노트북에 보냈습니다. 20초 안에 반영됩니다." };
+  await refresh();
+  setTimeout(refresh, 22000);
+}
+
+// ── 화면 ──
+function render() {
+  if (!S.user) return renderLogin();
+  const drafts = S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
+  const tabs = [["home", "현황"], ["approve", "승인"], ["board", "게시판"], ["family", "가족"]];
+  $app.innerHTML = `
+    <div class="top">
+      <div class="who"><h1>${esc(S.name)}의 자동매매</h1>
+        <span class="small muted">${S.snap ? "노트북 갱신 " + when(S.snap.taken_at) : "아직 노트북에서 올린 현황이 없습니다"}</span></div>
+      <div class="row"><button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>
+    </div>
+    <nav class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${t}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>
+    ${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}
+    <div id="view">${S.tab === "home" ? viewHome(S.snap, true) : S.tab === "approve" ? viewApprove() : S.tab === "board" ? viewBoard() : viewFamily()}</div>`;
+  bind();
+}
+
+function viewHome(snap, mine) {
+  if (!snap) return `<div class="card"><div class="empty">노트북 승인 봇이 켜지면 몇 분 안에 현황이 올라옵니다.</div></div>`;
+  const s = snap.summary, d = snap.detail || {};
+  let out = "";
+  if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
+  for (const [accId, acc] of Object.entries(s.accounts || {})) {
+    if (!acc.strategies.length) continue;
+    const sh = (s.shadow || {})[accId] || {};
+    const rows = acc.strategies.map((g) => {
+      const m = sh[g.id];
+      const same = m ? (m.qty === g.qty ? "ok" : "warn") : "";
+      return `<tr><td>${esc(g.symbol)}<div class="muted" style="font-size:11px">${esc(kindKo(g.kind))}</div></td>
+        <td class="n">${g.qty}주</td><td class="n">${money(g.avg)}</td><td class="n">${money(g.cash)}</td>
+        <td class="n">${m ? `<span class="chip ${same}">${m.qty}주</span>` : "-"}</td></tr>`;
+    }).join("");
+    const ready = (s.readiness || {})[accId];
+    const lc = (s.last_check || {})[accId];
+    const tn = (d.tonight || {})[accId] || [];
+    out += `<div class="card">
+      <div class="row between"><h2>${esc(ACC_NAME[accId] || acc.name || accId)}</h2>
+        <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API 연결" : "수동 계좌"}</span></div>
+      <div class="scroll"><table><thead><tr><th>종목</th><th class="n">실제</th><th class="n">평단</th><th class="n">잔금 $</th><th class="n">모의</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+      ${lc ? `<div class="small">실제 vs 모의 (미국 ${esc(lc.date)}): ${lc.ok ? '<span class="chip ok">일치</span>' : `<span class="chip warn">다름 ${lc.fills_ok ? "" : "· 체결"} ${lc.hold_ok ? "" : "· 보유"}</span>`}</div>` : ""}
+      ${ready ? `<div class="small muted">${esc(ready.replace("🚦 ", ""))}</div>` : ""}
+      ${tn.length && mine !== null ? `<details><summary class="small">오늘 밤 가상 주문 ${tn.length}건</summary>${linesTable(tn)}</details>` : ""}
+    </div>`;
+  }
+  const v4 = Object.entries(s.v4 || {});
+  if (v4.length) out += `<div class="card"><h2>무한매수 V4.0 전환 준비</h2>${v4.map(([sid, r]) =>
+    `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`;
+  const vr = Object.entries(s.vr || {});
+  if (vr.length) out += `<div class="card"><h2>VR</h2>${vr.map(([sid, r]) =>
+    `<div class="row between small"><span>${esc(sid)} · ${r.week}주차 (${esc(r.start)}부터)</span><span class="mono">V ${money(r.V)}</span></div>`).join("")}</div>`;
+  return out;
+}
+const kindKo = (k) => ({ sheet: "주문표", vr: "VR", v4: "V4.0", infinite: "무한매수", dynamic: "동적분할" }[k] || k || "");
+function linesTable(lines) {
+  return `<div class="scroll"><table><tbody>${lines.map((o) => `<tr><td class="${sideCls(o.side)}">${sideKo(o.side)}</td>
+    <td class="small muted">${esc(o.kind)}</td><td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td><td class="small muted">${esc(o.strategy_id || "")}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function viewApprove() {
+  const drafts = S.snap ? Object.entries(S.snap.summary.drafts || {}) : [];
+  let out = "";
+  if (!drafts.length) out += `<div class="card"><div class="empty">승인할 주문표가 없습니다. 주문표 사진을 텔레그램 봇에 보내면 판독 후 여기에 나옵니다.</div></div>`;
+  for (const [sid, dr] of drafts) {
+    const c = S.confirm && S.confirm.sid === sid ? S.confirm.kind : null;
+    out += `<div class="card">
+      <div class="row between"><h2>${esc(dr.symbol || "")} <span class="muted small">${esc(sid)}</span></h2>
+        <span class="chip ${dr.trusted ? "ok" : "warn"}">${dr.trusted ? "검증 통과" : "확인 필요"}</span></div>
+      <div class="small muted">종가날짜 ${esc(dr.sheet_date)} → 미국 ${esc(dr.trade_date)} 장에 주문${dr.multiplier > 1 ? ` · ${dr.multiplier}배수` : ""}</div>
+      <div class="kv"><div><span class="small muted">보유</span><b>${dr.holding ?? "-"}주</b></div>
+        <div><span class="small muted">평단</span><b>${money(dr.avg)}</b></div><div><span class="small muted">잔금 $</span><b>${money(dr.cash)}</b></div></div>
+      <div>${dr.lines.map((l) => `<label class="line ${l.on ? "" : "off"}" style="flex-direction:row">
+        <input type="checkbox" id="ln-${esc(sid)}-${l.n}" data-sid="${esc(sid)}" data-n="${l.n}" data-td="${esc(dr.trade_date)}" ${l.on ? "checked" : ""} ${S.busy ? "disabled" : ""}>
+        <span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(l.kind)}</span>
+        <span class="px num">${money(l.price)}</span><span class="num">${l.qty}주</span></label>`).join("")}</div>
+      ${dr.problems && dr.problems.length ? `<details><summary class="small">확인할 점 ${dr.problems.length}개</summary><ul class="small">${dr.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></details>` : ""}
+      ${c ? `<div class="confirm"><span>${c === "approve" ? "체크한 줄로 승인할까요?" : "이 주문표를 버릴까요?"}</span>
+          <button class="btn ${c === "approve" ? "primary" : "danger"}" data-do="${c}" data-sid="${esc(sid)}" data-td="${esc(dr.trade_date)}">${c === "approve" ? "승인" : "버리기"}</button>
+          <button class="btn" data-cancel="1">취소</button></div>`
+        : `<div class="row"><button class="btn primary" data-ask="approve" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>승인</button>
+          <button class="btn danger" data-ask="discard" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>버리기</button></div>`}
+    </div>`;
+  }
+  if (S.cmds.length) out += `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => `<div class="row between small">
+    <span>${esc({ approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침" }[c.command] || c.command)} ${esc((c.payload || {}).sid || "")}${(c.payload || {}).n ? " " + c.payload.n + "번" : ""}</span>
+    <span class="chip ${c.status === "done" ? "ok" : c.status === "failed" ? "bad" : "warn"}">${c.status === "pending" ? "대기" : esc(c.result || c.status)}</span></div>`).join("")}</div>`;
+  return out;
+}
+
+function viewBoard() {
+  const ns = (S.snap && S.snap.detail && S.snap.detail.notices) || [];
+  if (!ns.length) return `<div class="card"><div class="empty">아직 알림이 없습니다. 평일 아침 7시 브리핑부터 쌓입니다.</div></div>`;
+  return `<div class="card"><h2>게시판</h2>${ns.map((n) => `<div class="notice"><span class="small muted">${when(n.at)}</span><span>${esc(n.text)}</span></div>`).join("")}</div>`;
+}
+
+function viewFamily() {
+  if (S.viewing) {
+    const o = S.owners.find((x) => x.owner_id === S.viewing) || {};
+    return `<div class="row"><button class="btn" data-back="1">← 목록</button><h2>${esc(o.display_name || "")}님 현황 <span class="muted small">(보기 전용)</span></h2></div>
+      ${S.viewSnap ? `<div class="small muted">갱신 ${when(S.viewSnap.taken_at)}</div>` + viewHome({ summary: S.viewSnap.summary, detail: S.viewSnap.detail || {} }, null) : `<div class="card"><div class="empty">아직 올린 현황이 없습니다.</div></div>`}`;
+  }
+  const given = S.grants.filter((g) => g.direction === "given");
+  const received = S.grants.filter((g) => g.direction === "received");
+  return `
+    <div class="card"><h2>볼 수 있는 사람</h2>
+      ${S.owners.length ? S.owners.map((o) => `<div class="row between"><span>${esc(o.display_name)} <span class="chip">${o.relation === "family" ? "가족" : "허락받음"}</span></span>
+        <button class="btn" data-view="${esc(o.owner_id)}">보기</button></div>`).join("") : `<div class="empty">아직 없습니다. 가족이 나를 추가하면 여기에 나옵니다.</div>`}</div>
+    <div class="card"><h2>내 현황 보여 주기</h2>
+      <form id="f-grant" class="row" style="align-items:flex-end">
+        <label style="flex:2;min-width:180px">상대 이메일 (가입한 사람)<input type="email" id="g-email" required></label>
+        <label style="flex:1;min-width:120px">관계<select id="g-rel"><option value="family">가족 (기한 없음)</option><option value="other">그 밖 (30일)</option></select></label>
+        <button class="btn primary">추가</button></form>
+      ${given.length ? given.map((g) => `<div class="row between small"><span>${esc(g.other_name || g.other_email)} · ${g.level === "detail" ? "자세히" : "요약"}${g.note ? " · " + esc(g.note) : ""}</span>
+        <span class="row">${g.status === "pending" ? `<button class="btn primary" data-decide="${g.id}" data-ok="1">허락</button><button class="btn" data-decide="${g.id}" data-ok="0">거절</button>`
+          : g.status === "approved" ? `<span class="chip ok">보는 중</span><button class="btn danger" data-revoke="${esc(g.other_email)}">회수</button>` : `<span class="chip">${esc(g.status)}</span>`}</span></div>`).join("") : ""}
+    </div>
+    <div class="card"><h2>다른 사람 현황 요청</h2>
+      <form id="f-req" class="row" style="align-items:flex-end">
+        <label style="flex:2;min-width:180px">상대 이메일<input type="email" id="r-email" required></label>
+        <label style="flex:2;min-width:160px">요청 사유<input type="text" id="r-note" placeholder="예: 같은 전략 비교"></label>
+        <button class="btn">요청</button></form>
+      ${received.filter((g) => g.status !== "approved").map((g) => `<div class="small muted">${esc(g.other_name || g.other_email)}: ${g.status === "pending" ? "승인 대기" : esc(g.status)}</div>`).join("")}
+    </div>`;
+}
+
+function renderLogin() {
+  $app.innerHTML = `<div class="card login">
+    <h1>내 자동매매</h1><div class="small muted">메리츠 자동매매 현황 · 승인 · 가족 공유</div>
+    ${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}
+    <form id="f-login" style="display:flex;flex-direction:column;gap:10px">
+      <label>이메일<input type="email" id="l-email" autocomplete="username" required></label>
+      <label>비밀번호<input type="password" id="l-pw" autocomplete="current-password" minlength="8" required></label>
+      <label id="l-name-wrap" hidden>이름 (가족에게 보일 이름)<input type="text" id="l-name"></label>
+      <div class="row"><button class="btn primary" id="l-go">로그인</button><button class="btn" type="button" id="l-mode">처음이면 가입</button></div>
+    </form></div>`;
+  let signup = false;
+  document.getElementById("l-mode").onclick = () => { signup = !signup;
+    document.getElementById("l-name-wrap").hidden = !signup;
+    document.getElementById("l-go").textContent = signup ? "가입" : "로그인";
+    document.getElementById("l-mode").textContent = signup ? "이미 가입했으면 로그인" : "처음이면 가입"; };
+  document.getElementById("f-login").onsubmit = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("l-email").value.trim(), password = document.getElementById("l-pw").value;
+    if (signup) {
+      const { error } = await sb.auth.signUp({ email, password, options: { data: { display_name: document.getElementById("l-name").value.trim() || email.split("@")[0] } } });
+      S.msg = error ? { bad: true, text: "가입 실패: " + error.message } : { text: "가입했습니다. 메일함의 확인 링크를 누른 뒤 로그인하세요." };
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      S.msg = error ? { bad: true, text: "로그인 실패: 이메일·비밀번호를 확인하세요 (" + error.message + ")" } : null;
+    }
+    render();
+  };
+}
+
+function bind() {
+  document.getElementById("b-refresh").onclick = () => { S.msg = null; refresh(); };
+  document.getElementById("b-out").onclick = async () => { await sb.auth.signOut(); };
+  document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = async () => {
+    S.tab = b.dataset.tab; S.msg = null; S.confirm = null; S.viewing = null;
+    try { localStorage.setItem("tab", S.tab); } catch (e) {}
+    if (S.tab === "family") await loadFamily().catch(() => {});
+    render(); });
+  document.querySelectorAll("input[data-n]").forEach((cb) => cb.onchange = () =>
+    send("toggle_line", { sid: cb.dataset.sid, n: Number(cb.dataset.n), trade_date: cb.dataset.td }));
+  document.querySelectorAll("[data-ask]").forEach((b) => b.onclick = () => { S.confirm = { sid: b.dataset.sid, kind: b.dataset.ask }; render(); });
+  document.querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => { S.confirm = null; render(); });
+  document.querySelectorAll("[data-do]").forEach((b) => b.onclick = () => { S.confirm = null;
+    send(b.dataset.do, { sid: b.dataset.sid, trade_date: b.dataset.td }); });
+  document.querySelectorAll("[data-view]").forEach((b) => b.onclick = async () => {
+    S.viewing = b.dataset.view; const r = await sb.rpc("view_snapshot", { p_owner: S.viewing });
+    S.viewSnap = r.error ? null : r.data; if (r.error) S.msg = { bad: true, text: r.error.message }; render(); });
+  document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
+  const fg = document.getElementById("f-grant");
+  if (fg) fg.onsubmit = async (e) => { e.preventDefault();
+    const rel = document.getElementById("g-rel").value;
+    const r = await sb.rpc("grant_access", { p_viewer_email: document.getElementById("g-email").value.trim(), p_level: "detail",
+      p_relation: rel, p_days: rel === "family" ? null : 30 });
+    S.msg = r.error ? { bad: true, text: r.error.message } : { text: "추가했습니다. 상대가 '볼 수 있는 사람'에서 봅니다." };
+    await loadFamily(); render(); };
+  const fr = document.getElementById("f-req");
+  if (fr) fr.onsubmit = async (e) => { e.preventDefault();
+    const r = await sb.rpc("request_access", { p_owner_email: document.getElementById("r-email").value.trim(), p_level: "summary",
+      p_note: document.getElementById("r-note").value.trim() || null });
+    S.msg = r.error ? { bad: true, text: r.error.message } : { text: "요청했습니다. 상대가 허락하면 '볼 수 있는 사람'에 나옵니다." };
+    await loadFamily(); render(); };
+  document.querySelectorAll("[data-decide]").forEach((b) => b.onclick = async () => {
+    const r = await sb.rpc("decide_access", { p_grant_id: Number(b.dataset.decide), p_approve: b.dataset.ok === "1", p_days: 30, p_level: null });
+    S.msg = r.error ? { bad: true, text: r.error.message } : { text: b.dataset.ok === "1" ? "30일 동안 요약을 볼 수 있게 했습니다." : "거절했습니다." };
+    await loadFamily(); render(); });
+  document.querySelectorAll("[data-revoke]").forEach((b) => b.onclick = async () => {
+    const r = await sb.rpc("revoke_access", { p_viewer_email: b.dataset.revoke });
+    S.msg = r.error ? { bad: true, text: r.error.message } : { text: "회수했습니다." };
+    await loadFamily(); render(); });
+}
+
+// ── 시작 ──
+async function onSession(session) {
+  S.user = session ? session.user : null;
+  if (S.user) {
+    const p = await sb.from("profiles").select("display_name").eq("user_id", S.user.id).limit(1);
+    S.name = (p.data && p.data[0] && p.data[0].display_name) || S.user.email.split("@")[0];
+    await refresh();
+  } else render();
+}
+sb.auth.onAuthStateChange((_e, session) => { if ((session && session.user.id) !== (S.user && S.user.id)) onSession(session); });
+sb.auth.getSession().then(({ data }) => onSession(data.session));
+setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 30000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+</script>
+</body>
+</html>
