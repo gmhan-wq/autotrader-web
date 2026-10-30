@@ -112,6 +112,10 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
 .lmain { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0 } .lval { font-weight: 600; font-size: 14px }
 .oline { display: grid; grid-template-columns: 36px 52px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line) }
 .member { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line) }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--soft) }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); padding: 8px 12px; border-radius: 9px; cursor: pointer; min-height: 38px }
+.seg button.on { background: var(--glass-strong); color: var(--ink); font-weight: 700 }
+.krw { font-size: 12px; color: var(--muted) }
 .oline.off { opacity: .5 } .oline.off b { text-decoration: line-through }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px }
 .kpi { gap: 4px } .kpi b { font-size: 21px; font-weight: 600 } .kpi b.warnc { color: var(--warn) }
@@ -209,6 +213,9 @@ const ko = (m) => { m = String(m || ""); for (const [re, t] of KO_ERR) if (re.te
 const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (x, d = 2) => (x === null || x === undefined || x === "") ? "-" :
   Number(x).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const krw = (usd) => { const r = S.snap && S.snap.summary.fx && Number(S.snap.summary.fx.usdkrw);
+  if (!r || usd === null || usd === undefined || isNaN(Number(usd))) return "";
+  const v = Number(usd) * r; return "₩" + (Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + "억" : Math.round(v / 1e4).toLocaleString("ko-KR") + "만"); };
 const sideKo = (s) => s === "BUY" ? "매수" : s === "SELL" ? "매도" : esc(s);
 const sideCls = (s) => s === "BUY" ? "buy" : "sell";
 const ACC_NAME = { main: "A계좌", b: "B계좌", c: "C계좌" };
@@ -354,7 +361,7 @@ function render() {
     $app.innerHTML = `
       <header class="ph-top card">
         <div class="row"><b>${esc(S.name)}</b><span class="chip warn">모의</span><span class="grow"></span>${engine}</div>
-        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (원장 기준)</span><b class="num">$${money(t.value)}</b>
+        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (원장 기준)</span><b class="num">$${money(t.value)}</b>${krw(t.value) ? `<span class="krw">${krw(t.value)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
           : `<h1>${S.detail ? "전략" : VIEWS[S.tab]}</h1>`}
       </header>
@@ -372,10 +379,13 @@ function viewOrders() {
   const s = S.snap.summary, d = S.snap.detail || {};
   const accs = Object.entries(s.accounts || {}).filter(([, a]) => a.strategies.length);
   const cur = S.ordAcc && accs.find(([k]) => k === S.ordAcc) ? S.ordAcc : (accs[0] || [])[0];
+  const kind = S.ordKind || "real";
   let out = `<div class="row">${accs.map(([k, a]) => `<button class="btn ${k === cur ? "primary" : ""}" data-ordacc="${esc(k)}">${esc(ACC_NAME[k] || a.name)}</button>`).join("")}
-    <span class="small muted">모의(가상) 주문 · 실제 주문은 노트북 tonight 목록대로</span></div>`;
+    <span class="grow"></span>
+    <div class="seg" role="group" aria-label="주문 종류"><button class="${kind === "real" ? "on" : ""}" data-ordkind="real">실제로 넣을 주문</button><button class="${kind === "sim" ? "on" : ""}" data-ordkind="sim">모의 주문</button></div></div>`;
   const acc = (s.accounts || {})[cur];
   if (!acc) return out;
+  if (kind === "real") return out + realOrders(s, d, cur, acc);
   const tn = (d.tonight || {})[cur] || [];
   for (const g of acc.strategies) {
     const plan = (s.plans || {})[g.id];
@@ -388,6 +398,26 @@ function viewOrders() {
           <span class="chip ${r.st === "걸림" ? "ok" : ""}">${r.st}</span></div>`).join("") : `<div class="empty">오늘 밤 주문 없음 (승인 전이거나 해당 없음)</div>`}
     </section>`;
   }
+  return out;
+}
+const KIND_KO = { LOC: "LOC", LIMIT: "지정가", MARKET: "시장가", MOC: "MOC", LIMIT_VWAP: "VWAP" };
+function realOrders(s, d, cur, acc) {
+  const r = (d.real_orders || {})[cur];
+  const vr = acc.strategies.filter((g) => g.kind === "vr");
+  let out = `<div class="msg">메리츠 앱에 이 목록대로 넣으면 됩니다. 노트북이 증권사 <b>실제 보유</b>와 승인한 주문표로 계산했습니다 (노트북 <span class="mono">autotrader tonight</span> 와 같음).</div>`;
+  if (!r) return out + `<div class="card"><div class="empty">${acc.api ? "노트북이 아직 실제 보유를 조회하지 않았습니다 (봇 재시작 뒤 몇 분)." : "이 계좌는 API 키가 없어 실제 보유로 계산할 수 없습니다."}</div></div>`;
+  if (r.error) return out + `<div class="card"><div class="empty">실제 보유 조회 실패 (${esc(r.error)}) — 노트북에서 autotrader doctor 로 확인</div></div>`;
+  for (const row of r.strategies || []) {
+    out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(row.symbol)}</span> ${esc(row.sid)}</h2>
+      <span class="small muted">미국 ${esc(r.trade_date)} 장</span></div>`;
+    if (!row.approved) { out += `<div class="empty">아직 승인한 ${esc(r.trade_date)} 주문표가 없습니다 → 승인 탭</div></section>`; continue; }
+    out += `<div class="small">실제 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
+      ${row.lines.map((l) => `<div class="oline"><span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
+        <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.catchup ? '<span class="chip warn">보충</span>' : "<span></span>"}</div>`).join("")}
+      ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}</section>`;
+  }
+  if (vr.length) out += `<div class="card"><div class="small muted">VR 은 2주 단위 예약주문(기간잔량)이라 매일 넣지 않습니다. 단계와 체결 여부는 전략 화면에서 확인하세요.</div>
+    ${vr.map((g) => `<button class="btn" data-detail="${esc(g.id)}">${esc(g.symbol)} VR 사다리 보기</button>`).join("")}</div>`;
   return out;
 }
 
@@ -411,11 +441,11 @@ function viewHome(snap, mine) {
   const signed = (x) => x === null || x === undefined ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + "$" + money(Math.abs(Number(x)));
   const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
   const kpis = [
-    ["평가금액", "$" + money(t.value), "원장 기준 · 보유×종가 + 전략 잔금", ""],
-    ["평가손익", signed(t.eval_pnl), "보유 종목 (평단 있는 것)", pnlCls(t.eval_pnl)],
+    ["평가금액", "$" + money(t.value), `${krw(t.value) ? krw(t.value) + " · " : ""}원장 기준`, ""],
+    ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 있는 보유" : "보유 종목 (평단 있는 것)", pnlCls(t.eval_pnl)],
     ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
     ["전략 잔금", "$" + money(t.cash), "주문표·VR Pool 합계", ""],
-    ["오늘 밤 주문", tonight.length + "건", "가상(모의) 주문 기준", ""],
+    ["오늘 밤 주문", realCount(d) !== null ? realCount(d) + "건" : tonight.length + "건", realCount(d) !== null ? "실제로 넣을 주문" : "가상(모의) 주문 기준", ""],
     ["승인 대기", draftN + "건", draftN ? "승인 탭에서 확인" : "없음", draftN ? "warnc" : ""],
   ];
   let out = "";
@@ -463,6 +493,10 @@ function phoneHome(s, d, strat, out) {
   if (ns.length) out += `<div class="card"><div class="row between"><h2>최근 알림</h2><button class="btn ghost" data-tab="board">전체 보기</button></div>
     ${ns.map((n) => `<div class="small">${esc(n.text)}</div>`).join("")}</div>`;
   return out;
+}
+function realCount(d) {
+  const r = d.real_orders; if (!r || !Object.keys(r).length) return null;
+  return Object.values(r).reduce((n, a) => n + (a.strategies || []).reduce((m, x) => m + (x.lines || []).length, 0), 0);
 }
 function allStrategies(s) {
   return Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
@@ -660,6 +694,7 @@ function viewSettings() {
           ${KIND_FIELDS[kind].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
         <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
+        <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
     </div>` + cmdList();
@@ -745,6 +780,7 @@ function bind() {
     const r = await sb.rpc("admin_decide", { p_user: b.dataset.mdec, p_status: b.dataset.st, p_role: b.dataset.role || null });
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: "바꿨습니다." };
     await loadAdmin(); render(); });
+  document.querySelectorAll("[data-ordkind]").forEach((b) => b.onclick = () => { S.ordKind = b.dataset.ordkind; render(); });
   document.querySelectorAll("[data-ordacc]").forEach((b) => b.onclick = () => { S.ordAcc = b.dataset.ordacc; render(); });
   document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
   document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
@@ -769,6 +805,13 @@ function bind() {
   const fa = document.getElementById("f-acc");
   if (fa) fa.onsubmit = (e) => { e.preventDefault();
     send("add_account", { id: document.getElementById("a-id").value.trim().toLowerCase(), name: document.getElementById("a-name").value.trim() }); };
+  const prefill = () => { const sym = document.getElementById("s-symbol"), ac = document.getElementById("s-account"), q = document.getElementById("s-qty");
+    if (!sym || !ac || !q || !S.snap) return; const r = ((S.snap.detail || {}).real_orders || {})[ac.value];
+    const n = r && r.positions ? r.positions[sym.value] : undefined;
+    if (n !== undefined) { q.value = (S.newKind === "vr") ? Math.round(n / (Number((document.getElementById("s-mult") || {}).value) || 1)) : n;
+      const h = document.getElementById("s-hint"); if (h) h.textContent = `증권사 실제 보유 ${n}주를 넣었습니다 (확인 후 고치세요)`; } };
+  ["s-symbol", "s-account", "s-mult"].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener("change", prefill); });
+  prefill();
   const fs = document.getElementById("f-str");
   if (fs) fs.onsubmit = (e) => { e.preventDefault();
     const kind = S.newKind || "sheet", v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
