@@ -109,6 +109,7 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
   color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-height: 56px }
 .lmain { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0 } .lval { font-weight: 600; font-size: 14px }
 .oline { display: grid; grid-template-columns: 36px 52px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line) }
+.member { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line) }
 .oline.off { opacity: .5 } .oline.off b { text-decoration: line-through }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px }
 .kpi { gap: 4px } .kpi b { font-size: 21px; font-weight: 600 } .kpi b.warnc { color: var(--warn) }
@@ -215,7 +216,7 @@ async function loadFamily() {
 }
 async function refresh() {
   if (!S.user) return;
-  try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); if (S.admin) await loadAdmin(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
   render();
 }
 async function send(command, payload) {
@@ -235,22 +236,65 @@ function layout() {
   if (pref === "pc" || pref === "phone") return pref;
   return window.innerWidth >= 900 ? "pc" : "phone";
 }
-const VIEWS = { home: "대시보드", orders: "오늘 밤 주문", approve: "승인", board: "게시판", family: "가족·공유", settings: "설정", more: "더보기" };
+const VIEWS = { admin: "회원 관리", home: "대시보드", orders: "오늘 밤 주문", approve: "승인", board: "게시판", family: "가족·공유", settings: "설정", more: "더보기" };
 function currentView() {
   if (S.tab === "home") return viewHome(S.snap, true);
   if (S.tab === "orders") return viewOrders();
   if (S.tab === "approve") return viewApprove();
   if (S.tab === "board") return viewBoard();
   if (S.tab === "settings") return viewSettings();
-  if (S.tab === "more") return viewFamily() + viewSettings();
+  if (S.tab === "more") return viewAdmin() + viewFamily() + viewSettings();
+  if (S.tab === "admin") return viewAdmin();
   return viewFamily();
 }
+function renderPending() {
+  $app.innerHTML = `<div class="card login">
+    <h1>${S.status === "rejected" ? "가입이 승인되지 않았습니다" : "관리자 승인을 기다리고 있습니다"}</h1>
+    <div class="small muted">${esc(S.user.email)}</div>
+    <div>${S.status === "rejected" ? "관리자에게 문의해 주세요." : "관리자가 승인하면 이 화면에서 바로 쓸 수 있습니다. 승인 뒤에는 관리자가 노트북에 내 칸(본인 메리츠 키·텔레그램 봇)을 만들어야 현황이 올라옵니다."}</div>
+    <div class="row"><button class="btn primary" id="p-check">다시 확인</button><button class="btn" id="p-out">로그아웃</button></div></div>`;
+  document.getElementById("p-check").onclick = () => onSession({ user: S.user });
+  document.getElementById("p-out").onclick = async () => { await sb.auth.signOut(); };
+}
+
+async function loadAdmin() {
+  const r = await sb.rpc("admin_members");
+  S.members = r.error ? [] : (r.data || []);
+  if (r.error) S.msg = { bad: true, text: "회원 목록: " + r.error.message };
+}
+function viewAdmin() {
+  if (!S.admin) return "";
+  const ms = S.members || [];
+  const pend = ms.filter((m) => m.status === "pending");
+  const ago = (t) => { if (!t) return "노트북 칸 없음"; const m = Math.round((Date.now() - new Date(t).getTime()) / 60000);
+    return "노트북 갱신 " + (m < 60 ? m + "분" : m < 2880 ? Math.round(m / 60) + "시간" : Math.round(m / 1440) + "일") + " 전"; };
+  return `<div class="card"><div class="row between"><h2>회원 관리</h2><span class="chip">관리자</span></div>
+    <div class="small muted">웹앱 주소를 받은 사람이 가입하면 여기에 '승인 대기'로 나옵니다. 승인해야 현황·승인·공유를 쓸 수 있습니다.</div>
+    ${pend.length ? `<h2 style="font-size:14px">승인 대기 ${pend.length}명</h2>` : ""}
+    ${ms.map((m) => `<div class="member">
+      <div class="lmain"><b>${esc(m.display_name)} <span class="muted small">${esc(m.email || "")}</span></b>
+        <span class="small muted">${m.role === "admin" ? "관리자 · " : ""}${{ pending: "승인 대기", approved: "승인됨", rejected: "거절됨" }[m.status]} · 가입 ${when(m.created_at)} · ${ago(m.last_snapshot)}</span></div>
+      <div class="row">${m.user_id === S.user.id ? `<span class="chip ok">나</span>` :
+        m.status === "pending" ? `<button class="btn primary" data-mdec="${m.user_id}" data-st="approved">승인</button><button class="btn danger" data-mdec="${m.user_id}" data-st="rejected">거절</button>` :
+        m.status === "approved" ? `${m.role === "admin" ? `<button class="btn" data-mdec="${m.user_id}" data-st="approved" data-role="member">관리자 해제</button>`
+                                                       : `<button class="btn" data-mdec="${m.user_id}" data-st="approved" data-role="admin">관리자 지정</button>`}
+                                   <button class="btn danger" data-mdec="${m.user_id}" data-st="rejected">이용 중지</button>` :
+        `<button class="btn" data-mdec="${m.user_id}" data-st="approved">다시 승인</button>`}</div></div>`).join("")}
+    <details><summary class="small">승인한 회원을 노트북에 연결하는 방법</summary><ol class="small">
+      <li>노트북 PowerShell: <span class="mono">autotrader profile add 이름</span></li>
+      <li><span class="mono">profiles\이름\.env</span> 에 그 사람의 메리츠 앱키·시크릿, 텔레그램 봇, <span class="mono">SUPABASE_URL</span>·<span class="mono">SUPABASE_ANON_KEY</span>,
+        <span class="mono">SUPABASE_EMAIL=그 사람 가입 이메일</span>, <span class="mono">SUPABASE_SERVICE_ROLE_KEY=서버 키</span> (그 사람 비밀번호는 필요 없음). 키는 본인이 직접 입력합니다.</li>
+      <li><span class="mono">powershell -ExecutionPolicy Bypass -File scripts\install_schedule.ps1 -User 이름</span> → 몇 분 뒤 '노트북 갱신'이 표시됩니다.</li></ol></details></div>`;
+}
+
 function render() {
   if (!S.user) return renderLogin();
+  if (S.status && S.status !== "approved") return renderPending();
   const mode = layout();
   document.body.dataset.layout = mode;
   if (mode === "phone" && (S.tab === "family" || S.tab === "settings")) S.tab = "more";
   if (mode === "pc" && S.tab === "more") S.tab = "family";
+  if (mode === "phone" && S.tab === "admin") S.tab = "more";
   const drafts = S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
   const notes = `${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}${staleNote()}`;
   const engine = S.snap ? `<span class="chip ok live"><i></i>노트북 ${when(S.snap.taken_at)} 갱신</span>` : `<span class="chip">노트북 연결 전</span>`;
@@ -275,6 +319,7 @@ function render() {
           ${item("board", "게시판")}
           ${item("family", "가족·공유")}
           ${item("settings", "설정")}
+          ${S.admin ? item("admin", "회원 관리", (S.members || []).filter((m) => m.status === "pending").length ? `<span class="badge">${(S.members || []).filter((m) => m.status === "pending").length}</span>` : "") : ""}
         </nav>
         <main class="pc-main">${notes}<div id="view">${currentView()}</div></main>
       </div>`;
@@ -664,6 +709,10 @@ function bind() {
   const bo = document.getElementById("b-out"); if (bo) bo.onclick = async () => { await sb.auth.signOut(); };
   const bl = document.getElementById("b-layout"); if (bl) bl.onclick = () => {
     try { localStorage.setItem("layout", layout() === "pc" ? "phone" : "pc"); } catch (e) {} render(); };
+  document.querySelectorAll("[data-mdec]").forEach((b) => b.onclick = async () => {
+    const r = await sb.rpc("admin_decide", { p_user: b.dataset.mdec, p_status: b.dataset.st, p_role: b.dataset.role || null });
+    S.msg = r.error ? { bad: true, text: r.error.message } : { text: "바꿨습니다." };
+    await loadAdmin(); render(); });
   document.querySelectorAll("[data-ordacc]").forEach((b) => b.onclick = () => { S.ordAcc = b.dataset.ordacc; render(); });
   document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
   document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
@@ -721,8 +770,12 @@ function bind() {
 async function onSession(session) {
   S.user = session ? session.user : null;
   if (S.user) {
-    const p = await sb.from("profiles").select("display_name").eq("user_id", S.user.id).limit(1);
-    S.name = (p.data && p.data[0] && p.data[0].display_name) || S.user.email.split("@")[0];
+    const p = await sb.from("profiles").select("display_name,status,role").eq("user_id", S.user.id).limit(1);
+    const me = (p.data && p.data[0]) || {};
+    S.name = me.display_name || S.user.email.split("@")[0];
+    S.status = me.status || "approved";            // 회원 승인 기능 이전 데이터베이스면 승인으로 본다
+    S.admin = me.role === "admin";
+    if (S.status !== "approved") return renderPending();
     await refresh();
   } else render();
 }
