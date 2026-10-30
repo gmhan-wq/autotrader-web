@@ -76,9 +76,15 @@ button.btn.primary { background: var(--accent); color: var(--accent-ink); border
 button.btn.danger { color: var(--bad) }
 button.btn:disabled { opacity: .5; cursor: default }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-input[type=email], input[type=password], input[type=text], select { width: 100%; font: 15px var(--sans); padding: 10px 12px;
+input[type=email], input[type=password], input[type=text], input[type=number], input[type=date], select { width: 100%; font: 15px var(--sans); padding: 10px 12px;
   border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink) }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted) }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
+.strat { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line) }
+.strat:last-child { border-bottom: 0 }
+.sw input { width: 20px; height: 20px; accent-color: var(--accent) }
+.cmd { padding: 6px 0; border-bottom: 1px solid var(--line) } .cmd:last-child { border-bottom: 0 }
+.tabs button { font-size: 13.5px }
 .notice { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px }
 .notice:last-child { border-bottom: 0 }
 .msg { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--soft) }
@@ -149,7 +155,7 @@ async function send(command, payload) {
 function render() {
   if (!S.user) return renderLogin();
   const drafts = S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
-  const tabs = [["home", "현황"], ["approve", "승인"], ["board", "게시판"], ["family", "가족"]];
+  const tabs = [["home", "현황"], ["approve", "승인"], ["board", "게시판"], ["family", "가족"], ["settings", "설정"]];
   $app.innerHTML = `
     <div class="top">
       <div class="who"><h1>${esc(S.name)}의 자동매매</h1>
@@ -158,12 +164,13 @@ function render() {
     </div>
     <nav class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${t}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>
     ${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}
-    <div id="view">${S.tab === "home" ? viewHome(S.snap, true) : S.tab === "approve" ? viewApprove() : S.tab === "board" ? viewBoard() : viewFamily()}</div>`;
+    <div id="view">${S.tab === "home" ? viewHome(S.snap, true) : S.tab === "approve" ? viewApprove() : S.tab === "board" ? viewBoard() : S.tab === "settings" ? viewSettings() : viewFamily()}</div>`;
   bind();
 }
 
 function viewHome(snap, mine) {
-  if (!snap) return `<div class="card"><div class="empty">노트북 승인 봇이 켜지면 몇 분 안에 현황이 올라옵니다.</div></div>`;
+  if (!snap) return `<div class="card"><div class="empty">노트북 승인 봇이 켜지면 몇 분 안에 현황이 올라옵니다.</div>
+    ${mine ? `<div class="small muted">처음 쓰는 사용자라면 노트북에 내 칸(프로필)이 먼저 있어야 합니다. 노트북 관리자에게 이 로그인 이메일을 알려 주세요. 칸이 생기면 '설정' 탭에서 계좌와 전략을 직접 추가합니다.</div>` : ""}</div>`;
   const s = snap.summary, d = snap.detail || {};
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
@@ -228,10 +235,63 @@ function viewApprove() {
           <button class="btn danger" data-ask="discard" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>버리기</button></div>`}
     </div>`;
   }
-  if (S.cmds.length) out += `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => `<div class="row between small">
-    <span>${esc({ approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침" }[c.command] || c.command)} ${esc((c.payload || {}).sid || "")}${(c.payload || {}).n ? " " + c.payload.n + "번" : ""}</span>
-    <span class="chip ${c.status === "done" ? "ok" : c.status === "failed" ? "bad" : "warn"}">${c.status === "pending" ? "대기" : esc(c.result || c.status)}</span></div>`).join("")}</div>`;
-  return out;
+  return out + cmdList();
+}
+const CMD_KO = { approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침",
+                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경" };
+function cmdList() {
+  if (!S.cmds.length) return "";
+  return `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => { const p = c.payload || {};
+    return `<div class="cmd small"><div class="row between"><span>${esc(CMD_KO[c.command] || c.command)} ${esc(p.sid || p.id || "")}${p.n ? " " + p.n + "번" : ""}</span>
+    <span class="chip ${c.status === "done" ? "ok" : c.status === "failed" ? "bad" : "warn"}">${c.status === "pending" ? "대기" : c.status === "done" ? "완료" : "실패"}</span></div>
+    ${c.result ? `<div class="muted">${esc(c.result)}</div>` : ""}</div>`; }).join("")}</div>`;
+}
+
+const KIND_FIELDS = {
+  sheet: [["qty", "현재 보유 개수", "number", "0"], ["avg", "평단 $", "text", "0"], ["cash", "잔금 $ (주문표 잔금)", "text", ""], ["mult", "배수", "number", "1"]],
+  vr: [["start", "이번 사이클 시작일", "date", ""], ["week", "주차", "number", ""], ["V", "V (주문표 1배수)", "text", ""], ["pool", "Pool $", "text", ""],
+       ["qty", "보유 개수 (1배수)", "number", ""], ["mult", "배수", "number", "1"], ["contribution", "적립 추가금 $ (거치식 0)", "text", "0"]],
+  v4: [["cash", "원금·잔금 $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
+       ["T", "T (새로 시작 0)", "text", "0"], ["splits", "분할수", "number", "20"]],
+};
+function viewSettings() {
+  const s = S.snap ? S.snap.summary : null;
+  if (!s) return `<div class="card"><div class="empty">노트북이 연결되면 계좌·전략을 여기서 관리할 수 있습니다.</div></div>`;
+  const accs = Object.entries(s.accounts || {});
+  const kind = S.newKind || "sheet";
+  const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+  return `
+    <div class="card"><h2>계좌</h2>
+      ${accs.map(([aid, a]) => `<div class="row between"><span>${esc(ACC_NAME[aid] || a.name)} <span class="muted small">${esc(aid)}</span></span>
+        <span class="chip ${a.api ? "ok" : ""}">${a.api ? "API 연결" : "수동 (키 없음)"}</span></div>
+        ${a.api ? "" : `<div class="small muted">API 를 쓰려면 노트북 .env 에 <span class="mono">${esc(a.env_name || ("MERITZ_" + (aid === "main" ? "" : aid.toUpperCase() + "_") + "APP_KEY"))}</span> 와 SECRET 을 직접 넣습니다 (키는 웹으로 받지 않음).</div>`}`).join("")}
+      <form id="f-acc" class="row" style="align-items:flex-end">
+        <label style="flex:1;min-width:110px">계좌 id<input type="text" id="a-id" placeholder="예: isa" required pattern="[a-z][a-z0-9_]{0,23}"></label>
+        <label style="flex:2;min-width:150px">이름<input type="text" id="a-name" placeholder="예: ISA 계좌"></label>
+        <button class="btn">계좌 추가</button></form>
+    </div>
+    <div class="card"><h2>전략</h2>
+      ${strat.length ? strat.map((g) => `<div class="strat">
+        <div class="row between"><span><b>${esc(g.id)}</b> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}</span></span>
+          <label class="sw" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="on-${esc(g.id)}" data-on="${esc(g.id)}" ${g.active ? "checked" : ""}>${g.active ? "켜짐" : "꺼짐"}</label></div>
+        <div class="row small"><span class="muted">계좌</span><select id="mv-${esc(g.id)}" data-mv="${esc(g.id)}" style="width:auto">${accs.map(([aid, a]) =>
+          `<option value="${esc(aid)}" ${aid === g.account ? "selected" : ""}>${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></div></div>`).join("")
+        : `<div class="empty">아직 전략이 없습니다. 아래에서 추가하세요.</div>`}
+    </div>
+    <div class="card"><h2>전략 추가</h2>
+      <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
+        <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"]].map(([k, t]) =>
+          `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}">${t}</button>`).join("")}</div>
+        <div class="grid2">
+          <label>전략 id<input type="text" id="s-id" required pattern="[a-z][a-z0-9_]{0,23}" placeholder="예: ${kind === "vr" ? "tqqq_vr" : kind === "v4" ? "tqqq_v4" : "soxl_mumae"}"></label>
+          <label>종목<select id="s-symbol"><option>SOXL</option><option ${kind === "vr" ? "selected" : ""}>TQQQ</option></select></label>
+          <label>계좌<select id="s-account">${accs.map(([aid, a]) => `<option value="${esc(aid)}">${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></label>
+          ${KIND_FIELDS[kind].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
+        </div>
+        <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
+        <button class="btn primary">추가 요청</button>
+      </form>
+    </div>` + cmdList();
 }
 
 function viewBoard() {
@@ -317,6 +377,18 @@ function bind() {
     S.viewing = b.dataset.view; const r = await sb.rpc("view_snapshot", { p_owner: S.viewing });
     S.viewSnap = r.error ? null : r.data; if (r.error) S.msg = { bad: true, text: r.error.message }; render(); });
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
+  document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
+  document.querySelectorAll("[data-on]").forEach((cb) => cb.onchange = () => send("set_strategy", { id: cb.dataset.on, active: cb.checked }));
+  document.querySelectorAll("[data-mv]").forEach((sel) => sel.onchange = () => send("set_strategy", { id: sel.dataset.mv, account: sel.value }));
+  const fa = document.getElementById("f-acc");
+  if (fa) fa.onsubmit = (e) => { e.preventDefault();
+    send("add_account", { id: document.getElementById("a-id").value.trim().toLowerCase(), name: document.getElementById("a-name").value.trim() }); };
+  const fs = document.getElementById("f-str");
+  if (fs) fs.onsubmit = (e) => { e.preventDefault();
+    const kind = S.newKind || "sheet", v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
+    const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account") };
+    for (const [k] of KIND_FIELDS[kind]) { const x = v("s-" + k); if (x !== "") p[k] = x.replace(/,/g, ""); }
+    send("add_strategy", p); };
   const fg = document.getElementById("f-grant");
   if (fg) fg.onsubmit = async (e) => { e.preventDefault();
     const rel = document.getElementById("g-rel").value;
