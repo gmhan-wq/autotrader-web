@@ -78,7 +78,38 @@ h2 { font-size: 15.5px; margin: 0; text-wrap: balance; font-weight: 700 }
   box-shadow: 0 2px 8px rgba(70, 80, 150, 0.16), inset 0 0 0 1px var(--glass-edge) }
 .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px;
   background: var(--buy); color: #fff; font-size: 12px; line-height: 18px }
-#view { display: flex; flex-direction: column; gap: 14px }
+#view { display: flex; flex-direction: column; gap: 14px; min-width: 0 }
+.grow { flex: 1 1 auto }
+.btn.ghost { background: transparent; box-shadow: none }
+.live i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px }
+/* PC */
+body[data-layout="pc"] .wrap { max-width: 1360px }
+header.pc-top.card { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border-radius: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 6 }
+.brand { font-size: 17px; letter-spacing: -0.01em }
+.pc-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start }
+nav.pc-nav.card { gap: 2px; padding: 10px; position: sticky; top: 84px }
+.nav-h { font-size: 12px; color: var(--muted); padding: 12px 10px 4px }
+.nav-i { display: flex; align-items: center; gap: 8px; text-align: left; font: 500 14px var(--sans); color: var(--ink); background: transparent; border: 0;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer; min-height: 40px }
+.nav-i:hover { background: var(--soft) } .nav-i[aria-current="true"] { background: var(--glass-strong); font-weight: 700; box-shadow: inset 0 0 0 1px var(--glass-edge) }
+.pc-main { display: flex; flex-direction: column; gap: 14px; min-width: 0 }
+/* 폰 */
+body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) }
+.ph-top { gap: 8px } .ph-top h1 { font-size: 19px }
+.ph-total { display: flex; flex-direction: column; gap: 2px } .ph-total b { font-size: 30px; font-weight: 600 }
+.banner { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 16px; border-radius: 14px; border: 1px solid currentColor;
+  background: var(--glass-strong); color: var(--warn); font: 700 14px var(--sans); cursor: pointer }
+.ph-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 6px max(8px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px));
+  background: var(--glass-strong); border-top: 1px solid var(--glass-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px) }
+.ph-nav button { min-height: 52px; border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); border-radius: 12px; cursor: pointer }
+.ph-nav button[aria-current="true"] { color: var(--ink); font-weight: 700; background: var(--soft) }
+.list { gap: 0; padding: 12px 14px } .list > .row { padding-bottom: 8px }
+.lrow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: transparent;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-height: 56px }
+.lmain { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0 } .lval { font-weight: 600; font-size: 14px }
+.oline { display: grid; grid-template-columns: 36px 52px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line) }
+.oline.off { opacity: .5 } .oline.off b { text-decoration: line-through }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px }
 .kpi { gap: 4px } .kpi b { font-size: 21px; font-weight: 600 } .kpi b.warnc { color: var(--warn) }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px }
@@ -184,7 +215,7 @@ async function loadFamily() {
 }
 async function refresh() {
   if (!S.user) return;
-  try { await loadMine(); if (S.tab === "family") await loadFamily(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
   render();
 }
 async function send(command, payload) {
@@ -198,21 +229,96 @@ async function send(command, payload) {
 }
 
 // ── 화면 ──
+// 화면 모드: 넓은 화면(PC·맥북) = 왼쪽 메뉴 + 넓은 대시보드 / 좁은 화면(폰) = 위 요약 + 아래 탭. 직접 바꾸면 기억.
+function layout() {
+  let pref = null; try { pref = localStorage.getItem("layout"); } catch (e) {}
+  if (pref === "pc" || pref === "phone") return pref;
+  return window.innerWidth >= 900 ? "pc" : "phone";
+}
+const VIEWS = { home: "대시보드", orders: "오늘 밤 주문", approve: "승인", board: "게시판", family: "가족·공유", settings: "설정", more: "더보기" };
+function currentView() {
+  if (S.tab === "home") return viewHome(S.snap, true);
+  if (S.tab === "orders") return viewOrders();
+  if (S.tab === "approve") return viewApprove();
+  if (S.tab === "board") return viewBoard();
+  if (S.tab === "settings") return viewSettings();
+  if (S.tab === "more") return viewFamily() + viewSettings();
+  return viewFamily();
+}
 function render() {
   if (!S.user) return renderLogin();
+  const mode = layout();
+  document.body.dataset.layout = mode;
+  if (mode === "phone" && (S.tab === "family" || S.tab === "settings")) S.tab = "more";
+  if (mode === "pc" && S.tab === "more") S.tab = "family";
   const drafts = S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
-  const tabs = [["home", "현황"], ["approve", "승인"], ["board", "게시판"], ["family", "가족"], ["settings", "설정"]];
-  $app.innerHTML = `
-    <div class="top">
-      <div class="who"><h1>${esc(S.name)}의 자동매매</h1>
-        <span class="small muted">${S.snap ? "노트북 갱신 " + when(S.snap.taken_at) : "아직 노트북에서 올린 현황이 없습니다"}</span></div>
-      <div class="row"><button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>
-    </div>
-    <nav class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${t}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>
-    ${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}
-    ${staleNote()}
-    <div id="view">${S.tab === "home" ? viewHome(S.snap, true) : S.tab === "approve" ? viewApprove() : S.tab === "board" ? viewBoard() : S.tab === "settings" ? viewSettings() : viewFamily()}</div>`;
+  const notes = `${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}${staleNote()}`;
+  const engine = S.snap ? `<span class="chip ok live"><i></i>노트북 ${when(S.snap.taken_at)} 갱신</span>` : `<span class="chip">노트북 연결 전</span>`;
+  const sw = `<button class="btn ghost" id="b-layout">${mode === "pc" ? "폰 화면으로" : "PC 화면으로"}</button>`;
+  if (mode === "pc") {
+    const strat = S.snap ? allStrategies(S.snap.summary) : [];
+    const item = (k, t, extra = "") => `<button class="nav-i" data-tab="${k}" aria-current="${S.tab === k && !S.detail}">${t}${extra}</button>`;
+    $app.innerHTML = `
+      <header class="pc-top card">
+        <b class="brand">자동매매 콘솔</b><span class="muted small">${esc(S.name)}</span>
+        <span class="chip warn">모의 실행</span>${engine}
+        <span class="grow"></span>${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
+      </header>
+      <div class="pc-body">
+        <nav class="pc-nav card" aria-label="주 메뉴">
+          ${item("home", "대시보드")}
+          <div class="nav-h">전략</div>
+          ${strat.map((g) => `<button class="nav-i" data-detail="${esc(g.id)}" aria-current="${S.tab === "home" && S.detail === g.id}"><span class="sym num">${esc(g.symbol)}</span>${esc(stratName(g, (S.snap.summary.plans || {})[g.id]))}</button>`).join("") || `<span class="muted small" style="padding:6px 10px">전략 없음</span>`}
+          <div class="nav-h">운영</div>
+          ${item("orders", "오늘 밤 주문")}
+          ${item("approve", "주문표 승인", drafts ? `<span class="badge">${drafts}</span>` : "")}
+          ${item("board", "게시판")}
+          ${item("family", "가족·공유")}
+          ${item("settings", "설정")}
+        </nav>
+        <main class="pc-main">${notes}<div id="view">${currentView()}</div></main>
+      </div>`;
+  } else {
+    const t = S.snap ? (S.snap.summary.totals || {}) : {};
+    const tabs = [["home", "현황"], ["orders", "주문"], ["approve", "승인"], ["board", "알림"], ["more", "더보기"]];
+    $app.innerHTML = `
+      <header class="ph-top card">
+        <div class="row"><b>${esc(S.name)}</b><span class="chip warn">모의</span><span class="grow"></span>${engine}</div>
+        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (원장 기준)</span><b class="num">$${money(t.value)}</b>
+          <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
+          : `<h1>${S.detail ? "전략" : VIEWS[S.tab]}</h1>`}
+      </header>
+      ${drafts && S.tab !== "approve" ? `<button class="banner" data-tab="approve">주문표 승인 대기 ${drafts}건 <span aria-hidden="true">›</span></button>` : ""}
+      ${notes}
+      <div id="view">${currentView()}</div>
+      ${S.tab === "more" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
+      <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${S.tab === k}">${l}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>`;
+  }
   bind();
+}
+
+function viewOrders() {
+  if (!S.snap) return `<div class="card"><div class="empty">노트북이 연결되면 오늘 밤 주문이 보입니다.</div></div>`;
+  const s = S.snap.summary, d = S.snap.detail || {};
+  const accs = Object.entries(s.accounts || {}).filter(([, a]) => a.strategies.length);
+  const cur = S.ordAcc && accs.find(([k]) => k === S.ordAcc) ? S.ordAcc : (accs[0] || [])[0];
+  let out = `<div class="row">${accs.map(([k, a]) => `<button class="btn ${k === cur ? "primary" : ""}" data-ordacc="${esc(k)}">${esc(ACC_NAME[k] || a.name)}</button>`).join("")}
+    <span class="small muted">모의(가상) 주문 · 실제 주문은 노트북 tonight 목록대로</span></div>`;
+  const acc = (s.accounts || {})[cur];
+  if (!acc) return out;
+  const tn = (d.tonight || {})[cur] || [];
+  for (const g of acc.strategies) {
+    const plan = (s.plans || {})[g.id];
+    const rows = plan ? plan.lines.map((l) => ({ ...l, st: l.on ? "걸림" : "체크 해제" }))
+                      : tn.filter((o) => o.strategy_id === g.id).map((o) => ({ ...o, st: "걸림" }));
+    out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, plan))}</h2>
+        <span class="small muted">${plan ? `미국 ${esc(plan.trade_date)} 장 · ${esc(plan.phase || "")}` : ""}</span></div>
+      ${rows.length ? rows.map((r) => `<div class="oline ${r.st === "걸림" ? "" : "off"}"><span class="${sideCls(r.side)}">${sideKo(r.side)}</span>
+          <span class="small muted num">${esc(r.kind)}</span><b class="num">${money(r.price)} × ${r.qty}</b>
+          <span class="chip ${r.st === "걸림" ? "ok" : ""}">${r.st}</span></div>`).join("") : `<div class="empty">오늘 밤 주문 없음 (승인 전이거나 해당 없음)</div>`}
+    </section>`;
+  }
+  return out;
 }
 
 function staleNote() {
@@ -244,6 +350,7 @@ function viewHome(snap, mine) {
   ];
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
+  if (layout() === "phone" && mine) return phoneHome(s, d, strat, out);
   out += `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
     <b class="num ${c}">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
   out += `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
@@ -263,6 +370,28 @@ function viewHome(snap, mine) {
   const v4 = Object.entries(s.v4 || {});
   if (v4.length) out += `<div class="card"><h2>무한매수 V4.0 전환 준비</h2>${v4.map(([sid, r]) =>
     `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`;
+  return out;
+}
+function phoneHome(s, d, strat, out) {
+  for (const [accId, acc] of Object.entries(s.accounts || {})) {
+    const rows = acc.strategies.map((g) => ({ ...g, account: accId }));
+    if (!rows.length) continue;
+    const lc = (s.last_check || {})[accId];
+    out += `<section class="card list"><div class="row"><b>${esc(ACC_NAME[accId] || acc.name)}</b>
+        <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API" : "수동"}</span><span class="grow"></span>
+        ${lc ? `<span class="chip ${lc.ok ? "ok" : "warn"}">${lc.ok ? "실제=모의" : "비교 다름"}</span>` : ""}</div>
+      ${rows.length ? rows.map((g) => { const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id], px = (s.closes || {})[g.symbol];
+        const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
+        const sub = `${g.qty}주${g.avg ? " · 평단 " + money(g.avg) : ""}${plan ? " · T " + plan.T : vr ? " · V " + money(vr.V) : ""}`;
+        return `<button class="lrow" data-detail="${esc(g.id)}"><span class="sym num">${esc(g.symbol)}</span>
+          <span class="lmain"><b>${esc(stratName(g, plan))}</b><span class="small muted num">${esc(sub)}</span></span>
+          <span class="lval num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "$" + money(g.cash) : (pnl >= 0 ? "+" : "−") + money(Math.abs(pnl))}</span></button>`; }).join("")
+        : `<div class="empty">전략 없음</div>`}</section>`;
+  }
+  out += `<div class="card"><div class="row between"><h2>자산 추이</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
+  const ns = (d.notices || []).slice(0, 3);
+  if (ns.length) out += `<div class="card"><div class="row between"><h2>최근 알림</h2><button class="btn ghost" data-tab="board">전체 보기</button></div>
+    ${ns.map((n) => `<div class="small">${esc(n.text)}</div>`).join("")}</div>`;
   return out;
 }
 function allStrategies(s) {
@@ -531,14 +660,17 @@ function renderLogin() {
 }
 
 function bind() {
-  document.getElementById("b-refresh").onclick = () => { S.msg = null; refresh(); };
-  document.getElementById("b-out").onclick = async () => { await sb.auth.signOut(); };
-  document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
+  const br = document.getElementById("b-refresh"); if (br) br.onclick = () => { S.msg = null; refresh(); };
+  const bo = document.getElementById("b-out"); if (bo) bo.onclick = async () => { await sb.auth.signOut(); };
+  const bl = document.getElementById("b-layout"); if (bl) bl.onclick = () => {
+    try { localStorage.setItem("layout", layout() === "pc" ? "phone" : "pc"); } catch (e) {} render(); };
+  document.querySelectorAll("[data-ordacc]").forEach((b) => b.onclick = () => { S.ordAcc = b.dataset.ordacc; render(); });
+  document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
   document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = async () => {
     S.tab = b.dataset.tab; S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
     try { localStorage.setItem("tab", S.tab); } catch (e) {}
-    if (S.tab === "family") await loadFamily().catch(() => {});
+    if (S.tab === "family" || S.tab === "more") await loadFamily().catch(() => {});
     render(); });
   document.querySelectorAll("input[data-n]").forEach((cb) => cb.onchange = () =>
     send("toggle_line", { sid: cb.dataset.sid, n: Number(cb.dataset.n), trade_date: cb.dataset.td }));
@@ -597,6 +729,8 @@ async function onSession(session) {
 sb.auth.onAuthStateChange((_e, session) => { if ((session && session.user.id) !== (S.user && S.user.id)) onSession(session); });
 sb.auth.getSession().then(({ data }) => onSession(data.session));
 setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 30000);
+let _lastMode = null;
+window.addEventListener("resize", () => { const m = layout(); if (m !== _lastMode) { _lastMode = m; if (S.user) render(); } });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 </script>
 </body>
