@@ -56,7 +56,7 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-event
     radial-gradient(38rem 32rem at 105% 18%, var(--glow-lav), transparent 60%),
     radial-gradient(40rem 30rem at 30% 110%, var(--glow-mix), transparent 62%),
     var(--bg) }
-.wrap { max-width: 680px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px));
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 44px;
   display: flex; flex-direction: column; gap: 14px }
 h1 { font-size: 21px; margin: 0; letter-spacing: -0.015em; font-weight: 700 }
@@ -79,6 +79,17 @@ h2 { font-size: 15.5px; margin: 0; text-wrap: balance; font-weight: 700 }
 .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px;
   background: var(--buy); color: #fff; font-size: 12px; line-height: 18px }
 #view { display: flex; flex-direction: column; gap: 14px }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px }
+.kpi { gap: 4px } .kpi b { font-size: 21px; font-weight: 600 } .kpi b.warnc { color: var(--warn) }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px }
+.scard { text-align: left; font: inherit; color: var(--ink); cursor: pointer }
+.scard:hover { border-color: var(--accent) }
+.sym { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 7px; background: var(--soft) }
+.kv2 { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 13px } .kv2 .num { text-align: right }
+.chart { width: 100%; height: auto; display: block }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px }
+@media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr } }
+tr.offrow td { opacity: .45 } tr.offrow td.n { text-decoration: line-through }
 .card { border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
 .card > h2:first-child, .card > .row:first-child h2 { color: var(--ink) }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
@@ -217,38 +228,153 @@ function viewHome(snap, mine) {
   if (!snap) return `<div class="card"><div class="empty">노트북 승인 봇이 켜지면 몇 분 안에 현황이 올라옵니다.</div>
     ${mine ? `<div class="small muted">처음 쓰는 사용자라면 노트북에 내 칸(프로필)이 먼저 있어야 합니다. 노트북 관리자에게 이 로그인 이메일을 알려 주세요. 칸이 생기면 '설정' 탭에서 계좌와 전략을 직접 추가합니다.</div>` : ""}</div>`;
   const s = snap.summary, d = snap.detail || {};
+  if (S.detail && mine) return viewStrategy(s, d, S.detail);
+  const t = s.totals || {}, strat = allStrategies(s);
+  const tonight = Object.values(d.tonight || {}).flat();
+  const draftN = Object.keys(s.drafts || {}).length;
+  const signed = (x) => x === null || x === undefined ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + "$" + money(Math.abs(Number(x)));
+  const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
+  const kpis = [
+    ["평가금액", "$" + money(t.value), "원장 기준 · 보유×종가 + 전략 잔금", ""],
+    ["평가손익", signed(t.eval_pnl), "보유 종목 (평단 있는 것)", pnlCls(t.eval_pnl)],
+    ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
+    ["전략 잔금", "$" + money(t.cash), "주문표·VR Pool 합계", ""],
+    ["오늘 밤 주문", tonight.length + "건", "가상(모의) 주문 기준", ""],
+    ["승인 대기", draftN + "건", draftN ? "승인 탭에서 확인" : "없음", draftN ? "warnc" : ""],
+  ];
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
+  out += `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
+    <b class="num ${c}">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+  out += `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
+  out += `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`;
+  if (tonight.length && mine !== null) out += `<details class="card" ${window.innerWidth >= 820 ? "open" : ""}><summary class="row between"><h2 style="display:inline">오늘 밤 주문 ${tonight.length}건</h2><span class="small muted">모의 실행이 건 가상 주문 · 실제 주문은 tonight 목록으로</span></summary>
+    <div class="scroll"><table><thead><tr><th>전략</th><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th></tr></thead><tbody>
+    ${tonight.map((o) => `<tr><td class="small">${esc(o.strategy_id)}</td><td class="${sideCls(o.side)}">${sideKo(o.side)}</td><td class="small muted">${esc(o.kind)}</td>
+      <td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td></tr>`).join("")}</tbody></table></div></details>`;
   for (const [accId, acc] of Object.entries(s.accounts || {})) {
     if (!acc.strategies.length) continue;
-    const sh = (s.shadow || {})[accId] || {};
-    const rows = acc.strategies.map((g) => {
-      const m = sh[g.id];
-      const same = m ? (m.qty === g.qty ? "ok" : "warn") : "";
-      return `<tr><td>${esc(g.symbol)}<div class="muted" style="font-size:11px">${esc(kindKo(g.kind))}</div></td>
-        <td class="n">${g.qty}주</td><td class="n">${money(g.avg)}</td><td class="n">${money(g.cash)}</td>
-        <td class="n">${m ? `<span class="chip ${same}">${m.qty}주</span>` : "-"}</td></tr>`;
-    }).join("");
-    const ready = (s.readiness || {})[accId];
-    const lc = (s.last_check || {})[accId];
-    const tn = (d.tonight || {})[accId] || [];
-    out += `<div class="card">
-      <div class="row between"><h2>${esc(ACC_NAME[accId] || acc.name || accId)}</h2>
+    const ready = (s.readiness || {})[accId], lc = (s.last_check || {})[accId];
+    out += `<div class="card"><div class="row between"><h2>${esc(ACC_NAME[accId] || acc.name || accId)}</h2>
         <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API 연결" : "수동 계좌"}</span></div>
-      <div class="scroll"><table><thead><tr><th>종목</th><th class="n">실제</th><th class="n">평단</th><th class="n">잔금 $</th><th class="n">모의</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
       ${lc ? `<div class="small">실제 vs 모의 (미국 ${esc(lc.date)}): ${lc.ok ? '<span class="chip ok">일치</span>' : `<span class="chip warn">다름 ${lc.fills_ok ? "" : "· 체결"} ${lc.hold_ok ? "" : "· 보유"}</span>`}</div>` : ""}
-      ${ready ? `<div class="small muted">${esc(ready.replace("🚦 ", ""))}</div>` : ""}
-      ${tn.length && mine !== null ? `<details><summary class="small">오늘 밤 가상 주문 ${tn.length}건</summary>${linesTable(tn)}</details>` : ""}
-    </div>`;
+      ${ready ? `<div class="small muted">${esc(ready.replace("🚦 ", ""))}</div>` : ""}</div>`;
   }
   const v4 = Object.entries(s.v4 || {});
   if (v4.length) out += `<div class="card"><h2>무한매수 V4.0 전환 준비</h2>${v4.map(([sid, r]) =>
     `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`;
-  const vr = Object.entries(s.vr || {});
-  if (vr.length) out += `<div class="card"><h2>VR</h2>${vr.map(([sid, r]) =>
-    `<div class="row between small"><span>${esc(sid)} · ${r.week}주차 (${esc(r.start)}부터)</span><span class="mono">V ${money(r.V)}</span></div>`).join("")}</div>`;
   return out;
+}
+function allStrategies(s) {
+  return Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+}
+function strategyCard(s, g) {
+  const px = (s.closes || {})[g.symbol], plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
+  const m = ((s.shadow || {})[g.account] || {})[g.id];
+  const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
+  const metric = plan ? ["T · 단계", `${plan.T} / ${plan.splits} · ${plan.phase || "-"}`] :
+                 vr ? ["V · Pool", `${money(vr.V)} · ${money(vr.pool)}`] : ["상태", g.active ? "켜짐" : "꺼짐"];
+  const status = !g.active ? ["꺼짐", ""] : m ? (m.qty === g.qty ? ["실제 = 모의", "ok"] : [`모의 ${m.qty}주와 다름`, "warn"]) : ["모의 기록 없음", ""];
+  return `<button class="card scard" data-detail="${esc(g.id)}" aria-label="${esc(g.id)} 자세히">
+    <div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div>
+    <div class="kv2">
+      <span class="muted">보유 / 평단</span><span class="num">${g.qty}주 / ${money(g.avg)}</span>
+      <span class="muted">${vr ? "Pool(잔금)" : "원장 잔금"}</span><span class="num">$${money(g.cash)}</span>
+      <span class="muted">${metric[0]}</span><span class="num">${esc(metric[1])}</span>
+      <span class="muted">평가손익</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
+    </div>
+    <span class="chip ${status[1]}" style="align-self:flex-start">${status[0]}</span></button>`;
+}
+function stratName(g, plan) {
+  if (g.kind === "sheet") return `무한매수 ${plan && plan.splits ? Number(plan.splits) + "분할" : ""} 주문표`;
+  if (g.kind === "vr") return `VR${g.multiplier > 1 ? " " + g.multiplier + "배수" : ""}`;
+  if (g.kind === "infinite_buy_v4") return "무한매수 V4.0";
+  return kindKo(g.kind);
+}
+function equityChart(rows) {
+  const pts = rows.filter((r) => r.value !== null && r.value !== undefined).map((r) => ({ d: r.date, v: Number(r.value) }));
+  if (pts.length < 2) return `<div class="empty">오늘부터 매일 한 번 평가금액을 기록합니다. 이틀째부터 그래프가 그려집니다.${pts.length ? ` (오늘 $${money(pts[0].v)})` : ""}</div>`;
+  const W = window.innerWidth < 700 ? 460 : 1000, H = window.innerWidth < 700 ? 260 : 240, P = 34, lo = Math.min(...pts.map((p) => p.v)), hi = Math.max(...pts.map((p) => p.v));
+  const pad = (hi - lo) * 0.15 || hi * 0.02, y0 = lo - pad, y1 = hi + pad;
+  const X = (i) => P + i * (W - P * 2) / (pts.length - 1), Y = (v) => H - 24 - (v - y0) / (y1 - y0) * (H - 44);
+  const line = pts.map((p, i) => `${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" ");
+  const area = `${X(0).toFixed(1)},${H - 24} ${line} ${X(pts.length - 1).toFixed(1)},${H - 24}`;
+  const ticks = [y0 + (y1 - y0) * 0.2, y0 + (y1 - y0) * 0.5, y0 + (y1 - y0) * 0.8];
+  const last = pts[pts.length - 1];
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="평가금액 추이 ${pts[0].d}부터 ${last.d}까지">
+    <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    ${ticks.map((v) => `<line x1="${P}" x2="${W - P}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${P}" y="${(Y(v) - 4).toFixed(1)}" font-size="12" fill="var(--muted)">$${money(v, 0)}</text>`).join("")}
+    <polygon points="${area}" fill="url(#eqg)"/>
+    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="${X(pts.length - 1).toFixed(1)}" cy="${Y(last.v).toFixed(1)}" r="5" fill="var(--accent)"/>
+    <text x="${P}" y="${H - 4}" font-size="12" fill="var(--muted)">${esc(pts[0].d.slice(5))}</text>
+    <text x="${W - P}" y="${H - 4}" font-size="12" text-anchor="end" fill="var(--muted)">${esc(last.d.slice(5))} · $${money(last.v)}</text></svg>`;
+}
+function viewStrategy(s, d, sid) {
+  const g = allStrategies(s).find((x) => x.id === sid);
+  if (!g) { S.detail = null; return viewHome({ summary: s, detail: d }, true); }
+  const plan = (s.plans || {})[sid], vr = (s.vr || {})[sid], px = (s.closes || {})[g.symbol];
+  let out = `<div class="row"><button class="btn" data-back-home="1">← 현황</button>
+    <span class="sym num">${esc(g.symbol)}</span><h2>${esc(stratName(g, plan))}</h2><span class="chip ${g.active ? "ok" : ""}">${g.active ? "켜짐 · 모의" : "꺼짐"}</span></div>`;
+  if (plan) {
+    const facts = [["1회매수시도 B", money(plan.unit), "잔금 ÷ (분할수 − T)"], ["현재 회차 T", plan.T, `${Number(plan.splits)}분할 · ${plan.phase}`],
+      ["★%", (Number(plan.star_pct) > 0 ? "+" : "") + plan.star_pct + "%", `목표 ${Number(plan.target_pct)}% × (1 − 2T/분할수)`], ["★지점", money(plan.star_price), "평단 × (1 + ★%)"],
+      ["평단", money(plan.avg), `보유 ${plan.holding}주 (주문표)`], ["목표가", money(plan.target_price), `평단 × ${1 + Number(plan.target_pct) / 100}`],
+      ["직전 종가", money(plan.close), `종가날짜 ${esc(plan.sheet_date)}`]];
+    out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+    out += `<div class="card"><div class="row between"><h2>회차 진행</h2><span class="small muted">T ${plan.T} / ${Number(plan.splits)} · 절반 넘으면 후반전, ${Number(plan.splits) - 1} 넘으면 소진(리버스모드)</span></div>${tBar(Number(plan.T), Number(plan.splits))}</div>`;
+    out += `<div class="grid-2"><div class="card"><div class="row between"><h2>오늘 주문표</h2><span class="small muted">미국 ${esc(plan.trade_date)} 장 · 체크 해제 줄은 주문 안 함</span></div>
+      <div class="scroll"><table><thead><tr><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th><th>근거</th></tr></thead><tbody>
+      ${plan.lines.map((l) => `<tr class="${l.on ? "" : "offrow"}"><td class="${sideCls(l.side)}">${sideKo(l.side)}</td><td class="small muted">${esc(l.kind)}</td>
+        <td class="n">${money(l.price)}</td><td class="n">${l.qty}주</td><td class="small muted">${esc(lineWhy(l, plan))}</td></tr>`).join("")}</tbody></table></div></div>
+      <div class="card"><h2>가격 사다리</h2>${ladder(plan, px)}</div></div>`;
+  } else if (vr) {
+    const facts = [["V", money(vr.V), `${vr.week}주차 · ${esc(vr.start)}부터 2주`], ["최소값", money(vr.min), "V × 0.85 — 아래에서 매수"], ["최대값", money(vr.max), "V × 1.15 — 위에서 매도"],
+      ["Pool", "$" + money(vr.pool), "매수에 쓸 현금"], ["보유", g.qty + "주", px ? `종가 ${money(px)} · 평가 $${money(g.qty * Number(px))}` : ""]];
+    out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+    const lv = (arr, kind) => arr.map(([p, q], i) => ({ p, q, kind, tag: `vr_${kind}_${i + 1}` }));
+    const levels = [...lv(vr.sell || [], "sell").reverse(), ...lv(vr.buy || [], "buy")];
+    out += `<div class="card"><div class="row between"><h2>예약주문 사다리</h2><span class="small muted">기간잔량 지정가 · 체결된 단계는 다시 걸지 않음</span></div>
+      <div class="scroll"><table><thead><tr><th>구분</th><th class="n">가격</th><th class="n">수량</th><th>상태</th></tr></thead><tbody>
+      ${levels.map((l) => `<tr><td class="${l.kind === "buy" ? "buy" : "sell"}">${l.kind === "buy" ? "매수" : "매도"} ${l.tag.split("_")[2]}단계</td><td class="n">${money(l.p)}</td><td class="n">${l.q}주</td>
+        <td>${(vr.filled_tags || []).includes(l.tag) ? '<span class="chip ok">체결</span>' : '<span class="chip">대기</span>'}</td></tr>`).join("")}</tbody></table></div></div>`;
+  } else {
+    out += `<div class="card"><div class="empty">이 전략은 아직 자세한 화면이 없습니다. 보유 ${g.qty}주 · 잔금 $${money(g.cash)}</div></div>`;
+  }
+  return out;
+}
+function lineWhy(l, p) {
+  const px = Number(l.price);
+  if (l.side === "SELL") return Math.abs(px - Number(p.target_price)) < 0.02 ? `목표가 +${Number(p.target_pct)}% 나머지` : Math.abs(px - Number(p.star_price)) < 0.02 ? "★지점 쿼터매도 (보유 ÷ 4)" : "매도";
+  if (Math.abs(px - Number(p.star_price) + 0.01) < 0.02) return "★지점 − 0.01 매수";
+  if (px > Number(p.close)) return "종가 위 매수";
+  return `아래 가격 사다리 (종가 −${((1 - px / Number(p.close)) * 100).toFixed(0)}%)`;
+}
+function tBar(T, N) {
+  const W = window.innerWidth < 700 ? 460 : 1000, x = (v) => 10 + Math.min(Math.max(v / N, 0), 1) * (W - 20);
+  return `<svg viewBox="0 0 ${W} 60" class="chart" role="img" aria-label="T ${T} / ${N}">
+    <rect x="10" y="16" width="${W - 20}" height="16" rx="8" fill="var(--soft)"/>
+    <rect x="10" y="16" width="${(x(T) - 10).toFixed(1)}" height="16" rx="8" fill="var(--accent)"/>
+    <line x1="${x(N / 2)}" x2="${x(N / 2)}" y1="8" y2="40" stroke="var(--muted)" stroke-width="2"/>
+    <line x1="${x(N - 1)}" x2="${x(N - 1)}" y1="8" y2="40" stroke="var(--bad)" stroke-width="2"/>
+    <text x="${x(N / 2)}" y="56" font-size="12" text-anchor="middle" fill="var(--muted)">${N / 2} · 후반전</text>
+    <text x="${x(N - 1)}" y="56" font-size="12" text-anchor="end" fill="var(--bad)">${N - 1} · 소진</text></svg>`;
+}
+function ladder(p, close) {
+  const marks = [[p.target_price, "목표가 · 나머지 매도", "var(--sell)", ""], [p.star_price, "★지점 · 쿼터매도", "var(--sell)", ""],
+    [p.avg, "평단", "var(--ink)", "4 3"], [p.close, "직전 종가", "var(--muted)", ""]];
+  p.lines.filter((l) => l.side === "BUY" && l.on && Number(l.price) < Number(p.close) * 0.999).slice(0, 4)
+    .forEach((l) => marks.push([l.price, `매수 ${l.qty}주`, "var(--buy)", "4 3"]));
+  const vals = marks.map((m) => Number(m[0])).filter((v) => v), hi = Math.max(...vals), lo = Math.min(...vals);
+  const H = 360, Y = (v) => 16 + (hi - v) / ((hi - lo) || 1) * (H - 40);
+  let lastY = -99;
+  const rows = marks.filter((m) => m[0]).sort((a, b) => Number(b[0]) - Number(a[0])).map(([v, label, c, dash]) => {
+    let y = Y(Number(v)); const ty = Math.max(y, lastY + 18); lastY = ty;
+    return `<line x1="80" x2="84" y1="${ty.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${c}" stroke-width="1"/><line x1="84" x2="190" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${c}" stroke-width="1.5" stroke-dasharray="${dash}"/>
+      <line x1="190" x2="200" y1="${y.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${c}" stroke-width="1"/>
+      <text x="76" y="${(ty + 4).toFixed(1)}" font-size="13" text-anchor="end" fill="${c}" font-family="IBM Plex Mono, monospace">${money(v)}</text>
+      <text x="206" y="${(ty + 4).toFixed(1)}" font-size="12" fill="var(--ink)">${esc(label)}</text>`; }).join("");
+  return `<svg viewBox="0 0 420 ${H}" class="chart" role="img" aria-label="목표가, ★지점, 평단, 종가, 매수 가격 위치">${rows}</svg>`;
 }
 const kindKo = (k) => ({ sheet: "주문표", vr: "VR", v4: "V4.0", infinite: "무한매수", dynamic: "동적분할" }[k] || k || "");
 function linesTable(lines) {
@@ -407,8 +533,10 @@ function renderLogin() {
 function bind() {
   document.getElementById("b-refresh").onclick = () => { S.msg = null; refresh(); };
   document.getElementById("b-out").onclick = async () => { await sb.auth.signOut(); };
+  document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
+  document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = async () => {
-    S.tab = b.dataset.tab; S.msg = null; S.confirm = null; S.viewing = null;
+    S.tab = b.dataset.tab; S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
     try { localStorage.setItem("tab", S.tab); } catch (e) {}
     if (S.tab === "family") await loadFamily().catch(() => {});
     render(); });
