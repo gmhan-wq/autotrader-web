@@ -121,6 +121,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .notice:last-child { border-bottom: 0 }
 .msg { font-size: 13px; padding: 9px 12px; border-radius: 12px; background: var(--glass-strong); border: 1px solid var(--glass-edge) }
 .msg.bad { color: var(--bad) }
+.msg.warn-note { color: var(--warn); border-color: currentColor }
 .empty { color: var(--muted); font-size: 14px; padding: 6px 0 }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px; border-radius: 14px; background: var(--soft) }
 .login { max-width: 380px; margin: 8vh auto 0; width: 100% }
@@ -198,8 +199,18 @@ function render() {
     </div>
     <nav class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${t}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>
     ${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}
+    ${staleNote()}
     <div id="view">${S.tab === "home" ? viewHome(S.snap, true) : S.tab === "approve" ? viewApprove() : S.tab === "board" ? viewBoard() : S.tab === "settings" ? viewSettings() : viewFamily()}</div>`;
   bind();
+}
+
+function staleNote() {
+  if (!S.snap) return "";
+  const min = Math.round((Date.now() - new Date(S.snap.taken_at).getTime()) / 60000);
+  const waiting = S.cmds.filter((c) => c.status === "pending").length;
+  if (min < 30 && !(waiting && min >= 2)) return "";
+  const ago = min >= 120 ? Math.round(min / 60) + "시간" : min + "분";
+  return `<div class="msg warn-note">노트북 마지막 갱신 ${ago} 전 — 꺼져 있거나 잠자기 중일 수 있습니다.${waiting ? ` 웹에서 보낸 명령 ${waiting}건은 노트북이 켜지면 반영됩니다.` : ""}</div>`;
 }
 
 function viewHome(snap, mine) {
