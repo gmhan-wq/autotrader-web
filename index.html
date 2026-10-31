@@ -340,7 +340,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31e";
+const APP_VERSION = "2026-10-31f";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -896,7 +896,7 @@ function viewApprove() {
   return out + cmdList();
 }
 const CMD_KO = { approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침",
-                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경" , upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록"};
+                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경" , upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록", set_telegram: "텔레그램 연결"};
 function cmdList() {
   if (!S.cmds.length) return "";
   return `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => { const p = c.payload || {};
@@ -923,20 +923,48 @@ function keyForm(aid) {
     ${S.keyNote ? `<div class="small ${S.keyBad ? "sell" : "muted"}">${esc(S.keyNote)}</div>` : ""}
     <div class="row"><span class="grow"></span><button type="button" class="btn" data-keycancel="1">취소</button><button class="btn primary" ${S.busy ? "disabled" : ""}>잠가서 보내기</button></div></form>`;
 }
+async function sendSecret(command, prefix, obj, pass, extra) {
+  // 비밀(메리츠 키·텔레그램 토큰)을 업로드 암호로 잠가 내 폴더에 두고 노트북에 알린다. 노트북이 받아 .env 에 저장하고 지운다.
+  if (pass.length < 12) throw new Error("업로드 암호는 12자 이상이어야 합니다 (노트북 .env 도 같은 문장)");
+  const blob = await lockBytes(new TextEncoder().encode(JSON.stringify(obj)), prefix + ".json", pass);
+  const path = `${S.user.id}/${prefix}_${Date.now()}.bin`;
+  const up = await sb.storage.from("uploads").upload(path, blob, { contentType: "application/octet-stream", upsert: false });
+  if (up.error) throw new Error(ko(up.error.message));
+  const r = await sb.from("web_commands").insert({ command, payload: { path, by: S.name, ...(extra || {}) }, user_id: S.user.id, acted_by: S.user.id });
+  if (r.error) throw new Error(ko(r.error.message));
+  try { localStorage.setItem("upPass", pass); } catch (e) {}
+}
 async function sendKey(aid, key, secret, pass) {
-  if (pass.length < 12) { S.keyBad = true; S.keyNote = "업로드 암호는 12자 이상이어야 합니다 (노트북 .env 도 같은 문장)"; return render(); }
   S.busy = true; S.keyBad = false; S.keyNote = "잠그는 중…"; render();
   try {
-    const bytes = new TextEncoder().encode(JSON.stringify({ account: aid, app_key: key.trim(), app_secret: secret.trim() }));
-    const blob = await lockBytes(bytes, "apikey.json", pass);
-    const path = `${S.user.id}/key_${Date.now()}.bin`;
-    const up = await sb.storage.from("uploads").upload(path, blob, { contentType: "application/octet-stream", upsert: false });
-    if (up.error) throw new Error(ko(up.error.message));
-    const r = await sb.from("web_commands").insert({ command: "set_api_key", payload: { path, account: aid, by: S.name }, user_id: S.user.id, acted_by: S.user.id });
-    if (r.error) throw new Error(ko(r.error.message));
-    S.keyFor = null; S.keyNote = ""; S.msg = { text: "키를 잠가서 보냈습니다. 노트북이 20초 안에 저장하고 결과를 '최근 보낸 명령'과 텔레그램으로 알려 줍니다." };
+    await sendSecret("set_api_key", "key", { account: aid, app_key: key.trim(), app_secret: secret.trim() }, pass, { account: aid });
+    S.keyFor = null; S.keyNote = ""; S.msg = { text: "키를 잠가서 보냈습니다. 노트북이 20초 안에 저장하고 결과를 '최근 보낸 명령'과 알림으로 알려 줍니다." };
   } catch (e) { S.keyBad = true; S.keyNote = "보내기 실패: " + (e.message || e); }
   S.busy = false; await refresh(); setTimeout(refresh, 25000);
+}
+async function sendTelegram(token, pass) {
+  S.busy = true; S.tgBad = false; S.tgNote = "잠그는 중…"; render();
+  try {
+    await sendSecret("set_telegram", "tg", { token: token.trim() }, pass);
+    S.tgOpen = false; S.tgNote = "";
+    S.msg = { text: "토큰을 보냈습니다. 20초 뒤 '최근 보낸 명령'에 봇 이름이 나오면, 폰 텔레그램에서 그 봇을 열고 '시작'을 누르세요. 20초 안에 '연결 완료' 메시지가 옵니다." };
+  } catch (e) { S.tgBad = true; S.tgNote = "보내기 실패: " + (e.message || e); }
+  S.busy = false; await refresh(); setTimeout(refresh, 25000);
+}
+function telegramCard(s) {
+  if (owner() !== S.user.id) return "";
+  let saved = ""; try { saved = localStorage.getItem("upPass") || ""; } catch (e) {}
+  const on = !!s.telegram;
+  return `<div class="card"><div class="row between"><h2>텔레그램 알림</h2><span class="chip ${on ? "ok" : "warn"}">${on ? "연결됨" : "아직 연결 안 됨"}</span></div>
+    <div class="small muted">${on ? "승인·체결·급등락·거부 알림이 텔레그램으로 갑니다. 봇을 바꾸려면 아래에서 새 토큰을 보내세요." : "연결 전에는 알림이 웹 '게시판'에 쌓입니다. 폰에서 봇을 만들어 연결하세요."}</div>
+    ${S.tgOpen || !on ? `<ol class="small"><li>폰 텔레그램에서 <b>@BotFather</b>(파란 체크) → <span class="mono">/newbot</span> → 이름 → 끝이 <b>bot</b> 인 아이디</li>
+      <li>받은 <b>토큰</b>(숫자:긴글자)을 아래에 붙여 넣고 보내기</li><li>잠시 뒤 폰에서 만든 봇을 열고 <b>시작</b> → '연결 완료' 메시지</li></ol>
+    <form id="f-tg" class="row" style="align-items:flex-end">
+      <label style="flex:2;min-width:200px">봇 토큰<input type="password" id="tg-token" autocomplete="off" required minlength="30"></label>
+      <label style="flex:2;min-width:180px">업로드 암호 (12자 이상)<input type="password" id="tg-pass" autocomplete="off" value="${esc(saved)}" required minlength="12"></label>
+      <button class="btn primary" ${S.busy ? "disabled" : ""}>잠가서 보내기</button></form>
+    ${S.tgNote ? `<div class="small ${S.tgBad ? "sell" : "muted"}">${esc(S.tgNote)}</div>` : ""}`
+    : `<div class="row"><button class="btn" data-tgopen="1">봇 바꾸기</button></div>`}</div>`;
 }
 function viewSettings() {
   const s = S.snap ? S.snap.summary : null;
@@ -944,7 +972,7 @@ function viewSettings() {
   const accs = Object.entries(s.accounts || {});
   const kind = S.newKind || "sheet";
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
-  return `
+  return telegramCard(s) + `
     <div class="card"><h2>계좌</h2>
       ${accs.map(([aid, a]) => `<div class="row between"><span>${esc(ACC_NAME[aid] || a.name)} <span class="muted small">${esc(aid)}</span></span>
         <span class="chip ${a.api ? "ok" : ""}">${a.api ? "API 연결" : "수동 (키 없음)"}</span></div>
@@ -1150,6 +1178,9 @@ function bind() {
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: b.dataset.on === "true" ? "공동 운영을 켰습니다. 상대가 내 계좌를 승인·설정할 수 있습니다." : "공동 운영을 껐습니다." };
     await loadFamily(); render(); });
   const fbBody = document.getElementById("fb-body"); if (fbBody) fbBody.oninput = () => { if (S.fbForm) S.fbForm.text = fbBody.value; };
+  document.querySelectorAll("[data-tgopen]").forEach((b) => b.onclick = () => { S.tgOpen = true; render(); });
+  const ftg = document.getElementById("f-tg"); if (ftg) ftg.onsubmit = (e) => { e.preventDefault();
+    sendTelegram(document.getElementById("tg-token").value, document.getElementById("tg-pass").value); };
   document.querySelectorAll("[data-keyfor]").forEach((b) => b.onclick = () => { S.keyFor = b.dataset.keyfor; S.keyNote = ""; render(); });
   document.querySelectorAll("[data-keycancel]").forEach((b) => b.onclick = () => { S.keyFor = null; render(); });
   const fkey = document.getElementById("f-key"); if (fkey) fkey.onsubmit = (e) => { e.preventDefault();
