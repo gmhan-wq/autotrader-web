@@ -339,7 +339,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31c";
+const APP_VERSION = "2026-10-31d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -383,7 +383,9 @@ async function sendFeedback(body) {
   try {
     if (f.attach && f.shot) {
       try {                                          // 캡처 올리기가 안 돼도 내용은 보낸다
-        const blob = await (await fetch(f.shot)).blob();
+        const [hd, b64] = f.shot.split(","), bin = atob(b64), arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const blob = new Blob([arr], { type: (hd.match(/data:([^;]+)/) || [])[1] || "image/jpeg" });
         const path = `${S.user.id}/${Date.now()}.jpg`;
         const up = await sb.storage.from("feedback").upload(path, blob, { contentType: "image/jpeg", upsert: false });
         if (up.error) ctx.shot_error = up.error.message; else shot_path = path;
@@ -401,7 +403,7 @@ function feedbackModal() {
   return `<div class="modal-bg" role="dialog" aria-modal="true" aria-label="${bug ? "오류제보" : "기능개선"}"><div class="card modal">
     <div class="row between"><h2>${bug ? "🐞 오류제보" : "💡 기능개선 건의"}</h2><button class="btn ghost" data-fbclose="1" aria-label="닫기">✕</button></div>
     <div class="small muted">${bug ? "무엇을 하다가 어떤 문제가 났는지 짧게 적어 주세요. 지금 화면과 사용 환경(탭·기기·최근 오류)이 함께 갑니다." : "불편한 점이나 바뀌었으면 하는 것을 적어 주세요 (UI·편의성·기능)."}</div>
-    <textarea id="fb-body" maxlength="2000" placeholder="${bug ? "예) 주문표 달력에서 10/30 을 눌렀는데 아무것도 안 나와요" : "예) 오늘 밤 주문을 메리츠 앱 순서대로 보여 주면 좋겠어요"}"></textarea>
+    <textarea id="fb-body" maxlength="2000" data-keep="1" placeholder="${bug ? "예) 주문표 달력에서 10/30 을 눌렀는데 아무것도 안 나와요" : "예) 오늘 밤 주문을 메리츠 앱 순서대로 보여 주면 좋겠어요"}">${esc(f.text || "")}</textarea>
     ${f.shot ? `<label class="chk small"><input type="checkbox" id="fb-attach" ${f.attach ? "checked" : ""}> 화면 첨부 (제보한 사람과 관리자만 봅니다)</label>${f.attach ? `<img class="shot" src="${f.shot}" alt="캡처한 화면">` : ""}` : ""}
     ${f.note ? `<div class="small muted">${esc(f.note)}</div>` : ""}
     <div class="row"><span class="grow"></span><button class="btn" data-fbclose="1">취소</button>
@@ -436,12 +438,21 @@ function feedbackButtons(mode) {
   return mode === "pc" ? b : `<div class="fab">${b}</div>`;
 }
 
-async function refresh() {
+function typing() {
+  // 제보 창이 열려 있거나 입력 칸에 쓰는 중이면 화면을 다시 그리지 않는다 (쓰던 글이 지워지지 않게)
+  const a = document.activeElement;
+  if (S.fbForm) return true;
+  if (!a || !["INPUT", "TEXTAREA", "SELECT"].includes(a.tagName)) return false;
+  return a.type !== "checkbox" && a.type !== "button" && a.type !== "submit";
+}
+async function refresh(auto) {
   if (!S.user) return;
   try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); if (S.admin) await loadAdmin();
     if (S.tab === "fb_bug" || S.tab === "fb_idea") await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea"); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  if (auto === true && typing()) { S.renderLater = true; return; }
   render();
 }
+document.addEventListener("focusout", () => setTimeout(() => { if (S.renderLater && !typing()) { S.renderLater = false; render(); } }, 300));
 async function send(command, payload) {
   S.busy = true; render();
   const { error } = await sb.from("web_commands").insert({ command, payload: { ...payload, by: S.name },
@@ -460,7 +471,7 @@ function layout() {
   if (pref === "pc" || pref === "phone") return pref;
   return window.innerWidth >= 900 ? "pc" : "phone";
 }
-const VIEWS = { admin: "회원 관리", home: "대시보드", orders: "오늘 밤 주문", approve: "주문표", calendar: "주문표 달력", fb_bug: "오류제보", fb_idea: "기능개선", board: "게시판", family: "가족·공유", settings: "설정", more: "더보기" };
+const VIEWS = { admin: "회원 관리", home: "대시보드", orders: "오늘 밤 주문", approve: "주문표", calendar: "주문표 달력", fb_bug: "오류제보", fb_idea: "기능개선", board: "게시판", family: "가족·공유", settings: "계좌·전략 설정", more: "더보기" };
 function currentView() {
   if (S.tab === "home") return viewHome(S.snap, true);
   if (S.tab === "orders") return viewOrders();
@@ -560,7 +571,7 @@ function render() {
           ${item("calendar", "주문표 달력")}
           ${item("board", "게시판")}
           ${item("family", "가족·공유")}
-          ${item("settings", "설정")}
+          ${item("settings", "계좌·전략 설정")}
           ${S.flags.feedback !== false ? `<div class="nav-h">제보</div>${item("fb_bug", "🐞 오류제보")}${item("fb_idea", "💡 기능개선")}` : ""}
           ${S.admin ? item("admin", "회원 관리", (S.members || []).filter((m) => m.status === "pending").length ? `<span class="badge">${(S.members || []).filter((m) => m.status === "pending").length}</span>` : "") : ""}
         </nav>
@@ -676,6 +687,9 @@ function viewHome(snap, mine) {
   out += `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
     <b class="num ${c}">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
   out += `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
+  if (!strat.length && mine) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
+    <div class="small muted">메리츠 계좌와 따라갈 전략(무한매수 주문표·VR·V4.0)을 먼저 등록하세요. 계좌 API 키는 노트북 .env 에만 넣습니다.</div>
+    <div class="row"><button class="btn primary" data-tab="settings">계좌·전략 등록하기</button></div></div>`;
   out += `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`;
   if (tonight.length && mine !== null) out += `<details class="card" ${window.innerWidth >= 820 ? "open" : ""}><summary class="row between"><h2 style="display:inline">오늘 밤 주문 ${tonight.length}건</h2><span class="small muted">모의 실행이 건 가상 주문 · 실제 주문은 tonight 목록으로</span></summary>
     <div class="scroll"><table><thead><tr><th>전략</th><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th></tr></thead><tbody>
@@ -708,6 +722,9 @@ function marketStrip(s) {
 }
 function phoneHome(s, d, strat, out) {
   out += marketStrip(s);
+  if (!strat.length) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
+    <div class="small muted">메리츠 계좌와 따라갈 전략을 먼저 등록하세요 (더보기 → 계좌·전략 설정).</div>
+    <div class="row"><button class="btn primary" data-tab="settings">계좌·전략 등록하기</button></div></div>`;
   for (const [accId, acc] of Object.entries(s.accounts || {})) {
     const rows = acc.strategies.map((g) => ({ ...g, account: accId }));
     if (!rows.length) continue;
@@ -1103,6 +1120,7 @@ function bind() {
     const r = await sb.rpc("set_operate", { p_grant: Number(b.dataset.operate), p_on: b.dataset.on === "true" });
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: b.dataset.on === "true" ? "공동 운영을 켰습니다. 상대가 내 계좌를 승인·설정할 수 있습니다." : "공동 운영을 껐습니다." };
     await loadFamily(); render(); });
+  const fbBody = document.getElementById("fb-body"); if (fbBody) fbBody.oninput = () => { if (S.fbForm) S.fbForm.text = fbBody.value; };
   document.querySelectorAll("[data-fbopen]").forEach((b) => b.onclick = () => openFeedback(b.dataset.fbopen));
   document.querySelectorAll("[data-fbclose]").forEach((b) => b.onclick = () => { S.fbForm = null; render(); });
   const fbAt = document.getElementById("fb-attach"); if (fbAt) fbAt.onchange = () => { const t = document.getElementById("fb-body").value; S.fbForm.attach = fbAt.checked; render(); document.getElementById("fb-body").value = t; };
@@ -1196,10 +1214,10 @@ async function onSession(session) {
 sb.auth.onAuthStateChange((ev, session) => {
   if (ev === "PASSWORD_RECOVERY") { S.recovery = true; S.user = session && session.user; return renderRecovery(); } if ((session && session.user.id) !== (S.user && S.user.id)) onSession(session); });
 sb.auth.getSession().then(({ data }) => onSession(data.session));
-setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 30000);
+setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 30000);
 let _lastMode = null;
 window.addEventListener("resize", () => { const m = layout(); if (m !== _lastMode) { _lastMode = m; if (S.user) render(); } });
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
 </script>
 </body>
 </html>
