@@ -339,7 +339,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31b";
+const APP_VERSION = "2026-10-31c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -354,18 +354,23 @@ async function captureScreen() {
   await loadScript("https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js");
   const node = document.getElementById("app");
   const bg = getComputedStyle(document.body).backgroundColor;
-  return window.htmlToImage.toJpeg(node, { quality: 0.72, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5), skipFonts: true,
-    backgroundColor: bg && bg !== "rgba(0, 0, 0, 0)" ? bg : "#eef3fb", width: node.scrollWidth, height: Math.min(node.scrollHeight, 6000) });
+  const timeout = new Promise((_, bad) => setTimeout(() => bad(new Error("캡처 시간 초과 (Safari 등)")), 9000));
+  return Promise.race([timeout, window.htmlToImage.toJpeg(node, { quality: 0.72, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5), skipFonts: true,
+    backgroundColor: bg && bg !== "rgba(0, 0, 0, 0)" ? bg : "#eef3fb", width: node.scrollWidth, height: Math.min(node.scrollHeight, 6000) })]);
 }
 async function openFeedback(kind) {
-  S.fbForm = { kind, shot: null, attach: kind === "bug", busy: true, note: "화면을 캡처하는 중…" };
+  S.fbForm = { kind, shot: null, attach: kind === "bug", busy: kind === "bug", note: kind === "bug" ? "화면을 캡처하는 중… (길어지면 내용만 보내도 됩니다)" : "" };
   render();
+  if (kind !== "bug") return;                    // 기능개선은 캡처 없이 바로 쓰기
   try {
     document.querySelector(".modal-bg").style.visibility = "hidden";          // 캡처에 창이 찍히지 않게
     S.fbForm.shot = await captureScreen();
     S.fbForm.note = "";
-  } catch (e) { S.fbForm.note = "화면 캡처 실패 — 내용만 보내도 됩니다 (" + (e.message || e) + ")"; S.fbForm.attach = false; }
+  } catch (e) { if (S.fbForm) { S.fbForm.note = "화면 캡처 실패 — 내용만 보내도 됩니다 (" + (e.message || e) + ")"; S.fbForm.attach = false; } }
+  if (!S.fbForm) return;
+  const typed = (document.getElementById("fb-body") || {}).value || "";
   S.fbForm.busy = false; render();
+  const ta = document.getElementById("fb-body"); if (ta && typed) ta.value = typed;
 }
 function fbContext() {
   return { name: S.name, tab: S.tab, detail: S.detail, layout: layout(), w: window.innerWidth, h: window.innerHeight, ua: navigator.userAgent.slice(0, 160),
@@ -374,16 +379,19 @@ function fbContext() {
 }
 async function sendFeedback(body) {
   const f = S.fbForm; f.busy = true; f.note = "보내는 중…"; render();
-  let shot_path = null;
-  if (f.attach && f.shot) {
-    const blob = await (await fetch(f.shot)).blob();
-    const path = `${S.user.id}/${Date.now()}.jpg`;
-    const up = await sb.storage.from("feedback").upload(path, blob, { contentType: "image/jpeg", upsert: false });
-    if (up.error) { f.busy = false; f.note = "캡처 올리기 실패: " + ko(up.error.message) + " — '화면 첨부'를 끄고 다시 보내 보세요"; return render(); }
-    shot_path = path;
-  }
-  const r = await sb.from("feedback").insert({ kind: f.kind, body, context: fbContext(), shot_path });
-  if (r.error) { f.busy = false; f.note = "보내기 실패: " + ko(r.error.message); return render(); }
+  let shot_path = null; const ctx = fbContext();
+  try {
+    if (f.attach && f.shot) {
+      try {                                          // 캡처 올리기가 안 돼도 내용은 보낸다
+        const blob = await (await fetch(f.shot)).blob();
+        const path = `${S.user.id}/${Date.now()}.jpg`;
+        const up = await sb.storage.from("feedback").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (up.error) ctx.shot_error = up.error.message; else shot_path = path;
+      } catch (e) { ctx.shot_error = String(e.message || e); }
+    }
+    const r = await sb.from("feedback").insert({ kind: f.kind, body, context: ctx, shot_path });
+    if (r.error) { f.busy = false; f.note = "보내기 실패: " + ko(r.error.message) + " (" + r.error.message + ")"; return render(); }
+  } catch (e) { f.busy = false; f.note = "보내기 실패: " + (e.message || e); return render(); }
   S.fbForm = null; S.msg = { text: f.kind === "bug" ? "오류제보를 보냈습니다. 처리 결과는 PC 화면 '오류제보' 게시판에서 볼 수 있습니다." : "기능개선 건의를 보냈습니다. 고맙습니다!" };
   render();
 }
