@@ -330,6 +330,7 @@ async function uploadPhotos(files, pass, remember) {
     ok++;
   }
   S.busy = false;
+  if (!S.upBad) S.clearForm = ["up-files"];
   if (!S.upBad) S.upNote = `${ok}장 보냄 — 노트북이 20초 안에 받아 ${purpose === "privacy" ? "연구 폴더에 저장" : "판독"}합니다. 아래 '최근 보낸 명령'에서 결과 확인.`;
   await refresh(); setTimeout(refresh, 25000);
 }
@@ -340,7 +341,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31g";
+const APP_VERSION = "2026-10-31h";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -459,6 +460,7 @@ async function send(command, payload) {
   const { error } = await sb.from("web_commands").insert({ command, payload: { ...payload, by: S.name },
     user_id: owner(), acted_by: S.user.id });
   S.busy = false;
+  if (!error) S.clearForm = ["a-id", "a-name", "s-id", "g-email"];   // 보낸 칸은 비운다
   S.msg = error ? { bad: true, text: "보내지 못했습니다: " + ko(error.message) }
                 : { text: "노트북에 보냈습니다. 20초 안에 반영됩니다." };
   await refresh();
@@ -540,7 +542,36 @@ function viewAdmin() {
       <li><span class="mono">powershell -ExecutionPolicy Bypass -File scripts\\install_schedule.ps1 -User 이름</span> → 몇 분 뒤 '노트북 갱신'이 표시됩니다.</li></ol></details></div>`;
 }
 
+// 화면을 다시 그려도 쓰던 칸(글·암호·체크·고른 사진)과 커서가 그대로 남게 한다 (자동 새로 고침·체크박스 클릭 때 지워지던 문제)
+function keepForm() {
+  const kept = { vals: {}, files: {}, focus: null };
+  document.querySelectorAll("#app input[id], #app textarea[id], #app select[id]").forEach((el) => {
+    if (el.type === "file") { if (el.files && el.files.length) kept.files[el.id] = Array.from(el.files); return; }
+    kept.vals[el.id] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  const a = document.activeElement;
+  if (a && a.id && a.closest && a.closest("#app")) kept.focus = { id: a.id, s: a.selectionStart, e: a.selectionEnd };
+  return kept;
+}
+function restoreForm(kept) {
+  const skip = new Set(S.clearForm || []); S.clearForm = null;
+  for (const [id, v] of Object.entries(kept.vals)) {
+    const el = document.getElementById(id); if (!el || skip.has(id)) continue;
+    if (el.type === "checkbox") el.checked = v; else if (el.value !== v && v !== "") el.value = v;
+  }
+  for (const [id, files] of Object.entries(kept.files)) {
+    const el = document.getElementById(id); if (!el || skip.has(id)) continue;
+    try { const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f)); el.files = dt.files; } catch (e) {}
+  }
+  if (kept.focus) { const el = document.getElementById(kept.focus.id);
+    if (el) { el.focus({ preventScroll: true }); try { if (kept.focus.s !== null) el.setSelectionRange(kept.focus.s, kept.focus.e); } catch (e) {} } }
+}
 function render() {
+  const kept = keepForm();
+  renderInner();
+  restoreForm(kept);
+}
+function renderInner() {
   if (!S.user) return renderLogin();
   if (S.status && S.status !== "approved") return renderPending();
   const mode = layout();
