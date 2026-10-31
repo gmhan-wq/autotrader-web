@@ -282,13 +282,14 @@ function actSwitch() {
 }
 
 // ── 웹 사진 올리기 (ADR 0029): 브라우저에서 업로드 암호로 잠가(AES-GCM) 맡기고, 노트북이 받아 풀고 바로 지운다 ──
-async function lockFile(file, pass) {
+async function lockFile(file, pass) { return lockBytes(new Uint8Array(await file.arrayBuffer()), file.name || "photo", pass); }
+async function lockBytes(data, name, pass) {
   const enc = new TextEncoder();
   const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
   const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
   const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" }, base,
     { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
-  const nb = enc.encode(file.name || "photo").slice(0, 500), data = new Uint8Array(await file.arrayBuffer());
+  const nb = enc.encode(name).slice(0, 500);
   const plain = new Uint8Array(2 + nb.length + data.length);
   plain[0] = nb.length >> 8; plain[1] = nb.length & 255; plain.set(nb, 2); plain.set(data, 2 + nb.length);
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
@@ -339,7 +340,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31d";
+const APP_VERSION = "2026-10-31e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -895,7 +896,7 @@ function viewApprove() {
   return out + cmdList();
 }
 const CMD_KO = { approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침",
-                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경" };
+                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경" , upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록"};
 function cmdList() {
   if (!S.cmds.length) return "";
   return `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => { const p = c.payload || {};
@@ -911,6 +912,32 @@ const KIND_FIELDS = {
   v4: [["cash", "원금·잔금 $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
        ["T", "T (새로 시작 0)", "text", "0"], ["splits", "분할수", "number", "20"]],
 };
+function keyForm(aid) {
+  let saved = ""; try { saved = localStorage.getItem("upPass") || ""; } catch (e) {}
+  return `<form id="f-key" data-acc="${esc(aid)}" class="card" style="gap:8px;background:var(--soft)">
+    <b class="small">${esc(ACC_NAME[aid] || aid)} 메리츠 Open API 키</b>
+    <label>앱키 (App Key)<input type="password" id="k-key" autocomplete="off" required minlength="8"></label>
+    <label>시크릿 (App Secret)<input type="password" id="k-secret" autocomplete="off" required minlength="8"></label>
+    <label>업로드 암호 <span class="small muted">(노트북 .env 의 UPLOAD_PASSPHRASE, 12자 이상)</span><input type="password" id="k-pass" autocomplete="off" value="${esc(saved)}" required minlength="12"></label>
+    <div class="small muted">키는 이 브라우저에서 잠근 뒤 보내고, 노트북이 받아 .env 에 저장한 뒤 클라우드 사본을 바로 지웁니다. 키 값은 화면·알림·기록 어디에도 나오지 않습니다. 키가 들어가도 실주문은 노트북 설정 두 개가 있어야만 켜집니다.</div>
+    ${S.keyNote ? `<div class="small ${S.keyBad ? "sell" : "muted"}">${esc(S.keyNote)}</div>` : ""}
+    <div class="row"><span class="grow"></span><button type="button" class="btn" data-keycancel="1">취소</button><button class="btn primary" ${S.busy ? "disabled" : ""}>잠가서 보내기</button></div></form>`;
+}
+async function sendKey(aid, key, secret, pass) {
+  if (pass.length < 12) { S.keyBad = true; S.keyNote = "업로드 암호는 12자 이상이어야 합니다 (노트북 .env 도 같은 문장)"; return render(); }
+  S.busy = true; S.keyBad = false; S.keyNote = "잠그는 중…"; render();
+  try {
+    const bytes = new TextEncoder().encode(JSON.stringify({ account: aid, app_key: key.trim(), app_secret: secret.trim() }));
+    const blob = await lockBytes(bytes, "apikey.json", pass);
+    const path = `${S.user.id}/key_${Date.now()}.bin`;
+    const up = await sb.storage.from("uploads").upload(path, blob, { contentType: "application/octet-stream", upsert: false });
+    if (up.error) throw new Error(ko(up.error.message));
+    const r = await sb.from("web_commands").insert({ command: "set_api_key", payload: { path, account: aid, by: S.name }, user_id: S.user.id, acted_by: S.user.id });
+    if (r.error) throw new Error(ko(r.error.message));
+    S.keyFor = null; S.keyNote = ""; S.msg = { text: "키를 잠가서 보냈습니다. 노트북이 20초 안에 저장하고 결과를 '최근 보낸 명령'과 텔레그램으로 알려 줍니다." };
+  } catch (e) { S.keyBad = true; S.keyNote = "보내기 실패: " + (e.message || e); }
+  S.busy = false; await refresh(); setTimeout(refresh, 25000);
+}
 function viewSettings() {
   const s = S.snap ? S.snap.summary : null;
   if (!s) return `<div class="card"><div class="empty">노트북이 연결되면 계좌·전략을 여기서 관리할 수 있습니다.</div></div>`;
@@ -921,7 +948,9 @@ function viewSettings() {
     <div class="card"><h2>계좌</h2>
       ${accs.map(([aid, a]) => `<div class="row between"><span>${esc(ACC_NAME[aid] || a.name)} <span class="muted small">${esc(aid)}</span></span>
         <span class="chip ${a.api ? "ok" : ""}">${a.api ? "API 연결" : "수동 (키 없음)"}</span></div>
-        ${a.api ? "" : `<div class="small muted">API 를 쓰려면 노트북 .env 에 <span class="mono">${esc(a.env_name || ("MERITZ_" + (aid === "main" ? "" : aid.toUpperCase() + "_") + "APP_KEY"))}</span> 와 SECRET 을 직접 넣습니다 (키는 웹으로 받지 않음).</div>`}`).join("")}
+        ${owner() === S.user.id ? (S.keyFor === aid ? keyForm(aid) : `<div class="row"><button class="btn ${a.api ? "" : "primary"}" data-keyfor="${esc(aid)}">${a.api ? "API 키 바꾸기" : "API 키 등록"}</button>
+          <span class="small muted">잠가서 보내고 노트북이 받는 즉시 클라우드에서 지움 (또는 노트북 .env 의 <span class="mono">${esc(a.env_name || ("MERITZ_" + (aid === "main" ? "" : aid.toUpperCase() + "_") + "APP_KEY"))}</span>)</span></div>`)
+          : `<div class="small muted">메리츠 키는 계좌 주인만 등록할 수 있습니다.</div>`}`).join("")}
       <form id="f-acc" class="row" style="align-items:flex-end">
         <label style="flex:1;min-width:110px">계좌 id<input type="text" id="a-id" placeholder="예: isa" required pattern="[a-z][a-z0-9_]{0,23}"></label>
         <label style="flex:2;min-width:150px">이름<input type="text" id="a-name" placeholder="예: ISA 계좌"></label>
@@ -1121,6 +1150,10 @@ function bind() {
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: b.dataset.on === "true" ? "공동 운영을 켰습니다. 상대가 내 계좌를 승인·설정할 수 있습니다." : "공동 운영을 껐습니다." };
     await loadFamily(); render(); });
   const fbBody = document.getElementById("fb-body"); if (fbBody) fbBody.oninput = () => { if (S.fbForm) S.fbForm.text = fbBody.value; };
+  document.querySelectorAll("[data-keyfor]").forEach((b) => b.onclick = () => { S.keyFor = b.dataset.keyfor; S.keyNote = ""; render(); });
+  document.querySelectorAll("[data-keycancel]").forEach((b) => b.onclick = () => { S.keyFor = null; render(); });
+  const fkey = document.getElementById("f-key"); if (fkey) fkey.onsubmit = (e) => { e.preventDefault();
+    sendKey(fkey.dataset.acc, document.getElementById("k-key").value, document.getElementById("k-secret").value, document.getElementById("k-pass").value); };
   document.querySelectorAll("[data-fbopen]").forEach((b) => b.onclick = () => openFeedback(b.dataset.fbopen));
   document.querySelectorAll("[data-fbclose]").forEach((b) => b.onclick = () => { S.fbForm = null; render(); });
   const fbAt = document.getElementById("fb-attach"); if (fbAt) fbAt.onchange = () => { const t = document.getElementById("fb-body").value; S.fbForm.attach = fbAt.checked; render(); document.getElementById("fb-body").value = t; };
