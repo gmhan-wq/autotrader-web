@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>내 자동매매</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://yusvlbnlrfawmoqqswso.supabase.co wss://yusvlbnlrfawmoqqswso.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://yusvlbnlrfawmoqqswso.supabase.co; connect-src https://yusvlbnlrfawmoqqswso.supabase.co wss://yusvlbnlrfawmoqqswso.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#e9effa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0c1124" media="(prefers-color-scheme: dark)">
@@ -172,6 +172,19 @@ button.btn.primary { background: linear-gradient(135deg, var(--accent), var(--ic
 :root[data-theme="dark"] button.btn.primary { color: var(--accent-ink); text-shadow: none }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.btn.primary { color: var(--accent-ink); text-shadow: none } }
 button.btn.danger { color: var(--bad) }
+button.btn.fb-bug { background: #c62828; color: #ffffff; border-color: #c62828; font-weight: 700 }
+button.btn.fb-idea { background: #2e7d32; color: #ffffff; border-color: #2e7d32; font-weight: 700 }
+.fab { position: fixed; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; z-index: 30 }
+.fab button.btn { min-height: 40px; padding: 6px 12px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
+.modal-bg { position: fixed; inset: 0; background: rgba(10, 14, 30, .55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px }
+.modal { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--bg-solid, var(--glass-strong)); }
+.modal textarea { width: 100%; min-height: 120px; font: 15px var(--sans); padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); box-sizing: border-box }
+.modal img.shot { width: 100%; max-height: 260px; object-fit: cover; object-position: top; border-radius: 12px; border: 1px solid var(--line) }
+.fbrow img.shot { width: 100%; border-radius: 12px; border: 1px solid var(--line) }
+.modal label.chk { display: flex; flex-direction: row; align-items: center; gap: 8px; justify-content: flex-start }
+.fbrow button.btn { align-self: flex-start }
+.fbrow { border-top: 1px solid var(--line); padding: 10px 0; display: flex; flex-direction: column; gap: 6px }
+.fbrow .reply { padding: 8px 10px; border-radius: 12px; background: var(--soft); font-size: 14px }
 button.btn:disabled { opacity: .5; cursor: default }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 input[type=email], input[type=password], input[type=text], input[type=number], input[type=date], select { width: 100%; font: 15px var(--sans); padding: 10px 12px;
@@ -253,9 +266,102 @@ async function loadFamily() {
   const o = await sb.rpc("viewable_owners"); S.owners = clean(o.data || []).filter((x) => x.owner_id !== S.user.id);
   const g = await sb.rpc("my_grants"); S.grants = clean(g.data || []);
 }
+Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
+window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
+window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
+const APP_VERSION = "2026-10-31b";
+
+// ── 오류제보·기능개선 (ADR 0028) ──
+async function loadFlags() {
+  const r = await sb.from("site_flags").select("key,value");
+  if (!r.error) for (const f of r.data || []) S.flags[f.key] = f.value;
+}
+function loadScript(src) {
+  return new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok();
+    const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = () => bad(new Error("캡처 도구를 불러오지 못했습니다")); document.head.appendChild(t); });
+}
+async function captureScreen() {
+  await loadScript("https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js");
+  const node = document.getElementById("app");
+  const bg = getComputedStyle(document.body).backgroundColor;
+  return window.htmlToImage.toJpeg(node, { quality: 0.72, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5), skipFonts: true,
+    backgroundColor: bg && bg !== "rgba(0, 0, 0, 0)" ? bg : "#eef3fb", width: node.scrollWidth, height: Math.min(node.scrollHeight, 6000) });
+}
+async function openFeedback(kind) {
+  S.fbForm = { kind, shot: null, attach: kind === "bug", busy: true, note: "화면을 캡처하는 중…" };
+  render();
+  try {
+    document.querySelector(".modal-bg").style.visibility = "hidden";          // 캡처에 창이 찍히지 않게
+    S.fbForm.shot = await captureScreen();
+    S.fbForm.note = "";
+  } catch (e) { S.fbForm.note = "화면 캡처 실패 — 내용만 보내도 됩니다 (" + (e.message || e) + ")"; S.fbForm.attach = false; }
+  S.fbForm.busy = false; render();
+}
+function fbContext() {
+  return { name: S.name, tab: S.tab, detail: S.detail, layout: layout(), w: window.innerWidth, h: window.innerHeight, ua: navigator.userAgent.slice(0, 160),
+    version: APP_VERSION, snap_at: S.snap && S.snap.taken_at, msg: S.msg && S.msg.text, errors: S.jsErrors,
+    pending_cmds: (S.cmds || []).filter((c) => c.status !== "done").map((c) => `${c.command}:${c.status}`).slice(0, 5) };
+}
+async function sendFeedback(body) {
+  const f = S.fbForm; f.busy = true; f.note = "보내는 중…"; render();
+  let shot_path = null;
+  if (f.attach && f.shot) {
+    const blob = await (await fetch(f.shot)).blob();
+    const path = `${S.user.id}/${Date.now()}.jpg`;
+    const up = await sb.storage.from("feedback").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+    if (up.error) { f.busy = false; f.note = "캡처 올리기 실패: " + ko(up.error.message) + " — '화면 첨부'를 끄고 다시 보내 보세요"; return render(); }
+    shot_path = path;
+  }
+  const r = await sb.from("feedback").insert({ kind: f.kind, body, context: fbContext(), shot_path });
+  if (r.error) { f.busy = false; f.note = "보내기 실패: " + ko(r.error.message); return render(); }
+  S.fbForm = null; S.msg = { text: f.kind === "bug" ? "오류제보를 보냈습니다. 처리 결과는 PC 화면 '오류제보' 게시판에서 볼 수 있습니다." : "기능개선 건의를 보냈습니다. 고맙습니다!" };
+  render();
+}
+function feedbackModal() {
+  const f = S.fbForm; if (!f) return "";
+  const bug = f.kind === "bug";
+  return `<div class="modal-bg" role="dialog" aria-modal="true" aria-label="${bug ? "오류제보" : "기능개선"}"><div class="card modal">
+    <div class="row between"><h2>${bug ? "🐞 오류제보" : "💡 기능개선 건의"}</h2><button class="btn ghost" data-fbclose="1" aria-label="닫기">✕</button></div>
+    <div class="small muted">${bug ? "무엇을 하다가 어떤 문제가 났는지 짧게 적어 주세요. 지금 화면과 사용 환경(탭·기기·최근 오류)이 함께 갑니다." : "불편한 점이나 바뀌었으면 하는 것을 적어 주세요 (UI·편의성·기능)."}</div>
+    <textarea id="fb-body" maxlength="2000" placeholder="${bug ? "예) 주문표 달력에서 10/30 을 눌렀는데 아무것도 안 나와요" : "예) 오늘 밤 주문을 메리츠 앱 순서대로 보여 주면 좋겠어요"}"></textarea>
+    ${f.shot ? `<label class="chk small"><input type="checkbox" id="fb-attach" ${f.attach ? "checked" : ""}> 화면 첨부 (제보한 사람과 관리자만 봅니다)</label>${f.attach ? `<img class="shot" src="${f.shot}" alt="캡처한 화면">` : ""}` : ""}
+    ${f.note ? `<div class="small muted">${esc(f.note)}</div>` : ""}
+    <div class="row"><span class="grow"></span><button class="btn" data-fbclose="1">취소</button>
+      <button class="btn ${bug ? "fb-bug" : "fb-idea"}" id="fb-send" ${f.busy ? "disabled" : ""}>보내기</button></div></div></div>`;
+}
+const FB_STATUS = { open: ["접수", ""], checking: ["확인 중", "warn"], done: ["처리 완료", "ok"], wontfix: ["보류", ""] };
+async function loadFeedback(kind) {
+  const r = await sb.from("feedback").select("id,user_id,kind,body,context,shot_path,status,reply,replied_at,created_at")
+    .eq("kind", kind).order("id", { ascending: false }).limit(100);
+  S.fbList[kind] = r.error ? { error: ko(r.error.message) } : r.data;
+}
+function viewFeedbackBoard(kind) {
+  const bug = kind === "bug", list = S.fbList[kind];
+  let out = `<div class="card"><div class="row between"><h2>${bug ? "🐞 오류제보" : "💡 기능개선"} 게시판</h2>
+    <button class="btn ${bug ? "fb-bug" : "fb-idea"}" data-fbopen="${kind}">${bug ? "오류제보" : "기능개선"} 쓰기</button></div>
+    <div class="small muted">${S.admin ? "관리자: 모든 회원의 제보가 보입니다." : "내가 보낸 제보와 처리 결과만 보입니다."} Claude 가 노트북에서 확인·수정한 뒤 처리 결과를 남깁니다.</div>`;
+  if (!list) out += `<div class="empty">불러오는 중…</div>`;
+  else if (list.error) out += `<div class="empty">불러오지 못했습니다 (${esc(list.error)}) — 관리자가 최신 SQL 을 실행했는지 확인</div>`;
+  else if (!list.length) out += `<div class="empty">아직 제보가 없습니다.</div>`;
+  else out += list.map((f) => { const st = FB_STATUS[f.status] || [f.status, ""];
+    const who = S.admin ? ((S.members || []).find((m) => m.user_id === f.user_id) || {}).display_name || (f.context || {}).name || "" : "";
+    return `<div class="fbrow"><div class="row"><b class="num">#${f.id}</b><span class="chip ${st[1]}">${st[0]}</span>
+        <span class="small muted">${esc(when(f.created_at))}${who ? " · " + esc(who) : ""}${f.context && f.context.tab ? " · " + esc(f.context.tab) + " 화면" : ""}</span></div>
+      <div>${esc(f.body)}</div>
+      ${f.shot_path ? (S.fbShot && S.fbShot.id === f.id ? `<img class="shot" src="${esc(S.fbShot.url)}" alt="제보 화면 #${f.id}">` : `<button class="btn ghost small" data-fbshot="${f.id}" data-path="${esc(f.shot_path)}">화면 보기</button>`) : ""}
+      ${f.reply ? `<div class="reply"><b>처리 결과</b>${f.replied_at ? ` <span class="small muted">${esc(when(f.replied_at))}</span>` : ""}<div>${esc(f.reply)}</div></div>` : ""}</div>`; }).join("");
+  return out + "</div>";
+}
+function feedbackButtons(mode) {
+  if (!S.user || S.flags.feedback === false) return "";
+  const b = `<button class="btn fb-bug" data-fbopen="bug">오류제보</button><button class="btn fb-idea" data-fbopen="idea">기능개선</button>`;
+  return mode === "pc" ? b : `<div class="fab">${b}</div>`;
+}
+
 async function refresh() {
   if (!S.user) return;
-  try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); if (S.admin) await loadAdmin(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); if (S.admin) await loadAdmin();
+    if (S.tab === "fb_bug" || S.tab === "fb_idea") await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea"); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
   render();
 }
 async function send(command, payload) {
@@ -275,12 +381,14 @@ function layout() {
   if (pref === "pc" || pref === "phone") return pref;
   return window.innerWidth >= 900 ? "pc" : "phone";
 }
-const VIEWS = { admin: "회원 관리", home: "대시보드", orders: "오늘 밤 주문", approve: "주문표", calendar: "주문표 달력", board: "게시판", family: "가족·공유", settings: "설정", more: "더보기" };
+const VIEWS = { admin: "회원 관리", home: "대시보드", orders: "오늘 밤 주문", approve: "주문표", calendar: "주문표 달력", fb_bug: "오류제보", fb_idea: "기능개선", board: "게시판", family: "가족·공유", settings: "설정", more: "더보기" };
 function currentView() {
   if (S.tab === "home") return viewHome(S.snap, true);
   if (S.tab === "orders") return viewOrders();
   if (S.tab === "approve") return viewApprove() + (layout() === "phone" ? viewCalendar() : "");
   if (S.tab === "calendar") return viewCalendar();
+  if (S.tab === "fb_bug") return viewFeedbackBoard("bug");
+  if (S.tab === "fb_idea") return viewFeedbackBoard("idea");
   if (S.tab === "board") return viewBoard();
   if (S.tab === "settings") return viewSettings();
   if (S.tab === "more") return viewAdmin() + viewFamily() + viewSettings();
@@ -317,7 +425,10 @@ function viewAdmin() {
   const pend = ms.filter((m) => m.status === "pending");
   const ago = (t) => { if (!t) return "노트북 칸 없음"; const m = Math.round((Date.now() - new Date(t).getTime()) / 60000);
     return "노트북 갱신 " + (m < 60 ? m + "분" : m < 2880 ? Math.round(m / 60) + "시간" : Math.round(m / 1440) + "일") + " 전"; };
-  return `<div class="card"><div class="row between"><h2>회원 관리</h2><span class="chip">관리자</span></div>
+  return `<div class="card"><div class="row between"><h2>오류제보·기능개선 버튼</h2>
+      <button class="btn ${S.flags.feedback !== false ? "" : "primary"}" data-flag="feedback" data-val="${S.flags.feedback === false}">${S.flags.feedback !== false ? "끄기 (안정화 뒤)" : "다시 켜기"}</button></div>
+    <div class="small muted">지금 ${S.flags.feedback !== false ? "<b>켜짐</b> — 모든 회원 화면에 빨간·초록 버튼과 PC 게시판이 보입니다" : "<b>꺼짐</b> — 버튼·게시판이 숨겨집니다 (지난 제보는 그대로 보관)"}.</div></div>
+    <div class="card"><div class="row between"><h2>회원 관리</h2><span class="chip">관리자</span></div>
     <div class="small muted">웹앱 주소를 받은 사람이 가입하면 여기에 '승인 대기'로 나옵니다. 승인해야 현황·승인·공유를 쓸 수 있습니다.</div>
     ${pend.length ? `<h2 style="font-size:14px">승인 대기 ${pend.length}명</h2>` : ""}
     ${ms.map((m) => `<div class="member">
@@ -345,6 +456,7 @@ function render() {
   if (mode === "pc" && S.tab === "more") S.tab = "family";
   if (mode === "phone" && S.tab === "admin") S.tab = "more";
   if (mode === "phone" && S.tab === "calendar") S.tab = "approve";
+  if (mode === "phone" && (S.tab === "fb_bug" || S.tab === "fb_idea")) S.tab = "home";
   const drafts = S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
   const notes = `${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}${staleNote()}`;
   const engine = S.snap ? `<span class="chip ${(Date.now() - new Date(S.snap.taken_at).getTime()) < 1800000 ? "ok" : "warn"} live" title="${when(S.snap.taken_at)}"><i></i>노트북 ${ago(S.snap.taken_at)} 갱신</span>` : `<span class="chip">노트북 연결 전</span>`;
@@ -356,7 +468,7 @@ function render() {
       <header class="pc-top card">
         <b class="brand">자동매매 콘솔</b><span class="muted small">${esc(S.name)}</span>
         <span class="chip warn">모의 실행</span>${engine}
-        <span class="grow"></span>${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
+        <span class="grow"></span>${feedbackButtons("pc")}${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
       </header>
       <div class="pc-body">
         <nav class="pc-nav card" aria-label="주 메뉴">
@@ -370,10 +482,11 @@ function render() {
           ${item("board", "게시판")}
           ${item("family", "가족·공유")}
           ${item("settings", "설정")}
+          ${S.flags.feedback !== false ? `<div class="nav-h">제보</div>${item("fb_bug", "🐞 오류제보")}${item("fb_idea", "💡 기능개선")}` : ""}
           ${S.admin ? item("admin", "회원 관리", (S.members || []).filter((m) => m.status === "pending").length ? `<span class="badge">${(S.members || []).filter((m) => m.status === "pending").length}</span>` : "") : ""}
         </nav>
         <main class="pc-main">${notes}<div id="view">${currentView()}</div></main>
-      </div>`;
+      </div>${feedbackModal()}`;
   } else {
     const t = S.snap ? (S.snap.summary.totals || {}) : {};
     const tabs = [["home", "현황"], ["orders", "주문"], ["approve", "주문표"], ["board", "알림"], ["more", "더보기"]];
@@ -388,6 +501,7 @@ function render() {
       ${notes}
       <div id="view">${currentView()}</div>
       ${S.tab === "more" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
+      ${S.tab === "home" ? feedbackButtons("phone") : ""}${feedbackModal()}
       <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${S.tab === k}">${l}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>`;
   }
   bind();
@@ -896,6 +1010,19 @@ function bind() {
     await loadAdmin(); render(); });
   document.querySelectorAll("[data-ordkind]").forEach((b) => b.onclick = () => { S.ordKind = b.dataset.ordkind; render(); });
   document.querySelectorAll("[data-ordacc]").forEach((b) => b.onclick = () => { S.ordAcc = b.dataset.ordacc; render(); });
+  document.querySelectorAll("[data-fbopen]").forEach((b) => b.onclick = () => openFeedback(b.dataset.fbopen));
+  document.querySelectorAll("[data-fbclose]").forEach((b) => b.onclick = () => { S.fbForm = null; render(); });
+  const fbAt = document.getElementById("fb-attach"); if (fbAt) fbAt.onchange = () => { const t = document.getElementById("fb-body").value; S.fbForm.attach = fbAt.checked; render(); document.getElementById("fb-body").value = t; };
+  const fbSend = document.getElementById("fb-send"); if (fbSend) fbSend.onclick = () => { const t = document.getElementById("fb-body").value.trim();
+    if (!t) { S.fbForm.note = "내용을 한 줄이라도 적어 주세요"; const v = t; render(); document.getElementById("fb-body").value = v; return; } sendFeedback(t); };
+  document.querySelectorAll("[data-fbshot]").forEach((b) => b.onclick = async () => {
+    const r = await sb.storage.from("feedback").createSignedUrl(b.dataset.path, 600);
+    S.fbShot = r.error ? null : { id: Number(b.dataset.fbshot), url: r.data.signedUrl }; if (r.error) S.msg = { bad: true, text: ko(r.error.message) }; render(); });
+  document.querySelectorAll("[data-flag]").forEach((b) => b.onclick = async () => {
+    const val = b.dataset.val === "true";
+    const r = await sb.from("site_flags").upsert({ key: b.dataset.flag, value: val, updated_at: new Date().toISOString() });
+    if (r.error) S.msg = { bad: true, text: ko(r.error.message) }; else { S.flags[b.dataset.flag] = val; S.msg = { text: val ? "버튼을 다시 켰습니다." : "버튼과 게시판을 껐습니다." }; }
+    render(); });
   document.querySelectorAll("[data-calday]").forEach((b) => b.onclick = () => { S.calDay = b.dataset.calday; S.calMonth = S.calDay.slice(0, 7); render(); });
   document.querySelectorAll("[data-calm]").forEach((b) => b.onclick = () => { S.calMonth = b.dataset.calm; render(); });
   document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
@@ -904,6 +1031,7 @@ function bind() {
     S.tab = b.dataset.tab; S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
     try { localStorage.setItem("tab", S.tab); } catch (e) {}
     if (S.tab === "family" || S.tab === "more") await loadFamily().catch(() => {});
+    if (S.tab === "fb_bug" || S.tab === "fb_idea") { S.fbShot = null; await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea").catch(() => {}); }
     render(); });
   document.querySelectorAll("input[data-n]").forEach((cb) => cb.onchange = () =>
     send("toggle_line", { sid: cb.dataset.sid, n: Number(cb.dataset.n), trade_date: cb.dataset.td }));
@@ -967,6 +1095,7 @@ async function onSession(session) {
     S.status = me.status || "approved";            // 회원 승인 기능 이전 데이터베이스면 승인으로 본다
     S.admin = me.role === "admin";
     if (S.status !== "approved") return renderPending();
+    await loadFlags().catch(() => {});
     await refresh();
   } else render();
 }
