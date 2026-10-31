@@ -183,7 +183,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .notice:last-child { border-bottom: 0 }
 .msg { font-size: 13px; padding: 9px 12px; border-radius: 12px; background: var(--glass-strong); border: 1px solid var(--glass-edge) }
 .msg.bad { color: var(--bad) }
-.msg.warn-note { color: var(--warn); border-color: currentColor }
+.msg.warn-note, .card.warn-note { color: var(--warn); border-color: currentColor }
 .empty { color: var(--muted); font-size: 14px; padding: 6px 0 }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px; border-radius: 14px; background: var(--soft) }
 .login { max-width: 380px; margin: 8vh auto 0; width: 100% }
@@ -423,6 +423,15 @@ function realOrders(s, d, cur, acc) {
   let out = `<div class="msg">메리츠 앱에 이 목록대로 넣으면 됩니다. 노트북이 증권사 <b>실제 보유</b>와 승인한 주문표로 계산했습니다 (노트북 <span class="mono">autotrader tonight</span> 와 같음).</div>`;
   if (!r) return out + `<div class="card"><div class="empty">${acc.api ? "노트북이 아직 실제 보유를 조회하지 않았습니다 (봇 재시작 뒤 몇 분)." : "이 계좌는 API 키가 없어 실제 보유로 계산할 수 없습니다."}</div></div>`;
   if (r.error) return out + `<div class="card"><div class="empty">실제 보유 조회 실패 (${esc(r.error)}) — 노트북에서 autotrader doctor 로 확인</div></div>`;
+  if (r.buy_need !== undefined) {
+    const need = Number(r.buy_need || 0), vrn = Number(r.vr_buy_need || 0), short = Number(r.short || 0);
+    const parts = `매수가 모두 체결되면 <b class="num">$${money(need)}</b>${vrn ? ` · VR 남은 매수 <b class="num">$${money(vrn)}</b>` : ""}`;
+    out += r.cash === undefined || r.cash === null
+      ? `<div class="card small">예수금: ${parts} 필요 (주문가능금액 조회 못 함)</div>`
+      : `<div class="card ${short > 0 ? "warn-note" : ""}"><div class="row between"><b>${short > 0 ? "⚠ 예수금 부족" : "✅ 예수금 충분"}</b>
+          <span class="small">주문가능 <b class="num">$${money(r.cash)}</b> (원화 통합증거금 포함)</span></div>
+          <div class="small">${parts} 필요${short > 0 ? ` → <b class="num">$${money(short)}</b> 입금하면 모두 걸 수 있습니다` : ""}</div></div>`;
+  }
   for (const row of r.strategies || []) {
     out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(row.symbol)}</span> ${esc(row.sid)}</h2>
       <span class="small muted">미국 ${esc(r.trade_date)} 장</span></div>`;
