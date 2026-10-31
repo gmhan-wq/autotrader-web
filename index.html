@@ -297,14 +297,14 @@ async function lockBytes(data, name, pass) {
   return new Blob([out], { type: "application/octet-stream" });
 }
 function uploadCard() {
-  let saved = ""; try { saved = localStorage.getItem("upPass") || ""; } catch (e) {}
+  let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
   return `<details class="card" ${S.upOpen ? "open" : ""} id="up-card"><summary class="row between"><h2 style="display:inline">📷 사진 올리기</h2>
       <span class="small muted">텔레그램 대신 여기서 — 잠가서 보내고 노트북이 받는 즉시 클라우드에서 지움</span></summary>
     <form id="f-up" style="display:flex;flex-direction:column;gap:10px">
       <div class="seg" role="group" aria-label="용도"><button type="button" class="${S.upPurpose !== "privacy" ? "on" : ""}" data-uppurpose="sheet">주문표 판독</button>
         <button type="button" class="${S.upPurpose === "privacy" ? "on" : ""}" data-uppurpose="privacy">프라이버시 연구</button></div>
       <label>사진 (여러 장 가능)<input type="file" id="up-files" accept="image/jpeg,image/png,image/webp" multiple required></label>
-      <label>업로드 암호 <span class="small muted">(노트북 .env 의 UPLOAD_PASSPHRASE 와 같은 문장)</span>
+      <label>업로드 암호 <span class="small muted">(${owner() === S.user.id ? "내 노트북 칸" : "<b>" + esc(((S.ops || []).find((o) => o.owner_id === owner()) || {}).display_name || "") + "</b> 계좌 주인 칸"}의 UPLOAD_PASSPHRASE — 계좌마다 다름)</span>
         <input type="password" id="up-pass" autocomplete="off" value="${esc(saved)}" required minlength="8"></label>
       <label class="inl small"><input type="checkbox" id="up-remember" ${saved ? "checked" : ""}> 이 기기에 암호 기억</label>
       ${owner() !== S.user.id ? `<div class="small"><b>${esc(((S.ops || []).find((o) => o.owner_id === owner()) || {}).display_name || "")}</b> 계좌로 올립니다 (공동 운영)</div>` : ""}
@@ -313,7 +313,7 @@ function uploadCard() {
     </form></details>`;
 }
 async function uploadPhotos(files, pass, remember) {
-  try { if (remember) localStorage.setItem("upPass", pass); else localStorage.removeItem("upPass"); } catch (e) {}
+  try { if (remember) localStorage.setItem("upPass:" + owner(), pass); else localStorage.removeItem("upPass:" + owner()); } catch (e) {}
   S.busy = true; S.upBad = false; S.upOpen = true;
   const purpose = S.upPurpose === "privacy" ? "privacy" : "sheet";
   let ok = 0;
@@ -341,7 +341,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31h";
+const APP_VERSION = "2026-10-31i";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -946,7 +946,7 @@ const KIND_FIELDS = {
        ["T", "T (새로 시작 0)", "text", "0"], ["splits", "분할수", "number", "20"]],
 };
 function keyForm(aid) {
-  let saved = ""; try { saved = localStorage.getItem("upPass") || ""; } catch (e) {}
+  let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
   return `<form id="f-key" data-acc="${esc(aid)}" class="card" style="gap:8px;background:var(--soft)">
     <b class="small">${esc(ACC_NAME[aid] || aid)} 메리츠 Open API 키</b>
     <label>앱키 (App Key)<input type="password" id="k-key" autocomplete="off" required minlength="8"></label>
@@ -965,7 +965,7 @@ async function sendSecret(command, prefix, obj, pass, extra) {
   if (up.error) throw new Error(ko(up.error.message));
   const r = await sb.from("web_commands").insert({ command, payload: { path, by: S.name, ...(extra || {}) }, user_id: S.user.id, acted_by: S.user.id });
   if (r.error) throw new Error(ko(r.error.message));
-  try { localStorage.setItem("upPass", pass); } catch (e) {}
+  try { localStorage.setItem("upPass:" + owner(), pass); } catch (e) {}
 }
 async function sendKey(aid, key, secret, pass) {
   S.busy = true; S.keyBad = false; S.keyNote = "잠그는 중…"; render();
@@ -986,7 +986,7 @@ async function sendTelegram(token, pass) {
 }
 function telegramCard(s) {
   if (owner() !== S.user.id) return "";
-  let saved = ""; try { saved = localStorage.getItem("upPass") || ""; } catch (e) {}
+  let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
   const on = !!s.telegram;
   return `<div class="card"><div class="row between"><h2>텔레그램 알림</h2><span class="chip ${on ? "ok" : "warn"}">${on ? "연결됨" : "아직 연결 안 됨"}</span></div>
     <div class="small muted">${on ? "승인·체결·급등락·거부 알림이 텔레그램으로 갑니다. 봇을 바꾸려면 아래에서 새 토큰을 보내세요." : "연결 전에는 알림이 웹 '게시판'에 쌓입니다. 폰에서 봇을 만들어 연결하세요."}</div>
