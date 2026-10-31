@@ -420,7 +420,7 @@ const KIND_KO = { LOC: "LOC", LIMIT: "지정가", MARKET: "시장가", MOC: "MOC
 function realOrders(s, d, cur, acc) {
   const r = (d.real_orders || {})[cur];
   const vr = acc.strategies.filter((g) => g.kind === "vr");
-  let out = `<div class="msg">메리츠 앱에 이 목록대로 넣으면 됩니다. 노트북이 증권사 <b>실제 보유</b>와 승인한 주문표로 계산했습니다 (노트북 <span class="mono">autotrader tonight</span> 와 같음).</div>`;
+  let out = `<div class="msg">메리츠 앱에 이 목록대로 넣으면 됩니다. <b>거부 예상</b> 줄은 현재가 ±10% 밖이라 증권사가 받지 않으니 옆의 가격으로 넣으세요. 노트북이 증권사 <b>실제 보유</b>와 승인한 주문표로 계산했습니다 (노트북 <span class="mono">autotrader tonight</span> 와 같음).</div>`;
   if (!r) return out + `<div class="card"><div class="empty">${acc.api ? "노트북이 아직 실제 보유를 조회하지 않았습니다 (봇 재시작 뒤 몇 분)." : "이 계좌는 API 키가 없어 실제 보유로 계산할 수 없습니다."}</div></div>`;
   if (r.error) return out + `<div class="card"><div class="empty">실제 보유 조회 실패 (${esc(r.error)}) — 노트북에서 autotrader doctor 로 확인</div></div>`;
   if (r.buy_need !== undefined) {
@@ -436,9 +436,9 @@ function realOrders(s, d, cur, acc) {
     out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(row.symbol)}</span> ${esc(row.sid)}</h2>
       <span class="small muted">미국 ${esc(r.trade_date)} 장</span></div>`;
     if (!row.approved) { out += `<div class="empty">아직 승인한 ${esc(r.trade_date)} 주문표가 없습니다 → 승인 탭</div></section>`; continue; }
-    out += `<div class="small">실제 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
+    out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}실제 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
       ${row.lines.map((l) => `<div class="oline"><span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
-        <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.catchup ? '<span class="chip warn">보충</span>' : "<span></span>"}</div>`).join("")}
+        <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="현재가 ±10% 밖이면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충</span>' : "<span></span>"}</div>`).join("")}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}</section>`;
   }
   if (vr.length) out += `<div class="card"><div class="small muted">VR 은 2주 단위 예약주문(기간잔량)이라 매일 넣지 않습니다. 단계와 체결 여부는 전략 화면에서 확인하세요.</div>
