@@ -341,7 +341,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31i";
+const APP_VERSION = "2026-10-31j";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -563,6 +563,7 @@ function restoreForm(kept) {
     const el = document.getElementById(id); if (!el || skip.has(id)) continue;
     try { const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f)); el.files = dt.files; } catch (e) {}
   }
+  document.querySelectorAll("#up-pass, #k-pass, #tg-pass").forEach((el) => el.dispatchEvent(new Event("input")));   // 한글 경고 다시 확인
   if (kept.focus) { const el = document.getElementById(kept.focus.id);
     if (el) { el.focus({ preventScroll: true }); try { if (kept.focus.s !== null) el.setSelectionRange(kept.focus.s, kept.focus.e); } catch (e) {} } }
 }
@@ -1219,6 +1220,15 @@ function bind() {
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: b.dataset.on === "true" ? "공동 운영을 켰습니다. 상대가 내 계좌를 승인·설정할 수 있습니다." : "공동 운영을 껐습니다." };
     await loadFamily(); render(); });
   const fbBody = document.getElementById("fb-body"); if (fbBody) fbBody.oninput = () => { if (S.fbForm) S.fbForm.text = fbBody.value; };
+  // 암호 칸: 한/영 상태 때문에 한글로 입력되면 노트북 암호(영문)와 달라진다 → 바로 알려 주고 '보기'로 확인
+  ["up-pass", "k-pass", "tg-pass"].forEach((id) => {
+    const el = document.getElementById(id); if (!el || el.dataset.hw) return; el.dataset.hw = "1";
+    const warn = document.createElement("div"); warn.className = "small"; warn.style.color = "var(--warn)";
+    const eye = document.createElement("button"); eye.type = "button"; eye.className = "btn ghost small"; eye.textContent = "보기";
+    eye.onclick = () => { el.type = el.type === "password" ? "text" : "password"; eye.textContent = el.type === "password" ? "보기" : "숨기기"; };
+    const check = () => { warn.textContent = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(el.value) ? "⚠ 한글이 섞여 있습니다 — 한/영 키를 확인하세요 (노트북 암호가 영문이면 맞지 않습니다)" : ""; };
+    el.addEventListener("input", check); el.after(warn); el.after(eye); check();
+  });
   document.querySelectorAll("[data-tgopen]").forEach((b) => b.onclick = () => { S.tgOpen = true; render(); });
   const ftg = document.getElementById("f-tg"); if (ftg) ftg.onsubmit = (e) => { e.preventDefault();
     sendTelegram(document.getElementById("tg-token").value, document.getElementById("tg-pass").value); };
