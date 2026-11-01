@@ -240,6 +240,22 @@ summary { cursor: pointer; color: var(--ice) }
   font: 600 14px var(--sans); cursor: pointer; padding: 0 }
 .dial:focus-visible svg .face { stroke: var(--accent); stroke-width: 2 }
 .dadd { align-self: flex-start }
+
+/* 메뉴 다섯 개 */
+.subnav { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; margin-bottom: 4px }
+.subnav .badge { margin-left: 4px }
+.nav-i.nav-g { font-weight: 700 }
+.nav-i.nav-sub { padding-left: 22px; font-size: 13px }
+.actband { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; margin-bottom: 8px;
+  background: color-mix(in srgb, var(--warn) 18%, var(--glass-strong)); border: 1px solid var(--warn); color: var(--ink); font-size: 14px }
+.actband .btn { margin-left: auto; padding: 6px 12px }
+.linkbtn { border: 0; background: transparent; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px }
+
+.today { gap: 6px } .today h2 { margin: 0 0 2px }
+.today.ok-note { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 10px }
+.todo { display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--glass-strong); color: var(--ink); font: 500 14px var(--sans); cursor: pointer; text-align: left }
+.todo:hover { border-color: var(--accent) } .todo.warn { color: var(--warn); border-color: currentColor } .todo.bad { color: var(--bad); border-color: currentColor }
 </style>
 </head>
 <body>
@@ -371,7 +387,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-01e";
+const APP_VERSION = "2026-11-01g";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -480,7 +496,7 @@ function typing() {
 }
 async function refresh(auto) {
   if (!S.user) return;
-  try { await loadMine(); if (S.tab === "family" || S.tab === "more") await loadFamily(); if (S.admin) await loadAdmin();
+  try { await loadMine(); if (S.tab === "family") await loadFamily(); if (S.admin) await loadAdmin();
     if (S.tab === "fb_bug" || S.tab === "fb_idea") await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea"); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
   if (auto === true && typing()) { S.renderLater = true; return; }
   render();
@@ -505,19 +521,50 @@ function layout() {
   if (pref === "pc" || pref === "phone") return pref;
   return window.innerWidth >= 900 ? "pc" : "phone";
 }
-const VIEWS = { admin: "회원 관리", home: "대시보드", orders: "오늘 밤 주문", approve: "주문표", calendar: "주문표 달력", fb_bug: "오류제보", fb_idea: "기능개선", board: "게시판", family: "가족·공유", settings: "계좌·전략 설정", more: "더보기" };
+// 메뉴 다섯 개 (2026-11-01 개편): PC 왼쪽 메뉴 = 폰 아래 탭. 각 메뉴 안의 화면은 위쪽 버튼으로 고른다.
+const GROUPS = [
+  ["home", "홈", [["home", "대시보드"]]],
+  ["order", "주문", [["orders", "오늘 밤 주문"], ["approve", "주문표 승인"], ["upload", "사진 올리기"]]],
+  ["strategy", "전략", [["mystrat", "내 전략"], ["addstrat", "전략 추가"], ["privacy", "프라이버시"]]],
+  ["record", "기록", [["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
+  ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
+];
+const LEGACY_TAB = { settings: "accounts", more: "accounts" };      // 예전 이름 → 새 화면
+function pagesOf(g) {
+  return g[2].filter(([k]) => (k !== "admin" || S.admin) && (!k.startsWith("fb_") || S.flags.feedback !== false));
+}
+function groupOf(tab) { return GROUPS.find((g) => g[2].some(([k]) => k === tab)) || GROUPS[0]; }
+const VIEWS = Object.fromEntries(GROUPS.flatMap((g) => g[2]));
+const draftCount = () => S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
+const pendingMembers = () => (S.members || []).filter((m) => m.status === "pending").length;
+function subNav() {
+  const g = groupOf(S.tab), pages = pagesOf(g);
+  if (pages.length < 2 || S.detail || layout() === "pc") return "";       // PC 는 왼쪽 메뉴에 같은 목록이 있다
+  return `<div class="seg subnav" role="tablist" aria-label="${esc(g[1])}">${pages.map(([k, l]) =>
+    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "approve" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
+}
 function currentView() {
-  if (S.tab === "home") return viewHome(S.snap, true);
-  if (S.tab === "orders") return viewOrders();
-  if (S.tab === "approve") return viewApprove() + (layout() === "phone" ? viewCalendar() : "");
-  if (S.tab === "calendar") return viewCalendar();
-  if (S.tab === "fb_bug") return viewFeedbackBoard("bug");
-  if (S.tab === "fb_idea") return viewFeedbackBoard("idea");
-  if (S.tab === "board") return viewBoard();
-  if (S.tab === "settings") return viewSettings();
-  if (S.tab === "more") return viewAdmin() + viewFamily() + viewSettings();
-  if (S.tab === "admin") return viewAdmin();
-  return viewFamily();
+  const s = S.snap ? S.snap.summary : null;
+  const need = (f) => s ? f(s) : `<div class="card"><div class="empty">노트북이 연결되면 여기서 관리할 수 있습니다.</div></div>`;
+  let v;
+  switch (S.tab) {
+    case "home": v = viewHome(S.snap, true); break;
+    case "orders": v = viewOrders(); break;
+    case "approve": v = viewApprove(); break;
+    case "upload": S.upOpen = true; v = uploadCard() + `<div class="small muted">주문표 사진은 판독 뒤 '주문표 승인'에, 프라이버시 사진은 노트북 연구 폴더로 갑니다.</div>`; break;
+    case "mystrat": v = need(myStrategies); break;
+    case "addstrat": v = need(addStrategy); break;
+    case "privacy": v = need(privacyCard); break;
+    case "calendar": v = viewCalendar(); break;
+    case "board": v = viewBoard(); break;
+    case "fb_bug": v = viewFeedbackBoard("bug"); break;
+    case "fb_idea": v = viewFeedbackBoard("idea"); break;
+    case "accounts": v = need(accountsView); break;
+    case "telegram": v = need(telegramCard); break;
+    case "admin": v = viewAdmin(); break;
+    default: v = viewFamily();
+  }
+  return subNav() + v;
 }
 function renderRecovery() {
   $app.innerHTML = `<div class="card login"><h1>새 비밀번호 정하기</h1>
@@ -608,11 +655,11 @@ function renderInner() {
   if (S.status && S.status !== "approved") return renderPending();
   const mode = layout();
   document.body.dataset.layout = mode;
-  if (mode === "phone" && (S.tab === "family" || S.tab === "settings")) S.tab = "more";
-  if (mode === "pc" && S.tab === "more") S.tab = "family";
-  if (mode === "phone" && S.tab === "admin") S.tab = "more";
-  if (mode === "phone" && S.tab === "calendar") S.tab = "approve";
-  if (mode === "phone" && (S.tab === "fb_bug" || S.tab === "fb_idea")) S.tab = "home";
+  if (LEGACY_TAB[S.tab]) S.tab = LEGACY_TAB[S.tab];
+  if (!VIEWS[S.tab] || !pagesOf(groupOf(S.tab)).some(([k]) => k === S.tab)) S.tab = "home";
+  const grp = groupOf(S.tab)[0];
+  const acting = S.user && owner() !== S.user.id ? ((S.ops || []).find((o) => o.owner_id === owner()) || {}).display_name || "다른 사람" : null;
+  const actBand = acting ? `<div class="actband" role="status">🤝 <b>${esc(acting)}</b> 님 계좌로 작업 중 — 승인·설정·사진이 이 계좌로 갑니다 <button class="btn" id="b-act-me">내 계좌로</button></div>` : "";
   const drafts = S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
   const notes = `${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}${staleNote()}`;
   const engine = S.snap ? `<span class="chip ${(Date.now() - new Date(S.snap.taken_at).getTime()) < 1800000 ? "ok" : "warn"} live" title="${when(S.snap.taken_at)}"><i></i>노트북 ${ago(S.snap.taken_at)} 갱신</span>` : `<span class="chip">노트북 연결 전</span>`;
@@ -628,37 +675,30 @@ function renderInner() {
       </header>
       <div class="pc-body">
         <nav class="pc-nav card" aria-label="주 메뉴">
-          ${item("home", "대시보드")}
-          <div class="nav-h">전략</div>
-          ${strat.map((g) => `<button class="nav-i" data-detail="${esc(g.id)}" aria-current="${S.tab === "home" && S.detail === g.id}"><span class="sym num">${esc(g.symbol)}</span>${esc(stratName(g, (S.snap.summary.plans || {})[g.id]))}</button>`).join("") || `<span class="muted small" style="padding:6px 10px">전략 없음</span>`}
-          <div class="nav-h">운영</div>
-          ${item("orders", "오늘 밤 주문")}
-          ${item("approve", "주문표 승인", drafts ? `<span class="badge">${drafts}</span>` : "")}
-          ${item("calendar", "주문표 달력")}
-          ${item("board", "게시판")}
-          ${item("family", "가족·공유")}
-          ${item("settings", "계좌·전략 설정")}
-          ${S.flags.feedback !== false ? `<div class="nav-h">제보</div>${item("fb_bug", "🐞 오류제보")}${item("fb_idea", "💡 기능개선")}` : ""}
-          ${S.admin ? item("admin", "회원 관리", (S.members || []).filter((m) => m.status === "pending").length ? `<span class="badge">${(S.members || []).filter((m) => m.status === "pending").length}</span>` : "") : ""}
+          ${GROUPS.map((g) => { const pages = pagesOf(g), on = grp === g[0] && !S.detail;
+            const badge = g[0] === "order" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
+            return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`
+              + (on && pages.length > 1 ? pages.map(([k, l]) => `<button class="nav-i nav-sub" data-tab="${k}" aria-current="${S.tab === k}">${esc(l)}</button>`).join("") : "")
+              + (g[0] === "strategy" ? strat.map((x) => `<button class="nav-i nav-sub" data-detail="${esc(x.id)}" aria-current="${S.tab === "home" && S.detail === x.id}"><span class="sym num">${esc(x.symbol)}</span>${esc(stratName(x, (S.snap.summary.plans || {})[x.id]))}</button>`).join("") : ""); }).join("")}
         </nav>
-        <main class="pc-main">${notes}<div id="view">${currentView()}</div></main>
+        <main class="pc-main">${actBand}${notes}<div id="view">${currentView()}</div></main>
       </div>${feedbackModal()}`;
   } else {
     const t = S.snap ? (S.snap.summary.totals || {}) : {};
-    const tabs = [["home", "현황"], ["orders", "주문"], ["approve", "주문표"], ["board", "알림"], ["more", "더보기"]];
+    const tabs = GROUPS.map((g) => [g[0], g[1]]);
     $app.innerHTML = `
       <header class="ph-top card">
         <div class="row"><b>${esc(S.name)}</b><span class="chip warn">모의</span><span class="grow"></span>${engine}</div>${actSwitch()}
         ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (원장 기준)</span><b class="num">$${money(t.value)}</b>${krw(t.value) ? `<span class="krw">${krw(t.value)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
-          : `<h1>${S.detail ? "전략" : VIEWS[S.tab]}</h1>`}
+          : `<h1>${S.detail ? "전략" : esc(groupOf(S.tab)[1])}</h1>`}
       </header>
-      ${drafts && S.tab !== "approve" ? `<button class="banner" data-tab="approve">주문표 승인 대기 ${drafts}건 <span aria-hidden="true">›</span></button>` : ""}
+      ${actBand}${drafts && S.tab !== "approve" && S.tab !== "home" ? `<button class="banner" data-tab="approve">주문표 승인 대기 ${drafts}건 <span aria-hidden="true">›</span></button>` : ""}
       ${notes}
       <div id="view">${currentView()}</div>
-      ${S.tab === "more" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
+      ${grp === "settings" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
       ${S.tab === "home" ? feedbackButtons("phone") : ""}${feedbackModal()}
-      <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${S.tab === k}">${l}${k === "approve" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>`;
+      <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${grp === k && !S.detail}">${l}${k === "order" && drafts ? `<span class="badge">${drafts}</span>` : ""}${k === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</nav>`;
   }
   bind();
 }
@@ -748,6 +788,7 @@ function viewHome(snap, mine) {
   ];
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
+  if (mine) out += todayCard(s, d, strat);
   if (layout() === "phone" && mine) return phoneHome(s, d, strat, out);
   out += marketStrip(s);
   out += `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
@@ -755,7 +796,7 @@ function viewHome(snap, mine) {
   out += `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
   if (!strat.length && mine) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
     <div class="small muted">메리츠 계좌와 따라갈 전략(무한매수 주문표·VR·V4.0)을 먼저 등록하세요. 계좌 API 키는 노트북 .env 에만 넣습니다.</div>
-    <div class="row"><button class="btn primary" data-tab="settings">계좌·전략 등록하기</button></div></div>`;
+    <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`;
   out += `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`;
   if (tonight.length && mine !== null) out += `<details class="card" ${window.innerWidth >= 820 ? "open" : ""}><summary class="row between"><h2 style="display:inline">오늘 밤 주문 ${tonight.length}건</h2><span class="small muted">모의 실행이 건 가상 주문 · 실제 주문은 tonight 목록으로</span></summary>
     <div class="scroll"><table><thead><tr><th>전략</th><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th></tr></thead><tbody>
@@ -774,6 +815,26 @@ function viewHome(snap, mine) {
     `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`;
   return out;
 }
+// 홈 맨 위 '오늘 할 일': 여러 화면에 흩어진 확인 거리를 한곳에 (누르면 그 화면으로)
+function todayCard(s, d, strat) {
+  const items = [];
+  const drafts = Object.keys(s.drafts || {}).length;
+  if (drafts) items.push(["approve", `주문표 승인 대기 ${drafts}건`, "warn"]);
+  for (const [acc, r] of Object.entries(d.real_orders || {})) {
+    if (!r || r.error) continue;
+    const name = ACC_NAME[acc] || acc;
+    if (Number(r.short || 0) > 0) items.push(["orders", `${name}: 예수금 부족 $${money(r.short)}`, "bad"]);
+    const rej = (r.strategies || []).flatMap((x) => x.lines || []).filter((l) => l.collar).length;
+    if (rej) items.push(["orders", `${name}: 거부 예상 ${rej}줄 (현재가 ±10% 밖)`, "bad"]);
+  }
+  if (!s.telegram) items.push(["telegram", "텔레그램 연결하기 (알림을 폰으로)", ""]);
+  if (!strat.length) items.push(["addstrat", "계좌·전략 등록하기", ""]);
+  const pend = (S.cmds || []).filter((c) => c.status === "pending").length;
+  if (pend) items.push(["accounts", `노트북 반영 대기 ${pend}건`, ""]);
+  if (!items.length) return `<div class="card today ok-note"><b>✅ 오늘 할 일 없음</b><span class="small muted">승인 대기·예수금·거부 예상 모두 문제없습니다</span></div>`;
+  return `<section class="card today" aria-label="오늘 할 일"><h2>오늘 할 일</h2>${items.map(([tab, text, cls]) =>
+    `<button class="todo ${cls}" data-tab="${tab}"><span>${esc(text)}</span><span aria-hidden="true">›</span></button>`).join("")}</section>`;
+}
 function marketStrip(s) {
   const m = s.market, q = s.quotes || {};
   if (!m && !Object.keys(q).length) return "";
@@ -790,7 +851,7 @@ function phoneHome(s, d, strat, out) {
   out += marketStrip(s);
   if (!strat.length) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
     <div class="small muted">메리츠 계좌와 따라갈 전략을 먼저 등록하세요 (더보기 → 계좌·전략 설정).</div>
-    <div class="row"><button class="btn primary" data-tab="settings">계좌·전략 등록하기</button></div></div>`;
+    <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`;
   for (const [accId, acc] of Object.entries(s.accounts || {})) {
     const rows = acc.strategies.map((g) => ({ ...g, account: accId }));
     if (!rows.length) continue;
@@ -936,7 +997,7 @@ function linesTable(lines) {
 
 function viewApprove() {
   const drafts = S.snap ? Object.entries(S.snap.summary.drafts || {}) : [];
-  let out = uploadCard();
+  let out = `<div class="row"><span class="small muted">주문표 사진은 텔레그램 봇이나</span><button class="btn" data-tab="upload">📷 사진 올리기</button></div>`;
   if (!drafts.length) out += `<div class="card"><div class="empty">승인할 주문표가 없습니다. 위 '사진 올리기'나 텔레그램 봇으로 주문표 사진을 보내면 판독 후 여기에 나옵니다.</div></div>`;
   for (const [sid, dr] of drafts) {
     const c = S.confirm && S.confirm.sid === sid ? S.confirm.kind : null;
@@ -1141,13 +1202,10 @@ function privacyCard(s) {
       ${on && !s.telegram ? `<div class="small sell">텔레그램을 먼저 연결해야 보고서를 받을 수 있습니다 (위 텔레그램 칸).</div>` : ""}`}
   </div>`;
 }
-function viewSettings() {
-  const s = S.snap ? S.snap.summary : null;
-  if (!s) return `<div class="card"><div class="empty">노트북이 연결되면 계좌·전략을 여기서 관리할 수 있습니다.</div></div>`;
+function accountsView(s) {
   const accs = Object.entries(s.accounts || {});
-  const kind = S.newKind || "sheet";
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
-  return telegramCard(s) + privacyCard(s) + `
+  return `
     <div class="card"><h2>계좌</h2>
       ${accs.map(([aid, a]) => `<div class="row between"><span>${esc(ACC_NAME[aid] || a.name)} <span class="muted small">${esc(aid)}</span></span>
         <span class="chip ${a.api ? "ok" : ""}">${a.api ? "API 연결" : "수동 (키 없음)"}</span></div>
@@ -1159,14 +1217,27 @@ function viewSettings() {
         <label style="flex:2;min-width:150px">이름<input type="text" id="a-name" placeholder="예: ISA 계좌"></label>
         <button class="btn">계좌 추가</button></form>
     </div>
+` + cmdList();
+}
+function myStrategies(s) {
+  const accs = Object.entries(s.accounts || {});
+  const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+  return `
     <div class="card"><h2>전략</h2>
       ${strat.length ? strat.map((g) => `<div class="strat">
-        <div class="row between"><span><b>${esc(g.id)}</b> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}</span></span>
+        <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(g.id)}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}</span></span>
           <label class="sw" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="on-${esc(g.id)}" data-on="${esc(g.id)}" ${g.active ? "checked" : ""}>${g.active ? "켜짐" : "꺼짐"}</label></div>
         <div class="row small"><span class="muted">계좌</span><select id="mv-${esc(g.id)}" data-mv="${esc(g.id)}" style="width:auto">${accs.map(([aid, a]) =>
           `<option value="${esc(aid)}" ${aid === g.account ? "selected" : ""}>${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></div></div>`).join("")
-        : `<div class="empty">아직 전략이 없습니다. 아래에서 추가하세요.</div>`}
+        : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
+` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.</div>` : "") + cmdList();
+}
+function addStrategy(s) {
+  const accs = Object.entries(s.accounts || {});
+  const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+  const kind = S.newKind || "sheet";
+  return `
     <div class="card"><h2>전략 추가</h2>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
         <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
@@ -1184,7 +1255,6 @@ function viewSettings() {
       </form>
     </div>` + cmdList();
 }
-
 // ── 주문표 달력: 실행일(미국 장 날짜)을 고르면 그날 주문표·모의 체결·실제 vs 모의 결과 ──
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymd = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -1393,12 +1463,15 @@ function bind() {
     render(); });
   document.querySelectorAll("[data-calday]").forEach((b) => b.onclick = () => { S.calDay = b.dataset.calday; S.calMonth = S.calDay.slice(0, 7); render(); });
   document.querySelectorAll("[data-calm]").forEach((b) => b.onclick = () => { S.calMonth = b.dataset.calm; render(); });
-  document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = () => { S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
+  document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = (e) => { e.preventDefault(); S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
   document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = async () => {
-    S.tab = b.dataset.tab; S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
-    try { localStorage.setItem("tab", S.tab); } catch (e) {}
-    if (S.tab === "family" || S.tab === "more") await loadFamily().catch(() => {});
+    const want = b.dataset.tab, grp = GROUPS.find((g) => g[0] === want);
+    const last = (S.lastSub || {})[want];
+    S.tab = grp ? (pagesOf(grp).some(([k]) => k === last) ? last : pagesOf(grp)[0][0]) : (LEGACY_TAB[want] || want);
+    (S.lastSub = S.lastSub || {})[groupOf(S.tab)[0]] = S.tab;
+    S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
+    if (S.tab === "family") await loadFamily().catch(() => {});
     if (S.tab === "fb_bug" || S.tab === "fb_idea") { S.fbShot = null; await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea").catch(() => {}); }
     render(); });
   document.querySelectorAll("input[data-n]").forEach((cb) => cb.onchange = () =>
@@ -1413,6 +1486,8 @@ function bind() {
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
   bindDials();
+  const bam = document.getElementById("b-act-me");
+  if (bam) bam.onclick = () => { S.actAs = null; try { localStorage.removeItem("actAs"); } catch (e) {} refresh(); };
   document.querySelectorAll("[data-on]").forEach((cb) => cb.onchange = () => send("set_strategy", { id: cb.dataset.on, active: cb.checked }));
   document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
     ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
