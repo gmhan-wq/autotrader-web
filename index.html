@@ -341,7 +341,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-01b";
+const APP_VERSION = "2026-11-01c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -948,7 +948,9 @@ const KIND_FIELDS = {
        ["T", "T (새로 시작 0)", "text", "0"], ["splits", "분할수", "number", "20"]],
   dynamic: [["cash", "투자금(예수금) $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
        ["rules", "매수 규칙 (하락%:비중%)", "text", "7:20, 10:30, 15:80"], ["tp", "익절 % (평단 대비)", "text", "5"],
-       ["tp_sell", "익절 때 파는 비중 %", "text", "50"], ["base_offset", "기준가: 개장 몇 분 뒤 (0 = 시가)", "number", "0"],
+       ["tp_sell", "익절 때 파는 비중 %", "text", "50"], ["stop_loss", "손절 % (평단 대비, 전량 매도)", "text", "5"],
+       ["until", "모의 기간 마지막 날 (미국 날짜)", "date", new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)],
+       ["base_offset", "기준가: 개장 몇 분 뒤 (0 = 시가, 첫날은 전날 종가)", "number", "0"],
        ["checks", "확인 시각: 개장 뒤 분 (쉼표)", "text", "30, 60, 120, 180, 240, 300, 360"]],
 };
 function keyForm(aid) {
@@ -1053,7 +1055,7 @@ function viewSettings() {
           <label>계좌<select id="s-account">${accs.map(([aid, a]) => `<option value="${esc(aid)}">${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></label>
           ${KIND_FIELDS[kind].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
-        <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 기준가 대비 하락률을 보고, 해당하는 가장 깊은 규칙 하나만큼 예수금 비중으로 매수합니다(하루 1회). 평단 대비 익절%에 닿으면 정한 비중만큼 매도. 손절은 직접. 지금은 모의로만 체결합니다." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
+        <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 기준가 대비 하락률을 보고, 해당하는 가장 깊은 규칙 하나만큼 예수금 비중으로 매수합니다(하루 1회). 평단 대비 익절%에 닿으면 정한 비중만큼 매도, 손절%만큼 내려가면 전량 매도. 첫날 기준가는 전날 종가. 지금은 모의로만 체결합니다." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
         <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
