@@ -210,6 +210,36 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .kv b { font: 500 15px var(--mono) }
 summary { cursor: pointer; color: var(--ice) }
 @media (prefers-reduced-motion: no-preference) { .tabs button, button.btn { transition: background .15s, border-color .15s } }
+
+/* ── 다이얼 (동적 분할매수 단계) ── */
+.dsec { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; background: var(--soft) }
+.dsec h3 { margin: 0; font-size: 14px } .dsec .hint { font-size: 12px; color: var(--muted) }
+.dsteps { display: flex; flex-wrap: wrap; gap: 10px }
+.dstep { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 10px 8px;
+  border-radius: 16px; background: var(--glass-strong); border: 1px solid var(--glass-edge); box-shadow: var(--shadow) }
+.dstep .dhead { font: 600 12px var(--sans); color: var(--muted); align-self: stretch; display: flex; justify-content: space-between; align-items: center }
+.dstep .dpair { display: flex; gap: 6px }
+.dstep .dsay { font-size: 12px; color: var(--ink); text-align: center; max-width: 220px }
+.dstep .ddel { border: 0; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; width: 28px; height: 28px; border-radius: 8px }
+.dstep .ddel:hover { color: var(--bad); background: var(--soft) }
+.dial { --c1: var(--accent); --c2: var(--ice); position: relative; width: 96px; display: flex; flex-direction: column; align-items: center;
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; outline: none }
+.dial.red { --c1: #e0435b; --c2: #ff9a6b } .dial.green { --c1: #17a265; --c2: #6fd3a8 }
+.dial:active { cursor: grabbing }
+.dial svg { width: 96px; height: 96px; display: block; overflow: visible }
+.dial .trk { fill: none; stroke: var(--line); stroke-width: 9; stroke-linecap: round }
+.dial .val { fill: none; stroke-width: 9; stroke-linecap: round; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--c1) 55%, transparent)) }
+.dial .face { fill: var(--glass-strong); stroke: var(--glass-edge) }
+.dial .tick { stroke: var(--muted); stroke-width: 1.2; opacity: .45 }
+.dial .knob { fill: #fff; stroke: var(--c1); stroke-width: 3 }
+.dial .num { position: absolute; top: 30px; left: 0; right: 0; text-align: center; font: 600 19px var(--mono); color: var(--ink); pointer-events: none }
+.dial .num small { font-size: 11px; color: var(--muted); margin-left: 1px }
+.dial .lbl { font-size: 11.5px; color: var(--muted); margin-top: -6px }
+.dial .fine { display: flex; gap: 4px; margin-top: 2px }
+.dial .fine button { width: 30px; height: 26px; border-radius: 8px; border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+  font: 600 14px var(--sans); cursor: pointer; padding: 0 }
+.dial:focus-visible svg .face { stroke: var(--accent); stroke-width: 2 }
+.dadd { align-self: flex-start }
 </style>
 </head>
 <body>
@@ -341,7 +371,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-01c";
+const APP_VERSION = "2026-11-01d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -444,6 +474,7 @@ function typing() {
   // 제보 창이 열려 있거나 입력 칸에 쓰는 중이면 화면을 다시 그리지 않는다 (쓰던 글이 지워지지 않게)
   const a = document.activeElement;
   if (S.fbForm) return true;
+  if (a && a.closest && a.closest(".dial")) return true;          // 다이얼을 돌리는 중
   if (!a || !["INPUT", "TEXTAREA", "SELECT"].includes(a.tagName)) return false;
   return a.type !== "checkbox" && a.type !== "button" && a.type !== "submit";
 }
@@ -947,12 +978,103 @@ const KIND_FIELDS = {
   v4: [["cash", "원금·잔금 $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
        ["T", "T (새로 시작 0)", "text", "0"], ["splits", "분할수", "number", "20"]],
   dynamic: [["cash", "투자금(예수금) $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
-       ["rules", "매수 규칙 (하락%:비중%)", "text", "7:20, 10:30, 15:80"], ["tp", "익절 % (평단 대비)", "text", "5"],
-       ["tp_sell", "익절 때 파는 비중 %", "text", "50"], ["stop_loss", "손절 % (평단 대비, 전량 매도)", "text", "5"],
        ["until", "모의 기간 마지막 날 (미국 날짜)", "date", new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)],
        ["base_offset", "기준가: 개장 몇 분 뒤 (0 = 시가, 첫날은 전날 종가)", "number", "0"],
        ["checks", "확인 시각: 개장 뒤 분 (쉼표)", "text", "30, 60, 120, 180, 240, 300, 360"]],
 };
+// ── 다이얼: 돌려서 값 정하기 (끌기·휠·화살표 키·±버튼) ──
+const DIAL = { start: 135, sweep: 270 };
+function arcPath(f, r = 38) {
+  const a0 = DIAL.start * Math.PI / 180, a1 = (DIAL.start + DIAL.sweep * Math.max(0.0001, Math.min(1, f))) * Math.PI / 180;
+  const p = (a) => `${(50 + r * Math.cos(a)).toFixed(2)} ${(50 + r * Math.sin(a)).toFixed(2)}`;
+  return `M ${p(a0)} A ${r} ${r} 0 ${DIAL.sweep * f > 180 ? 1 : 0} 1 ${p(a1)}`;
+}
+function dialHTML(key, v, o) {   // o: { min, max, step, unit, label, color, neg }
+  const f = (v - o.min) / (o.max - o.min), a = (DIAL.start + DIAL.sweep * f) * Math.PI / 180, gid = "g-" + key.replace(/\W/g, "_");
+  const ticks = Array.from({ length: 11 }, (_, i) => { const t = (DIAL.start + DIAL.sweep * i / 10) * Math.PI / 180;
+    return `<line class="tick" x1="${50 + 46 * Math.cos(t)}" y1="${50 + 46 * Math.sin(t)}" x2="${50 + 49 * Math.cos(t)}" y2="${50 + 49 * Math.sin(t)}"/>`; }).join("");
+  return `<div class="dial ${o.color || ""}" tabindex="0" role="slider" aria-label="${esc(o.label)}" aria-valuemin="${o.min}" aria-valuemax="${o.max}" aria-valuenow="${v}"
+      data-dial="${esc(key)}" data-min="${o.min}" data-max="${o.max}" data-step="${o.step}" data-neg="${o.neg ? 1 : 0}" data-unit="${esc(o.unit || "%")}">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="var(--c1)"/><stop offset="1" stop-color="var(--c2)"/></linearGradient></defs>
+      ${ticks}<circle class="face" cx="50" cy="50" r="30"/><path class="trk" d="${arcPath(1)}"/>
+      <path class="val" d="${arcPath(f)}" stroke="url(#${gid})"/>
+      <circle class="knob" r="6" cx="${(50 + 38 * Math.cos(a)).toFixed(2)}" cy="${(50 + 38 * Math.sin(a)).toFixed(2)}"/></svg>
+    <div class="num">${o.neg ? "−" : ""}${fmtDial(v)}<small>${esc(o.unit || "%")}</small></div>
+    <div class="lbl">${esc(o.label)}</div>
+    <div class="fine"><button type="button" data-fine="-1" aria-label="줄이기">−</button><button type="button" data-fine="1" aria-label="늘리기">+</button></div>
+  </div>`;
+}
+const fmtDial = (v) => (Math.round(v * 10) / 10).toString();
+function dynForm() {
+  if (!S.dynForm) S.dynForm = { rules: [[7, 20], [10, 30], [15, 80]], stops: [[5, 100]], tp: 5, tpSell: 50 };
+  return S.dynForm;
+}
+function dynGet(key) { const f = dynForm(), k = key.split("."); return k.length === 1 ? f[k[0]] : f[k[0]][+k[1]][+k[2]]; }
+function dynSet(key, v) { const f = dynForm(), k = key.split("."); if (k.length === 1) f[k[0]] = v; else f[k[0]][+k[1]][+k[2]] = v; }
+function stepSay(kind, d, w) {
+  return kind === "rules" ? `기준가 대비 −${fmtDial(d)}% 닿으면 그날 예수금의 ${fmtDial(w)}%까지 채워 사기`
+    : `평단 대비 −${fmtDial(d)}% 닿으면 보유의 ${fmtDial(w)}%까지 팔기`;
+}
+function dynSection() {
+  const f = dynForm();
+  const steps = (kind) => f[kind].map(([d, w], i) => `<div class="dstep">
+      <div class="dhead"><span>${i + 1}단계</span>${f[kind].length > 1 || kind === "stops" ? `<button type="button" class="ddel" data-dstep-del="${kind}.${i}" aria-label="${i + 1}단계 지우기">×</button>` : ""}</div>
+      <div class="dpair">${dialHTML(`${kind}.${i}.0`, d, { min: 0.5, max: 30, step: 0.5, label: kind === "rules" ? "하락" : "평단 대비", color: kind === "stops" ? "red" : "", neg: true })}
+        ${dialHTML(`${kind}.${i}.1`, w, { min: 5, max: 100, step: 5, label: kind === "rules" ? "예수금 비중" : "보유 비중", color: kind === "stops" ? "red" : "" })}</div>
+      <div class="dsay" id="say-${kind}-${i}">${stepSay(kind, d, w)}</div></div>`).join("");
+  return `<div class="dsec"><h3>매수 단계</h3>
+      <div class="hint">다이얼을 돌리거나(끌기·휠) ± 로 맞춥니다. 확인 시각마다 닿은 <b>가장 깊은 단계 하나</b>의 비중까지 그날 산 양을 채웁니다.</div>
+      <div class="dsteps">${steps("rules")}</div>
+      ${f.rules.length < 6 ? `<button type="button" class="btn dadd" data-dstep-add="rules">+ 매수 단계 추가</button>` : ""}</div>
+    <div class="dsec"><h3>손절 단계</h3>
+      <div class="hint">평단보다 내려가면 단계별로 팝니다 (첫 손절 때 보유 기준, 더 깊은 단계에서 그 비중까지 채워 팔기). 손절 구간에서는 사지 않습니다. 단계를 모두 지우면 손절 없음(직접).</div>
+      <div class="dsteps">${steps("stops")}</div>
+      ${f.stops.length < 4 ? `<button type="button" class="btn dadd" data-dstep-add="stops">+ 손절 단계 추가</button>` : ""}</div>
+    <div class="dsec"><h3>익절</h3>
+      <div class="dsteps"><div class="dstep"><div class="dpair">
+        ${dialHTML("tp", f.tp, { min: 0.5, max: 50, step: 0.5, label: "평단 대비 +", color: "green" })}
+        ${dialHTML("tpSell", f.tpSell, { min: 10, max: 100, step: 10, label: "보유 중 팔 비중", color: "green" })}</div>
+        <div class="dsay" id="say-tp">평단 대비 +${fmtDial(f.tp)}% 이상이면 보유의 ${fmtDial(f.tpSell)}% 매도 (하루 1번)</div></div></div></div>`;
+}
+function updateDial(el, v) {
+  const min = +el.dataset.min, max = +el.dataset.max, step = +el.dataset.step;
+  v = Math.min(max, Math.max(min, Math.round(v / step) * step));
+  const f = (v - min) / (max - min), a = (DIAL.start + DIAL.sweep * f) * Math.PI / 180;
+  el.querySelector(".val").setAttribute("d", arcPath(f));
+  const k = el.querySelector(".knob"); k.setAttribute("cx", (50 + 38 * Math.cos(a)).toFixed(2)); k.setAttribute("cy", (50 + 38 * Math.sin(a)).toFixed(2));
+  el.querySelector(".num").innerHTML = `${el.dataset.neg === "1" ? "−" : ""}${fmtDial(v)}<small>${esc(el.dataset.unit)}</small>`;
+  el.setAttribute("aria-valuenow", v);
+  dynSet(el.dataset.dial, v);
+  const key = el.dataset.dial.split("."), fm = dynForm();
+  if (key.length === 3) { const s = document.getElementById(`say-${key[0]}-${key[1]}`); if (s) s.textContent = stepSay(key[0], ...fm[key[0]][+key[1]]); }
+  else { const s = document.getElementById("say-tp"); if (s) s.textContent = `평단 대비 +${fmtDial(fm.tp)}% 이상이면 보유의 ${fmtDial(fm.tpSell)}% 매도 (하루 1번)`; }
+}
+function bindDials() {
+  document.querySelectorAll(".dial").forEach((el) => {
+    const val = () => +el.getAttribute("aria-valuenow"), min = +el.dataset.min, max = +el.dataset.max, step = +el.dataset.step;
+    const fromPoint = (e) => { const r = el.querySelector("svg").getBoundingClientRect();
+      let ang = Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
+      let rel = (ang - DIAL.start + 720) % 360;
+      if (rel > DIAL.sweep) rel = rel > DIAL.sweep + (360 - DIAL.sweep) / 2 ? 0 : DIAL.sweep;
+      updateDial(el, min + (max - min) * rel / DIAL.sweep); };
+    el.querySelector("svg").addEventListener("pointerdown", (e) => { e.preventDefault(); el.focus({ preventScroll: true });
+      el.setPointerCapture(e.pointerId); el.dataset.drag = "1"; fromPoint(e); });
+    el.addEventListener("pointermove", (e) => { if (el.dataset.drag === "1") fromPoint(e); });
+    const end = () => { el.dataset.drag = ""; };
+    el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+    el.addEventListener("wheel", (e) => { e.preventDefault(); updateDial(el, val() + (e.deltaY < 0 ? step : -step)); }, { passive: false });
+    el.addEventListener("keydown", (e) => {
+      const m = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key];
+      if (m) { e.preventDefault(); updateDial(el, val() + m * step); } });
+    el.querySelectorAll("[data-fine]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); updateDial(el, val() + (+b.dataset.fine) * step); });
+  });
+  document.querySelectorAll("[data-dstep-add]").forEach((b) => b.onclick = () => {
+    const kind = b.dataset.dstepAdd, arr = dynForm()[kind], last = arr[arr.length - 1] || [kind === "rules" ? 5 : 3, kind === "rules" ? 10 : 50];
+    arr.push([Math.min(30, last[0] + (kind === "rules" ? 5 : 5)), Math.min(100, kind === "rules" ? last[1] + 10 : 100)]); render(); });
+  document.querySelectorAll("[data-dstep-del]").forEach((b) => b.onclick = () => {
+    const [kind, i] = b.dataset.dstepDel.split("."); dynForm()[kind].splice(+i, 1); render(); });
+}
 function keyForm(aid) {
   let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
   return `<form id="f-key" data-acc="${esc(aid)}" class="card" style="gap:8px;background:var(--soft)">
@@ -1055,7 +1177,8 @@ function viewSettings() {
           <label>계좌<select id="s-account">${accs.map(([aid, a]) => `<option value="${esc(aid)}">${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></label>
           ${KIND_FIELDS[kind].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
-        <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 기준가 대비 하락률을 보고, 해당하는 가장 깊은 규칙 하나만큼 예수금 비중으로 매수합니다(하루 1회). 평단 대비 익절%에 닿으면 정한 비중만큼 매도, 손절%만큼 내려가면 전량 매도. 첫날 기준가는 전날 종가. 지금은 모의로만 체결합니다." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
+        ${kind === "dynamic" ? dynSection() : ""}
+        <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 판단합니다. 첫날 기준가는 전날 종가, 둘째 날부터는 시가(개장 N분). 지금은 모의로만 체결합니다." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
         <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
@@ -1289,6 +1412,7 @@ function bind() {
     S.viewSnap = r.error ? null : clean(r.data); if (r.error) S.msg = { bad: true, text: r.error.message }; render(); });
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
+  bindDials();
   document.querySelectorAll("[data-on]").forEach((cb) => cb.onchange = () => send("set_strategy", { id: cb.dataset.on, active: cb.checked }));
   document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
     ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
@@ -1308,6 +1432,13 @@ function bind() {
     const kind = S.newKind || "sheet", v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
     const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account") };
     for (const [k] of KIND_FIELDS[kind]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
+    if (kind === "dynamic") {
+      const f = dynForm(), ser = (a) => [...a].sort((x, y) => x[0] - y[0]).map(([d, w]) => `${d}:${w}`).join(",");
+      const dup = (a) => new Set(a.map((x) => x[0])).size !== a.length;
+      if (dup(f.rules) || dup(f.stops)) { S.msg = { bad: true, text: "같은 하락% 단계가 두 개 있습니다 — 다이얼을 다르게 맞춰 주세요" }; render(); return; }
+      Object.assign(p, { rules: ser(f.rules), stops: ser(f.stops), tp: String(f.tp), tp_sell: String(f.tpSell) });
+      if (!f.stops.length) p.stops = "";
+    }
     send("add_strategy", p); };
   const fg = document.getElementById("f-grant");
   if (fg) fg.onsubmit = async (e) => { e.preventDefault();
