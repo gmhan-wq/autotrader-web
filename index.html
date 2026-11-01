@@ -341,7 +341,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-10-31j";
+const APP_VERSION = "2026-11-01a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1000,13 +1000,25 @@ function telegramCard(s) {
     ${S.tgNote ? `<div class="small ${S.tgBad ? "sell" : "muted"}">${esc(S.tgNote)}</div>` : ""}`
     : `<div class="row"><button class="btn" data-tgopen="1">봇 바꾸기</button></div>`}</div>`;
 }
+function privacyCard(s) {
+  const pv = s.privacy || {}, on = !!pv.on;
+  return `<div class="card"><h2>프라이버시 투자법 <span class="chip">모의 예측</span></h2>
+    <div class="small muted">프라이버시 주문표 사진을 올리면(사진 올리기 → 프라이버시 연구) 관리자 노트북이 판독해
+      <b>분석 보고서</b>(판독값·규칙 대조)와 <b>다음 거래일 주문표 예상</b>을 텔레그램으로 보내 드립니다.
+      규칙은 사진 50장마다 다시 맞춥니다. 아직 주문은 내지 않습니다.</div>
+    ${pv.admin ? `<div class="small">관리자는 늘 받습니다.</div>` : `<div class="row between">
+      <span>${on ? "켜짐 — 보고서를 받습니다" : "꺼짐"}</span>
+      <button class="btn ${on ? "" : "primary"}" data-privacy="${on ? "0" : "1"}">${on ? "끄기" : "켜기"}</button></div>
+      ${on && !s.telegram ? `<div class="small sell">텔레그램을 먼저 연결해야 보고서를 받을 수 있습니다 (위 텔레그램 칸).</div>` : ""}`}
+  </div>`;
+}
 function viewSettings() {
   const s = S.snap ? S.snap.summary : null;
   if (!s) return `<div class="card"><div class="empty">노트북이 연결되면 계좌·전략을 여기서 관리할 수 있습니다.</div></div>`;
   const accs = Object.entries(s.accounts || {});
   const kind = S.newKind || "sheet";
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
-  return telegramCard(s) + `
+  return telegramCard(s) + privacyCard(s) + `
     <div class="card"><h2>계좌</h2>
       ${accs.map(([aid, a]) => `<div class="row between"><span>${esc(ACC_NAME[aid] || a.name)} <span class="muted small">${esc(aid)}</span></span>
         <span class="chip ${a.api ? "ok" : ""}">${a.api ? "API 연결" : "수동 (키 없음)"}</span></div>
@@ -1271,6 +1283,8 @@ function bind() {
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
   document.querySelectorAll("[data-on]").forEach((cb) => cb.onchange = () => send("set_strategy", { id: cb.dataset.on, active: cb.checked }));
+  document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
+    ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
   document.querySelectorAll("[data-mv]").forEach((sel) => sel.onchange = () => send("set_strategy", { id: sel.dataset.mv, account: sel.value }));
   const fa = document.getElementById("f-acc");
   if (fa) fa.onsubmit = (e) => { e.preventDefault();
