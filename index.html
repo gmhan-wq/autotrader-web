@@ -257,7 +257,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const $app = document.getElementById("app");
 const S = { user: null, name: "", tab: "home", snap: null, cmds: [], owners: [], grants: [], viewing: null,
             viewSnap: null, confirm: null, msg: null, busy: false };
-try { S.tab = localStorage.getItem("tab") || "home"; } catch (e) {}
+S.tab = "home";   // 첫 화면은 늘 대시보드 (마지막에 보던 화면으로 열리지 않게)
 
 // 다른 사람이 올린 현황(가족 보기)에 화면을 깨거나 스크립트를 넣는 글자가 섞여 있어도 안전하게: 받자마자 걸러 낸다
 function clean(v) {
@@ -371,7 +371,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-01d";
+const APP_VERSION = "2026-11-01e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
