@@ -118,7 +118,7 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
 .krw { font-size: 12px; color: var(--muted) }
 .oline.off { opacity: .5 } .oline.off b { text-decoration: line-through }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px }
-.kpi { gap: 4px } .kpi b { font-size: 21px; font-weight: 600 } .kpi b.warnc { color: var(--warn) }
+.kpi { gap: 4px } .kpi b { font-size: clamp(16px, 1.55vw, 21px); font-weight: 600; white-space: nowrap }   /* 제보 #5: −$3,019.83 이 기호에서 줄바꿈되지 않게 */ .kpi b.warnc { color: var(--warn) }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px }
 .scard { text-align: left; font: inherit; color: var(--ink); cursor: pointer }
 .scard:hover { border-color: var(--accent) }
@@ -403,7 +403,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02f";
+const APP_VERSION = "2026-11-02g";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
