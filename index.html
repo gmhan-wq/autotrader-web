@@ -308,7 +308,18 @@ async function loadOps() {
   S.ops = clean(o.data || []).filter((x) => x.can_operate && x.owner_id !== S.user.id);
   try { S.actAs = localStorage.getItem("actAs") || null; } catch (e) {}
 }
+// ── 전략 수정 합의 (ADR 0037): 제안 → 당사자 전원 동의 → 계좌 주인이 적용 ──
+async function loadChanges() {
+  const r = await sb.from("strategy_changes").select("id,owner_id,strategy_id,change,summary,note,created_by,created_at,required,approvals,status,decided_at,result")
+    .order("id", { ascending: false }).limit(30);
+  S.changes = r.error ? [] : clean(r.data || []);
+}
+const nameOf = (uid) => uid === S.user.id ? "나" : (((S.ops || []).find((o) => o.owner_id === uid) || {}).display_name
+  || ((S.members || []).find((m) => m.user_id === uid) || {}).display_name || ((S.owners || []).find((o) => o.owner_id === uid) || {}).display_name || "다른 당사자");
+const myVoteNeeded = () => (S.changes || []).filter((c) => c.status === "open" && (c.required || []).includes(S.user.id) && !(c.approvals || {})[S.user.id]);
+const readyToApply = () => (S.changes || []).filter((c) => c.status === "open" && c.owner_id === S.user.id && (c.required || []).every((u) => (c.approvals || {})[u]));
 async function loadMine() {
+  try { await loadChanges(); } catch (e) {}
   if (owner() !== S.user.id) {                       // 공동 운영: 주인의 현황을 보고 주인 이름으로 명령
     const r = await sb.rpc("view_snapshot", { p_owner: owner() });
     S.snap = r.data ? clean(r.data) : null;
@@ -387,7 +398,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02c";
+const APP_VERSION = "2026-11-02d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -525,7 +536,7 @@ function layout() {
 const GROUPS = [
   ["home", "홈", [["home", "대시보드"]]],
   ["order", "주문", [["orders", "오늘 밤 주문"], ["approve", "주문표 승인"], ["upload", "사진 올리기"]]],
-  ["strategy", "전략", [["mystrat", "내 전략"], ["addstrat", "전략 추가"], ["privacy", "프라이버시"]]],
+  ["strategy", "전략", [["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["privacy", "프라이버시"]]],
   ["record", "기록", [["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
@@ -541,7 +552,7 @@ function subNav() {
   const g = groupOf(S.tab), pages = pagesOf(g);
   if (pages.length < 2 || S.detail || layout() === "pc") return "";       // PC 는 왼쪽 메뉴에 같은 목록이 있다
   return `<div class="seg subnav" role="tablist" aria-label="${esc(g[1])}">${pages.map(([k, l]) =>
-    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "approve" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
+    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "approve" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "consensus" && myVoteNeeded().length + readyToApply().length ? `<span class="badge">${myVoteNeeded().length + readyToApply().length}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
 }
 function currentView() {
   const s = S.snap ? S.snap.summary : null;
@@ -554,6 +565,7 @@ function currentView() {
     case "upload": S.upOpen = true; v = uploadCard() + `<div class="small muted">주문표 사진은 판독 뒤 '주문표 승인'에, 프라이버시 사진은 노트북 연구 폴더로 갑니다.</div>`; break;
     case "mystrat": v = need(myStrategies); break;
     case "addstrat": v = need(addStrategy); break;
+    case "consensus": v = viewConsensus(); break;
     case "privacy": v = need(privacyCard); break;
     case "calendar": v = viewCalendar(); break;
     case "board": v = viewBoard(); break;
@@ -827,6 +839,8 @@ function todayCard(s, d, strat) {
     const rej = (r.strategies || []).flatMap((x) => x.lines || []).filter((l) => l.collar).length;
     if (rej) items.push(["orders", `${name}: 거부 예상 ${rej}줄 (시세 대비 28% 넘게 벗어남)`, "bad"]);
   }
+  if (myVoteNeeded().length) items.push(["consensus", `전략 수정 합의: 내 동의가 필요한 제안 ${myVoteNeeded().length}건`, "warn"]);
+  if (readyToApply().length) items.push(["consensus", `전략 수정 합의 완료 ${readyToApply().length}건 — 계좌 주인이 '적용'`, "warn"]);
   if (!s.telegram) items.push(["telegram", "텔레그램 연결하기 (알림을 폰으로)", ""]);
   if (!strat.length) items.push(["addstrat", "계좌·전략 등록하기", ""]);
   const pend = (S.cmds || []).filter((c) => c.status === "pending").length;
@@ -1234,11 +1248,46 @@ function myStrategies(s) {
             ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}">정지</button><button class="btn" data-stopno="1">취소</button></span>`
             : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}">⛔ 비상 정지</button></span>`)
             : `<span class="chip bad" title="다시 켜기는 계좌 주인·관리자·공동 운영자 합의 (ADR 0037)">꺼짐 · 다시 켜기는 합의</span>`}</div>
+        ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}">✍ 수정·다시 켜기 제안</button></div>`}
         <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div></div>`).join("")
         : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
     <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList();
+}
+function allStrategiesFlat() {
+  const s = S.snap ? S.snap.summary : {};
+  return Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+}
+function changeForm(g, accs) {
+  return `<form id="f-change" data-sid="${esc(g.id)}" class="card" style="gap:10px;background:var(--soft)">
+    <b class="small">${esc(g.id)} 수정 제안 — 당사자(계좌 주인·관리자·공동 운영자) 모두 동의하면 계좌 주인이 적용합니다</b>
+    ${!g.active ? `<label class="inl"><input type="checkbox" id="ch-on" checked> 다시 켜기</label>` : ""}
+    <label>계좌<select id="ch-acc">${accs.map(([aid, a]) => `<option value="${esc(aid)}" ${aid === g.account ? "selected" : ""}>${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></label>
+    ${g.kind === "dynamic" && g.params ? `<label class="inl"><input type="checkbox" id="ch-params" ${S.chParams ? "checked" : ""}> 단계·손절·익절 값 바꾸기</label>
+      ${S.chParams ? dynSection() + `<div class="grid2"><label>확인 시각 (개장 뒤 분)<input type="text" id="ch-checks" value="${esc((g.params.check_offsets_min || []).join(", "))}"></label>
+        <label>모의 기간 마지막 날<input type="date" id="ch-until" value="${esc(g.params.until || "")}"></label></div>` : ""}` : ""}
+    <label>이유 (왜 바꾸는지 — 당사자에게 보입니다)<textarea id="ch-note" rows="2" maxlength="500" required></textarea></label>
+    <div class="row"><span class="grow"></span><button type="button" class="btn" data-propose-cancel="1">취소</button><button class="btn primary">제안 보내기</button></div>
+  </form>`;
+}
+function viewConsensus() {
+  const list = S.changes || [];
+  const head = `<div class="card small muted"><div>진행 중인 전략의 값 수정·다시 켜기·계좌 옮기기는 <b>계좌 주인 + 관리자 + 공동 운영자 모두 동의</b>해야 하고, 모두 동의하면 <b>계좌 주인</b>이 '적용'을 누릅니다 (절대 규칙). 비상 정지는 '내 전략'에서 누구나 바로 할 수 있습니다.</div></div>`;
+  if (!list.length) return head + `<div class="card"><div class="empty">아직 제안이 없습니다. '내 전략'에서 '수정·다시 켜기 제안'을 누르세요.</div></div>`;
+  const ST = { open: ["합의 중", "warn"], applied: ["적용됨", "ok"], rejected: ["반대로 끝남", "bad"], cancelled: ["취소", ""] };
+  return head + list.map((c) => {
+    const req = c.required || [], ap = c.approvals || {}, n = req.filter((u) => ap[u]).length;
+    const mine = req.includes(S.user.id) && !ap[S.user.id] && c.status === "open";
+    const ready = c.status === "open" && n === req.length;
+    const st = ST[c.status] || [c.status, ""];
+    return `<div class="card"><div class="row between"><b>#${c.id} ${esc(c.strategy_id)}</b><span class="chip ${st[1]}">${st[0]}</span></div>
+      <div>${esc(c.summary || "")}</div>${c.note ? `<div class="small muted">이유: ${esc(c.note)}</div>` : ""}
+      <div class="small">제안: ${esc(nameOf(c.created_by))} · ${when(c.created_at)} · 동의 <b>${n}/${req.length}</b> (${req.map((u) => `${esc(nameOf(u))} ${ap[u] ? "✅" : "⏳"}`).join(", ")})</div>
+      ${c.result ? `<div class="small muted">결과: ${esc(c.result)}</div>` : ""}
+      ${mine ? `<div class="row"><button class="btn primary" data-agree="${c.id}">동의</button><button class="btn danger" data-disagree="${c.id}">반대</button></div>` : ""}
+      ${ready && c.owner_id === S.user.id ? `<div class="row"><b class="small">모두 동의했습니다</b><button class="btn primary" data-apply="${c.id}" data-sid="${esc(c.strategy_id)}">적용</button></div>`
+        : ready ? `<div class="small">모두 동의 — 계좌 주인이 '적용'을 누르면 바뀝니다</div>` : ""}</div>`; }).join("");
 }
 function addStrategy(s) {
   const accs = Object.entries(s.accounts || {});
@@ -1493,6 +1542,37 @@ function bind() {
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
   bindDials();
+  document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
+    const g = allStrategiesFlat().find((x) => x.id === b.dataset.propose);
+    S.editSid = b.dataset.propose; S.chParams = false;
+    if (g && g.params) S.dynForm = { rules: (g.params.rules || []).map(([a, w]) => [+a, +w]), stops: (g.params.stops || []).map(([a, w]) => [+a, +w]),
+      tp: +(g.params.tp_pct || 5), tpSell: +(g.params.tp_sell_pct || 50) };
+    render(); });
+  document.querySelectorAll("[data-propose-cancel]").forEach((b) => b.onclick = () => { S.editSid = null; render(); });
+  const chp = document.getElementById("ch-params");
+  if (chp) chp.onchange = () => { S.chParams = chp.checked; render(); };
+  const fch = document.getElementById("f-change");
+  if (fch) fch.onsubmit = async (e) => { e.preventDefault();
+    const sid = fch.dataset.sid, g = allStrategiesFlat().find((x) => x.id === sid) || {}, change = {}, parts = [];
+    const on = document.getElementById("ch-on"); if (on && on.checked) { change.active = true; parts.push("다시 켜기"); }
+    const acc = document.getElementById("ch-acc").value; if (acc && acc !== g.account) { change.account = acc; parts.push(`계좌 → ${ACC_NAME[acc] || acc}`); }
+    if (S.chParams) { const f = dynForm(), ser = (a) => [...a].sort((x, y) => x[0] - y[0]).map(([d, w]) => `${d}:${w}`).join(",");
+      change.params = { rules: ser(f.rules), stops: ser(f.stops), tp: String(f.tp), tp_sell: String(f.tpSell),
+        checks: document.getElementById("ch-checks").value, until: document.getElementById("ch-until").value };
+      parts.push(`매수 ${change.params.rules} · 손절 ${change.params.stops || "없음"} · 익절 +${f.tp}%→${f.tpSell}%`); }
+    if (!parts.length) { S.msg = { bad: true, text: "바꿀 내용이 없습니다" }; render(); return; }
+    const r = await sb.rpc("propose_change", { p_owner: owner(), p_strategy: sid, p_change: change, p_summary: parts.join(" / "),
+      p_note: document.getElementById("ch-note").value.trim() });
+    S.msg = r.error ? { bad: true, text: "제안 실패: " + ko(r.error.message) } : { text: "제안했습니다. 당사자 모두 '수정 합의'에서 동의하면 계좌 주인이 적용합니다." };
+    if (!r.error) { S.editSid = null; S.tab = "consensus"; }
+    await refresh(); };
+  document.querySelectorAll("[data-agree],[data-disagree]").forEach((b) => b.onclick = async () => {
+    const agree = !!b.dataset.agree, id = Number(b.dataset.agree || b.dataset.disagree);
+    const r = await sb.rpc("decide_change", { p_id: id, p_agree: agree });
+    S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: agree ? "동의했습니다." : "반대했습니다 — 이 제안은 끝납니다." };
+    await refresh(); });
+  document.querySelectorAll("[data-apply]").forEach((b) => b.onclick = () =>
+    send("set_strategy", { id: b.dataset.sid, apply_change: Number(b.dataset.apply) }));
   const bam = document.getElementById("b-act-me");
   if (bam) bam.onclick = () => { S.actAs = null; try { localStorage.removeItem("actAs"); } catch (e) {} refresh(); };
   document.querySelectorAll("[data-stopask]").forEach((b) => b.onclick = () => { S.stopAsk = b.dataset.stopask; render(); });
