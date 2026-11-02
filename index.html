@@ -177,6 +177,10 @@ button.btn.fb-idea { background: #2e7d32; color: #ffffff; border-color: #2e7d32;
 .fab { position: fixed; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; z-index: 30 }
 .fab button.btn { min-height: 40px; padding: 6px 12px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
 .modal-bg { position: fixed; inset: 0; background: rgba(10, 14, 30, .55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px }
+/* 제보 #5: 흐림(blur) 효과가 있으면 글자를 칠 때마다 아래 화면 전체를 다시 그려 느려진다 → 제보 창과 그 뒤는 흐림 없이 */
+.modal.card { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg) }
+body.modal-open .card { -webkit-backdrop-filter: none; backdrop-filter: none }
+.kpi-sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .modal { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--bg-solid, var(--glass-strong)); }
 .modal textarea { width: 100%; min-height: 120px; font: 15px var(--sans); padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); box-sizing: border-box }
 .modal img.shot { width: 100%; max-height: 260px; object-fit: cover; object-position: top; border-radius: 12px; border: 1px solid var(--line) }
@@ -292,7 +296,8 @@ const money = (x, d = 2) => (x === null || x === undefined || x === "") ? "-" :
   Number(x).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const krw = (usd) => { const r = S.snap && S.snap.summary.fx && Number(S.snap.summary.fx.usdkrw);
   if (!r || usd === null || usd === undefined || isNaN(Number(usd))) return "";
-  const v = Number(usd) * r; return "₩" + (Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + "억" : Math.round(v / 1e4).toLocaleString("ko-KR") + "만"); };
+  const v = Number(usd) * r, a = Math.abs(v);       // 제보 #5: 음수는 달러처럼 기호를 앞에 (−₩402만)
+  return (v < 0 ? "−" : "") + "₩" + (a >= 1e8 ? (a / 1e8).toFixed(2) + "억" : Math.round(a / 1e4).toLocaleString("ko-KR") + "만"); };
 const sideKo = (s) => s === "BUY" ? "매수" : s === "SELL" ? "매도" : esc(s);
 const sideCls = (s) => s === "BUY" ? "buy" : "sell";
 const ACC_NAME = { main: "A계좌", b: "B계좌", c: "C계좌" };
@@ -398,7 +403,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02e";
+const APP_VERSION = "2026-11-02f";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -663,6 +668,7 @@ function render() {
   restoreForm(kept);
 }
 function renderInner() {
+  document.body.classList.toggle("modal-open", !!S.fbForm);
   if (!S.user) return renderLogin();
   if (S.status && S.status !== "approved") return renderPending();
   const mode = layout();
@@ -792,7 +798,7 @@ function viewHome(snap, mine) {
   const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
   const kpis = [
     ["평가금액", "$" + money(t.value), `${krw(t.value) ? krw(t.value) + " · " : ""}원장 기준`, ""],
-    ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 있는 보유" : "보유 종목 (평단 있는 것)", pnlCls(t.eval_pnl)],
+    ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 기준" : "평단 있는 보유 기준", pnlCls(t.eval_pnl)],
     ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
     ["전략 잔금", "$" + money(t.cash), "주문표·VR Pool 합계", ""],
     ["오늘 밤 주문", realCount(d) !== null ? realCount(d) + "건" : tonight.length + "건", realCount(d) !== null ? "실제로 넣을 주문" : "가상(모의) 주문 기준", ""],
@@ -804,7 +810,7 @@ function viewHome(snap, mine) {
   if (layout() === "phone" && mine) return phoneHome(s, d, strat, out);
   out += marketStrip(s);
   out += `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
-    <b class="num ${c}">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+    <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`;
   out += `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
   if (!strat.length && mine) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
     <div class="small muted">메리츠 계좌와 따라갈 전략(무한매수 주문표·VR·V4.0)을 먼저 등록하세요. 계좌 API 키는 노트북 .env 에만 넣습니다.</div>
