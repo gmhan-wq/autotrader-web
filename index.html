@@ -89,7 +89,7 @@ body[data-layout="pc"] .wrap { max-width: 1360px }
 header.pc-top.card { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border-radius: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 6 }
 .brand { font-size: 17px; letter-spacing: -0.01em }
 .pc-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start }
-nav.pc-nav.card { gap: 2px; padding: 10px; position: sticky; top: 84px }
+nav.pc-nav.card { gap: 2px; padding: 10px; position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain }
 .nav-h { font-size: 12px; color: var(--muted); padding: 12px 10px 4px }
 .nav-i { display: flex; align-items: center; gap: 8px; text-align: left; font: 500 14px var(--sans); color: var(--ink); background: transparent; border: 0;
   padding: 9px 10px; border-radius: 10px; cursor: pointer; min-height: 40px }
@@ -398,7 +398,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02d";
+const APP_VERSION = "2026-11-02e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1542,6 +1542,12 @@ function bind() {
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
   bindDials();
+  // 제보 #4: 왼쪽 메뉴 위에서 굴려도 오른쪽 내용이 움직이지 않게 (메뉴가 짧으면 굴림을 메뉴에서 끝낸다)
+  const pnav = document.querySelector("nav.pc-nav");
+  if (pnav) pnav.addEventListener("wheel", (e) => {
+    const top = pnav.scrollTop <= 0, bottom = pnav.scrollTop + pnav.clientHeight >= pnav.scrollHeight - 1;
+    if ((e.deltaY < 0 && top) || (e.deltaY > 0 && bottom)) e.preventDefault();
+  }, { passive: false });
   document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
     const g = allStrategiesFlat().find((x) => x.id === b.dataset.propose);
     S.editSid = b.dataset.propose; S.chParams = false;
