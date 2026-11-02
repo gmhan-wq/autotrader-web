@@ -387,7 +387,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02b";
+const APP_VERSION = "2026-11-02c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1230,12 +1230,15 @@ function myStrategies(s) {
     <div class="card"><h2>전략</h2>
       ${strat.length ? strat.map((g) => `<div class="strat">
         <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(g.id)}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}</span></span>
-          <label class="sw" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="on-${esc(g.id)}" data-on="${esc(g.id)}" ${g.active ? "checked" : ""}>${g.active ? "켜짐" : "꺼짐"}</label></div>
-        <div class="row small"><span class="muted">계좌</span><select id="mv-${esc(g.id)}" data-mv="${esc(g.id)}" style="width:auto">${accs.map(([aid, a]) =>
-          `<option value="${esc(aid)}" ${aid === g.account ? "selected" : ""}>${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></div></div>`).join("")
+          ${g.active ? (S.stopAsk === g.id
+            ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}">정지</button><button class="btn" data-stopno="1">취소</button></span>`
+            : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}">⛔ 비상 정지</button></span>`)
+            : `<span class="chip bad" title="다시 켜기는 계좌 주인·관리자·공동 운영자 합의 (ADR 0037)">꺼짐 · 다시 켜기는 합의</span>`}</div>
+        <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div></div>`).join("")
         : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
-` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.</div>` : "") + cmdList();
+` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
+    <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList();
 }
 function addStrategy(s) {
   const accs = Object.entries(s.accounts || {});
@@ -1492,10 +1495,11 @@ function bind() {
   bindDials();
   const bam = document.getElementById("b-act-me");
   if (bam) bam.onclick = () => { S.actAs = null; try { localStorage.removeItem("actAs"); } catch (e) {} refresh(); };
-  document.querySelectorAll("[data-on]").forEach((cb) => cb.onchange = () => send("set_strategy", { id: cb.dataset.on, active: cb.checked }));
+  document.querySelectorAll("[data-stopask]").forEach((b) => b.onclick = () => { S.stopAsk = b.dataset.stopask; render(); });
+  document.querySelectorAll("[data-stopno]").forEach((b) => b.onclick = () => { S.stopAsk = null; render(); });
+  document.querySelectorAll("[data-stop]").forEach((b) => b.onclick = () => { S.stopAsk = null; send("set_strategy", { id: b.dataset.stop, active: false }); });
   document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
     ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
-  document.querySelectorAll("[data-mv]").forEach((sel) => sel.onchange = () => send("set_strategy", { id: sel.dataset.mv, account: sel.value }));
   const fa = document.getElementById("f-acc");
   if (fa) fa.onsubmit = (e) => { e.preventDefault();
     send("add_account", { id: document.getElementById("a-id").value.trim().toLowerCase(), name: document.getElementById("a-name").value.trim() }); };
