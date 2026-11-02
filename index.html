@@ -260,6 +260,13 @@ summary { cursor: pointer; color: var(--ice) }
 .todo { display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 12px;
   border: 1px solid var(--line); background: var(--glass-strong); color: var(--ink); font: 500 14px var(--sans); cursor: pointer; text-align: left }
 .todo:hover { border-color: var(--accent) } .todo.warn { color: var(--warn); border-color: currentColor } .todo.bad { color: var(--bad); border-color: currentColor }
+
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: middle; animation: livepulse 1.6s ease-in-out infinite }
+@keyframes livepulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+.flash-up { animation: flashup 1.4s ease-out } .flash-down { animation: flashdown 1.4s ease-out }
+@keyframes flashup { 0% { background: color-mix(in srgb, var(--buy) 35%, transparent) } 100% { background: transparent } }
+@keyframes flashdown { 0% { background: color-mix(in srgb, var(--sell) 35%, transparent) } 100% { background: transparent } }
+@media (prefers-reduced-motion: reduce) { .live-dot, .flash-up, .flash-down { animation: none } }
 </style>
 </head>
 <body>
@@ -403,7 +410,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02g";
+const APP_VERSION = "2026-11-02h";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -856,19 +863,24 @@ function todayCard(s, d, strat) {
     `<button class="todo ${cls}" data-tab="${tab}"><span>${esc(text)}</span><span aria-hidden="true">›</span></button>`).join("")}</section>`;
 }
 function marketStrip(s) {
-  const m = s.market, q = s.quotes || {};
+  const m = s.market;
+  // 실시간: 보고 있는 동안 관리자 노트북이 5초마다 올리는 시세가 현황(스냅숏)보다 새로우면 그것을 쓴다
+  const snapAt = Object.values(s.quotes || {})[0], liveNew = S.live && S.live.at && (!snapAt || new Date(S.live.at) > new Date(snapAt.at || 0));
+  const q = liveNew ? Object.fromEntries(Object.entries(S.live.quotes || {}).map(([k, v]) => [k, { price: v, at: S.live.at }])) : (s.quotes || {});
   if (!m && !Object.keys(q).length) return "";
   const hm = (iso) => iso ? iso.slice(11, 16) : "";
   const phase = m ? `<span class="chip phase-${esc(m.code)}">${esc(m.label)}${m.until ? " ~" + hm(m.until) : ""}</span>
     ${m.next_label ? `<span class="small muted">다음 ${esc(m.next_label)} ${m.next_at && m.next_at.slice(0, 10) !== new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? m.next_at.slice(5, 10).replace("-", "/") + " " : ""}${hm(m.next_at)}</span>` : ""}` : "";
   const items = Object.entries(q).map(([sym, v]) => {
     const prev = Number((s.closes || {})[sym]), px = Number(v.price), ch = prev ? (px / prev - 1) * 100 : null;
-    return `<span class="q"><span class="sym num">${esc(sym)}</span><b>${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%</span>` : ""}</span>`; }).join("");
+    const dir = S.livePrev && S.livePrev[sym] !== undefined && Number(S.livePrev[sym]) !== px ? (px > Number(S.livePrev[sym]) ? "up" : "down") : "";
+    return `<span class="q"><span class="sym num">${esc(sym)}</span><b class="${dir ? "flash-" + dir : ""}">${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%</span>` : ""}</span>`; }).join("");
   const at = Object.values(q)[0];
+  const hms = (iso) => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "Asia/Seoul" }); };
   // 주간거래·프리장인데 값이 직전 종가 그대로면 메리츠가 그 시간 시세를 주지 않는 것 (11/02 확인) — 멈춘 게 아님을 알린다
   const flat = m && (m.code === "day" || m.code === "pre") && Object.entries(q).length &&
     Object.entries(q).every(([sym, v]) => Number((s.closes || {})[sym]) === Number(v.price));
-  return `<section class="card mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">메리츠 시세 ${hm(at.at)} · 직전 종가 대비 · 1분마다</span>` : ""}
+  return `<section class="card mkt" id="mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">${liveNew ? `<span class="live-dot"></span>실시간 ${hms(at.at)}` : `메리츠 시세 ${hm(at.at)}`} · 직전 종가 대비</span>` : ""}
     ${flat ? `<span class="small" style="color:var(--warn);flex-basis:100%">${esc(m.label)} 시간에는 메리츠 시세가 직전 종가 그대로입니다 (실시간 값 확인 중)</span>` : ""}</section>`;
 }
 function phoneHome(s, d, strat, out) {
@@ -1657,6 +1669,21 @@ sb.auth.onAuthStateChange((ev, session) => {
   if (ev === "PASSWORD_RECOVERY") { S.recovery = true; S.user = session && session.user; return renderRecovery(); } if ((session && session.user.id) !== (S.user && S.user.id)) onSession(session); });
 sb.auth.getSession().then(({ data }) => onSession(data.session));
 setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 30000);
+// 실시간 시세: 화면을 보고 있고 장 시간이면 5초마다 가져와 시세 줄만 바꾼다 (화면 전체를 다시 그리지 않음).
+// 30초마다 '보고 있음'을 알려야 관리자 노트북이 5초 시세를 올린다 (아무도 안 보면 메리츠를 부르지 않음).
+let liveTouched = 0;
+setInterval(async () => {
+  if (document.visibilityState !== "visible" || !S.user || !S.snap || S.status !== "approved") return;
+  const m = S.snap.summary.market; if (m && m.code === "closed") return;
+  if (!["home", "orders"].includes(S.tab)) return;
+  try {
+    if (Date.now() - liveTouched > 30000) { liveTouched = Date.now(); await sb.rpc("touch_live"); }
+    const r = await sb.from("live_quotes").select("quotes,at").eq("id", "global").limit(1);
+    const row = r.data && r.data[0]; if (!row || !row.at || (S.live && S.live.at === row.at)) return;
+    S.livePrev = S.live ? S.live.quotes : null; S.live = row;
+    const el = document.getElementById("mkt"); if (el) el.outerHTML = marketStrip(S.snap.summary);
+  } catch (e) {}
+}, 5000);
 let _lastMode = null;
 window.addEventListener("resize", () => { const m = layout(); if (m !== _lastMode) { _lastMode = m; if (S.user) render(); } });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
