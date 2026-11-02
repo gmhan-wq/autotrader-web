@@ -387,7 +387,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-02a";
+const APP_VERSION = "2026-11-02b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -845,7 +845,11 @@ function marketStrip(s) {
     const prev = Number((s.closes || {})[sym]), px = Number(v.price), ch = prev ? (px / prev - 1) * 100 : null;
     return `<span class="q"><span class="sym num">${esc(sym)}</span><b>${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%</span>` : ""}</span>`; }).join("");
   const at = Object.values(q)[0];
-  return `<section class="card mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">메리츠 시세 ${hm(at.at)} · 직전 종가 대비</span>` : ""}</section>`;
+  // 주간거래·프리장인데 값이 직전 종가 그대로면 메리츠가 그 시간 시세를 주지 않는 것 (11/02 확인) — 멈춘 게 아님을 알린다
+  const flat = m && (m.code === "day" || m.code === "pre") && Object.entries(q).length &&
+    Object.entries(q).every(([sym, v]) => Number((s.closes || {})[sym]) === Number(v.price));
+  return `<section class="card mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">메리츠 시세 ${hm(at.at)} · 직전 종가 대비 · 1분마다</span>` : ""}
+    ${flat ? `<span class="small" style="color:var(--warn);flex-basis:100%">${esc(m.label)} 시간에는 메리츠 시세가 직전 종가 그대로입니다 (실시간 값 확인 중)</span>` : ""}</section>`;
 }
 function phoneHome(s, d, strat, out) {
   out += marketStrip(s);
