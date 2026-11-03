@@ -410,7 +410,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-03d";
+const APP_VERSION = "2026-11-03e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -819,32 +819,75 @@ function viewHome(snap, mine) {
   ];
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
-  if (mine) out += todayCard(s, d, strat);
-  if (layout() === "phone" && mine) return phoneHome(s, d, strat, out);
-  out += marketStrip(s);
-  out += `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
-    <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`;
-  out += `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
-  if (!strat.length && mine) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
+  const B = [];                                   // [키, 이름, html] — 사용자가 순서·숨김을 정한다 (제보 #6)
+  if (mine) B.push(["today", "오늘 할 일", todayCard(s, d, strat)]);
+  B.push(["market", "시세", marketStrip(s)]);
+  if (!strat.length && mine) B.push(["empty", "계좌·전략 등록", `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
     <div class="small muted">메리츠 계좌와 따라갈 전략(무한매수 주문표·VR·V4.0)을 먼저 등록하세요. 계좌 API 키는 노트북 .env 에만 넣습니다.</div>
-    <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`;
-  out += `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`;
-  if (tonight.length && mine !== null) out += `<details class="card" ${window.innerWidth >= 820 ? "open" : ""}><summary class="row between"><h2 style="display:inline">오늘 밤 주문 ${tonight.length}건</h2><span class="small muted">모의 실행이 건 가상 주문 · 실제 주문은 tonight 목록으로</span></summary>
-    <div class="scroll"><table><thead><tr><th>전략</th><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th></tr></thead><tbody>
-    ${tonight.map((o) => `<tr><td class="small">${esc(o.strategy_id)}</td><td class="${sideCls(o.side)}">${sideKo(o.side)}</td><td class="small muted">${esc(o.kind)}</td>
-      <td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td></tr>`).join("")}</tbody></table></div></details>`;
-  for (const [accId, acc] of Object.entries(s.accounts || {})) {
-    if (!acc.strategies.length) continue;
-    const ready = (s.readiness || {})[accId], lc = (s.last_check || {})[accId];
-    out += `<div class="card"><div class="row between"><h2>${esc(ACC_NAME[accId] || acc.name || accId)}</h2>
-        <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API 연결" : "수동 계좌"}</span></div>
-      ${lc ? `<div class="small">실제 vs 모의 (미국 ${esc(lc.date)}): ${lc.ok ? '<span class="chip ok">일치</span>' : `<span class="chip warn">다름 ${lc.fills_ok ? "" : "· 체결"} ${lc.hold_ok ? "" : "· 보유"}</span>`}</div>` : ""}
-      ${ready ? `<div class="small muted">${esc(ready.replace("🚦 ", ""))}</div>` : ""}</div>`;
+    <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`]);
+  if (layout() === "phone" && mine) {
+    phoneBlocks(s, d, B);
+  } else {
+    B.push(["kpis", "요약 숫자", `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
+      <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`]);
+    B.push(["equity", "자산 추이", `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`]);
+    B.push(["strategies", "전략별 현황", `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`]);
+    if (tonight.length && mine !== null) B.push(["tonight", "오늘 밤 주문(모의)", `<details class="card" ${window.innerWidth >= 820 ? "open" : ""}><summary class="row between"><h2 style="display:inline">오늘 밤 주문 ${tonight.length}건</h2><span class="small muted">모의 실행이 건 가상 주문 · 실제 주문은 tonight 목록으로</span></summary>
+      <div class="scroll"><table><thead><tr><th>전략</th><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th></tr></thead><tbody>
+      ${tonight.map((o) => `<tr><td class="small">${esc(o.strategy_id)}</td><td class="${sideCls(o.side)}">${sideKo(o.side)}</td><td class="small muted">${esc(o.kind)}</td>
+        <td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td></tr>`).join("")}</tbody></table></div></details>`]);
+    let accs = "";
+    for (const [accId, acc] of Object.entries(s.accounts || {})) {
+      if (!acc.strategies.length) continue;
+      const ready = (s.readiness || {})[accId], lc = (s.last_check || {})[accId];
+      accs += `<div class="card"><div class="row between"><h2>${esc(ACC_NAME[accId] || acc.name || accId)}</h2>
+          <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API 연결" : "수동 계좌"}</span></div>
+        ${lc ? `<div class="small">실제 vs 모의 (미국 ${esc(lc.date)}): ${lc.ok ? '<span class="chip ok">일치</span>' : `<span class="chip warn">다름 ${lc.fills_ok ? "" : "· 체결"} ${lc.hold_ok ? "" : "· 보유"}</span>`}</div>` : ""}
+        ${ready ? `<div class="small muted">${esc(ready.replace("🚦 ", ""))}</div>` : ""}</div>`;
+    }
+    if (accs) B.push(["accounts", "계좌별 실제 vs 모의", accs]);
+    const v4 = Object.entries(s.v4 || {});
+    if (v4.length) B.push(["v4", "V4.0 전환 준비", `<div class="card"><h2>무한매수 V4.0 전환 준비</h2>${v4.map(([sid, r]) =>
+      `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`]);
   }
-  const v4 = Object.entries(s.v4 || {});
-  if (v4.length) out += `<div class="card"><h2>무한매수 V4.0 전환 준비</h2>${v4.map(([sid, r]) =>
-    `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`;
-  return out;
+  return out + arrangeBlocks(B, mine);
+}
+// ── 홈 카드 순서·숨김 (제보 #6): 이 기기·화면 모양(PC/폰)마다 따로 기억 ──
+function homeOrderKey() { return "homeOrder:" + layout(); }
+function homeOrder() { try { return JSON.parse(localStorage.getItem(homeOrderKey()) || "null") || {}; } catch (e) { return {}; } }
+function saveHomeOrder(o) { try { localStorage.setItem(homeOrderKey(), JSON.stringify(o)); } catch (e) {} }
+function sortedBlocks(B) {
+  const o = homeOrder(), order = o.order || [];
+  const pos = (k) => { const i = order.indexOf(k); return i < 0 ? 1000 + B.findIndex((b) => b[0] === k) : i; };
+  return [...B].sort((a, b) => pos(a[0]) - pos(b[0])).map((b) => [...b, (o.hidden || []).includes(b[0])]);
+}
+function arrangeBlocks(B, mine) {
+  const list = sortedBlocks(B);
+  if (S.arrange && mine) {
+    return `<div class="card"><div class="row between"><h2>홈 카드 순서 바꾸기</h2><button class="btn primary" id="arrDone">완료</button></div>
+      <div class="small muted">↑↓ 로 순서, '숨기기'로 감추기. 이 기기(${layout() === "phone" ? "폰 화면" : "PC 화면"})에만 저장됩니다.</div>
+      ${list.map(([k, label, , hid], i) => `<div class="row between arr-row" style="padding:6px 0;border-top:1px solid var(--line)">
+        <span class="${hid ? "muted" : ""}">${esc(label)}${hid ? " (숨김)" : ""}</span>
+        <span class="row" style="gap:4px"><button class="btn ghost" data-arr-up="${k}" ${i === 0 ? "disabled" : ""} aria-label="${esc(label)} 위로">↑</button>
+        <button class="btn ghost" data-arr-down="${k}" ${i === list.length - 1 ? "disabled" : ""} aria-label="${esc(label)} 아래로">↓</button>
+        <button class="btn ghost" data-arr-hide="${k}" aria-label="${esc(label)} ${hid ? "보이기" : "숨기기"}">${hid ? "보이기" : "숨기기"}</button></span></div>`).join("")}
+      <div class="row"><button class="btn ghost" id="arrReset">처음 순서로</button></div></div>`;
+  }
+  const hiddenN = list.filter((b) => b[3]).length;
+  return list.filter((b) => !b[3]).map((b) => b[2]).join("")
+    + (mine ? `<div class="row" style="justify-content:center;margin:8px 0"><button class="btn ghost small" id="arrOpen">카드 순서 바꾸기${hiddenN ? ` · 숨김 ${hiddenN}개` : ""}</button></div>` : "");
+}
+function bindArrange() {
+  const keys = () => [...document.querySelectorAll("[data-arr-up]")].map((b) => b.dataset.arrUp);
+  const op = document.getElementById("arrOpen"); if (op) op.onclick = () => { S.arrange = true; render(); };
+  const dn = document.getElementById("arrDone"); if (dn) dn.onclick = () => { S.arrange = false; render(); };
+  const rs = document.getElementById("arrReset"); if (rs) rs.onclick = () => { saveHomeOrder({}); render(); };
+  const move = (k, dir) => { const o = homeOrder(), ks = keys(), i = ks.indexOf(k), j = i + dir;
+    if (j < 0 || j >= ks.length) return; [ks[i], ks[j]] = [ks[j], ks[i]]; saveHomeOrder({ ...o, order: ks }); render(); };
+  document.querySelectorAll("[data-arr-up]").forEach((b) => b.onclick = () => move(b.dataset.arrUp, -1));
+  document.querySelectorAll("[data-arr-down]").forEach((b) => b.onclick = () => move(b.dataset.arrDown, 1));
+  document.querySelectorAll("[data-arr-hide]").forEach((b) => b.onclick = () => { const o = homeOrder(), h = new Set(o.hidden || []);
+    h.has(b.dataset.arrHide) ? h.delete(b.dataset.arrHide) : h.add(b.dataset.arrHide); saveHomeOrder({ ...o, order: keys(), hidden: [...h] }); render(); });
 }
 // 홈 맨 위 '오늘 할 일': 여러 화면에 흩어진 확인 거리를 한곳에 (누르면 그 화면으로)
 function todayCard(s, d, strat) {
@@ -889,16 +932,13 @@ function marketStrip(s) {
   return `<section class="card mkt" id="mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">${liveNew ? `<span class="live-dot"></span>실시간 ${hms(at.at)}` : `메리츠 시세 ${hm(at.at)}`} · 직전 종가 대비</span>` : ""}
     ${flat ? `<span class="small" style="color:var(--warn);flex-basis:100%">${esc(m.label)} 시간에는 메리츠 시세가 직전 종가 그대로입니다 (실시간 값 확인 중)</span>` : ""}</section>`;
 }
-function phoneHome(s, d, strat, out) {
-  out += marketStrip(s);
-  if (!strat.length) out += `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
-    <div class="small muted">메리츠 계좌와 따라갈 전략을 먼저 등록하세요 (더보기 → 계좌·전략 설정).</div>
-    <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`;
+function phoneBlocks(s, d, B) {
+  let accs = "";
   for (const [accId, acc] of Object.entries(s.accounts || {})) {
     const rows = acc.strategies.map((g) => ({ ...g, account: accId }));
     if (!rows.length) continue;
     const lc = (s.last_check || {})[accId];
-    out += `<section class="card list"><div class="row"><b>${esc(ACC_NAME[accId] || acc.name)}</b>
+    accs += `<section class="card list"><div class="row"><b>${esc(ACC_NAME[accId] || acc.name)}</b>
         <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API" : "수동"}</span><span class="grow"></span>
         ${lc ? `<span class="chip ${lc.ok ? "ok" : "warn"}">${lc.ok ? "실제=모의" : "비교 다름"}</span>` : ""}</div>
       ${rows.length ? rows.map((g) => { const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id], px = (s.closes || {})[g.symbol];
@@ -909,11 +949,11 @@ function phoneHome(s, d, strat, out) {
           <span class="lval num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "$" + money(g.cash) : (pnl >= 0 ? "+" : "−") + money(Math.abs(pnl))}</span></button>`; }).join("")
         : `<div class="empty">전략 없음</div>`}</section>`;
   }
-  out += `<div class="card"><div class="row between"><h2>자산 추이</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`;
+  if (accs) B.push(["accounts", "계좌별 전략", accs]);
+  B.push(["equity", "자산 추이", `<div class="card"><div class="row between"><h2>자산 추이</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`]);
   const ns = (d.notices || []).slice(0, 3);
-  if (ns.length) out += `<div class="card"><div class="row between"><h2>최근 알림</h2><button class="btn ghost" data-tab="board">전체 보기</button></div>
-    ${ns.map((n) => `<div class="small">${esc(n.text)}</div>`).join("")}</div>`;
-  return out;
+  if (ns.length) B.push(["notices", "최근 알림", `<div class="card"><div class="row between"><h2>최근 알림</h2><button class="btn ghost" data-tab="board">전체 보기</button></div>
+    ${ns.map((n) => `<div class="small">${esc(n.text)}</div>`).join("")}</div>`]);
 }
 function realCount(d) {
   const r = d.real_orders; if (!r || !Object.keys(r).length) return null;
@@ -1481,6 +1521,7 @@ function renderLogin() {
 }
 
 function bind() {
+  bindArrange();
   const br = document.getElementById("b-refresh"); if (br) br.onclick = () => { S.msg = null; refresh(); };
   const bo = document.getElementById("b-out"); if (bo) bo.onclick = async () => { await sb.auth.signOut(); };
   const bl = document.getElementById("b-layout"); if (bl) bl.onclick = () => {
