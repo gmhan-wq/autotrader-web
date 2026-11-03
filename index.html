@@ -410,7 +410,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-03e";
+const APP_VERSION = "2026-11-03f";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -548,8 +548,8 @@ function layout() {
 const GROUPS = [
   ["home", "홈", [["home", "대시보드"]]],
   ["order", "주문", [["orders", "오늘 밤 주문"], ["approve", "주문표 승인"], ["upload", "사진 올리기"]]],
-  ["strategy", "전략", [["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["privacy", "프라이버시"]]],
-  ["record", "기록", [["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
+  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["privacy", "프라이버시"]]],
+  ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
 const LEGACY_TAB = { settings: "accounts", more: "accounts" };      // 예전 이름 → 새 화면
@@ -580,6 +580,8 @@ function currentView() {
     case "consensus": v = viewConsensus(); break;
     case "privacy": v = need(privacyCard); break;
     case "calendar": v = viewCalendar(); break;
+    case "trades": v = need(viewTrades); break;
+    case "constitution": v = need(viewConstitution); break;
     case "board": v = viewBoard(); break;
     case "fb_bug": v = viewFeedbackBoard("bug"); break;
     case "fb_idea": v = viewFeedbackBoard("idea"); break;
@@ -1358,6 +1360,7 @@ function addStrategy(s) {
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
   const kind = S.newKind || "sheet";
   return `
+    <div class="card small" style="border-left:4px solid var(--accent)">📜 새 전략은 <b>투자헌법</b>에 맞아야 합니다 — 특히 제3조 생존 우선(퇴출될 위험 금지)·제4조 적극적 투자는 정해진 한도 안에서. <button class="btn ghost small" data-tab="constitution">투자헌법 보기</button></div>
     <div class="card"><h2>전략 추가</h2>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
         <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
@@ -1385,6 +1388,54 @@ function calData() {
   for (const [acc, log] of Object.entries(chk)) for (const [td, r] of Object.entries(log)) {
     (days[td] = days[td] || { sheets: [], checks: {} }).checks[acc] = r; }
   return days;
+}
+// ── 투자헌법 (사용자 11/03): 자동매매 전략의 절대 원칙. 수정은 매년 1월, 전원 합의 (ADR 0040) ──
+function viewConstitution(s) {
+  const c = (S.snap.detail || {}).constitution;
+  if (!c) return `<div class="card"><div class="empty">투자헌법은 관리자 계좌 화면에 있습니다 (공동 운영 중이면 위쪽에서 관리자 계좌로 바꿔 보세요).</div></div>`;
+  const now = new Date(), jan = now.getMonth() === 0;
+  const next = jan ? `지금(${now.getFullYear()}년 1월)이 수정 기간입니다` : `다음 수정 가능 기간: ${now.getFullYear() + 1}년 1월`;
+  return `<section class="card const">
+      <div class="small muted" style="letter-spacing:.08em">${esc(c.subtitle || "")}</div>
+      <h1 style="margin:4px 0 2px">📜 ${esc(c.title)}</h1>
+      <div class="small muted">${c.adopted ? `채택 ${esc(c.adopted)}` : ""}${c.version ? ` · 제${esc(c.version)}판` : ""}</div>
+      <ol class="articles" style="list-style:none;padding:0;margin:14px 0 0">
+        ${c.articles.map(([t, body]) => `<li style="padding:12px 0;border-top:1px solid var(--line)"><b>${esc(t)}</b><div style="margin-top:4px;line-height:1.6">${esc(body.trim())}</div></li>`).join("")}
+      </ol></section>
+    <div class="card"><h2>헌법의 효력</h2>
+      <div class="small" style="line-height:1.7">
+        • 투자헌법은 자동매매 모든 전략의 <b>절대 원칙</b>입니다. 헌법에 반하는 투자는 하지 않습니다.<br>
+        • 수정은 <b>매년 1월에 한 번만</b>, 계좌 주인·관리자·공동 운영자 <b>전원 합의</b>로 합니다.<br>
+        • 진행 중인 전략의 값 수정도 합의로만 합니다 (전략 → 수정 합의).</div>
+      <div class="row" style="margin-top:8px"><span class="chip ${jan ? "warn" : ""}">${esc(next)}</span></div></div>`;
+}
+// ── 매매 표 (사용자 11/03): 전략마다 매일 실제·모의 매수·매도 ──
+function viewTrades(s) {
+  const T = (S.snap.detail || {}).trades || {};
+  const strat = allStrategies(s).filter((g) => T[g.id]);
+  if (!strat.length) return `<div class="card"><div class="empty">아직 기록된 체결이 없습니다. 노트북 주문 감시가 증권사 주문내역을 저장한 날부터 쌓입니다.</div></div>`;
+  if (!strat.some((g) => g.id === S.tradeSid)) S.tradeSid = strat[0].id;
+  const g = strat.find((x) => x.id === S.tradeSid), since = T[g.id].since, rows = T[g.id].days || {}, days = Object.keys(rows).sort().reverse();
+  const known = (d) => since && d >= since;
+  const cmp = (d) => !known(d) ? '<span class="chip">실제 기록 전</span>' : same(rows[d].real, rows[d].mock) ? '<span class="chip ok">같음</span>' : '<span class="chip warn">다름</span>';
+  const cell = (list, d) => d && !known(d) ? '<span class="small muted">기록 전</span>' : !list || !list.length ? '<span class="muted">-</span>' : list.map(([side, q, avg, amt]) =>
+    `<div class="${sideCls(side)}">${sideKo(side)} <b class="num">${q}주</b> <span class="num">@${money(avg)}</span> <span class="small muted num">$${money(amt)}</span></div>`).join("");
+  const same = (a, b) => JSON.stringify((a || []).map((x) => [x[0], x[1]])) === JSON.stringify((b || []).map((x) => [x[0], x[1]]));
+  const sum = (kind, side) => days.reduce((n, d) => n + (rows[d][kind] || []).filter((x) => x[0] === side).reduce((m, x) => m + Number(x[3]), 0), 0);
+  const cnt = (kind, side) => days.reduce((n, d) => n + (rows[d][kind] || []).filter((x) => x[0] === side).reduce((m, x) => m + x[1], 0), 0);
+  return `<div class="seg" role="tablist" aria-label="전략" style="flex-wrap:wrap">${strat.map((x) => `<button role="tab" data-tradesid="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}" aria-selected="${x.id === g.id}"><span class="num">${esc(x.symbol)}</span> ${esc(stratName(x, (s.plans || {})[x.id]))}</button>`).join("")}</div>
+    <div class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2><span class="small muted">미국 장 날짜 · 최근 ${days.length}일</span></div>
+      <div class="small">실제 합계: <span class="buy">매수 ${cnt("real", "BUY")}주 $${money(sum("real", "BUY"))}</span> · <span class="sell">매도 ${cnt("real", "SELL")}주 $${money(sum("real", "SELL"))}</span></div>
+      <div class="small muted">모의 합계: 매수 ${cnt("mock", "BUY")}주 $${money(sum("mock", "BUY"))} · 매도 ${cnt("mock", "SELL")}주 $${money(sum("mock", "SELL"))}</div>
+      ${layout() === "phone"
+        ? days.map((d) => { const r = rows[d]; return `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="row between"><b class="num">${esc(d.slice(5))}</b>${cmp(d)}</div>
+            <div class="row" style="align-items:flex-start;gap:8px"><span class="small muted" style="min-width:30px">실제</span><div>${cell(r.real, d)}</div></div>
+            <div class="row" style="align-items:flex-start;gap:8px"><span class="small muted" style="min-width:30px">모의</span><div>${cell(r.mock)}</div></div></div>`; }).join("")
+        : `<div class="scroll"><table><thead><tr><th>날짜</th><th>실제 체결</th><th>모의 체결</th><th>비교</th></tr></thead><tbody>
+      ${days.map((d) => { const r = rows[d]; return `<tr><td class="num">${esc(d.slice(5))}</td><td>${cell(r.real, d)}</td><td>${cell(r.mock)}</td>
+        <td>${cmp(d)}</td></tr>`; }).join("")}
+      </tbody></table></div>`}
+      <div class="small muted">실제 = 증권사 주문내역(직접 넣은 주문 포함, ${since ? `미국 ${esc(since)} 장부터` : "노트북이 저장한 날부터"}), 모의 = 같은 전략을 가상 계좌로 굴린 결과. 한 계좌에 같은 종목 전략이 둘이면 실제는 나눌 수 없어 비워 둡니다.</div></div>`;
 }
 function viewCalendar() {
   if (!S.snap) return `<div class="card"><div class="empty">노트북이 연결되면 주문표 달력이 보입니다.</div></div>`;
@@ -1543,6 +1594,7 @@ function bind() {
   const actSel = document.getElementById("act-as"); if (actSel) actSel.onchange = async () => {
     S.actAs = actSel.value || null; try { if (S.actAs) localStorage.setItem("actAs", S.actAs); else localStorage.removeItem("actAs"); } catch (e) {}
     S.detail = null; S.msg = { text: S.actAs ? "공동 운영 계좌로 바꿨습니다. 승인·설정은 그 계좌 노트북으로 갑니다." : "내 계좌로 돌아왔습니다." }; await refresh(); };
+  document.querySelectorAll("[data-tradesid]").forEach((b) => b.onclick = () => { S.tradeSid = b.dataset.tradesid; render(); });
   document.querySelectorAll("[data-uppurpose]").forEach((b) => b.onclick = () => { S.upPurpose = b.dataset.uppurpose; S.upOpen = true; render(); });
   const fup = document.getElementById("f-up"); if (fup) fup.onsubmit = (e) => { e.preventDefault();
     const files = document.getElementById("up-files").files; if (!files.length) return;
