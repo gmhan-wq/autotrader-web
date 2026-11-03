@@ -153,6 +153,9 @@ tr.offrow td { opacity: .45 } tr.offrow td.n { text-decoration: line-through }
 .chip.ok { color: var(--ok); border-color: currentColor } .chip.warn { color: var(--warn); border-color: currentColor }
 .chip.bad { color: var(--bad); border-color: currentColor }
 .scroll { overflow-x: auto }
+.ttable td, .ttable th { padding: 6px 8px } .ttable td:first-child, .ttable th:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1 }
+.ttable tr.t-total td { background: var(--soft); font-weight: 600 } .ttable tr.t-cycle td { background: var(--soft); font-size: 13px; position: static } .ttable .t-cyc { position: sticky; left: 8px; display: inline-block; white-space: normal; max-width: min(860px, calc(100vw - 96px)) }
+.ttable tr.t-sub td { font-size: 12.5px; color: var(--muted) } .linkbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px }
 th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 4px 4px; border-bottom: 1px solid var(--line); white-space: nowrap }
 td { padding: 7px 4px; border-bottom: 1px solid var(--line); white-space: nowrap }
@@ -410,7 +413,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-03f";
+const APP_VERSION = "2026-11-03g";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1409,33 +1412,79 @@ function viewConstitution(s) {
         • 진행 중인 전략의 값 수정도 합의로만 합니다 (전략 → 수정 합의).</div>
       <div class="row" style="margin-top:8px"><span class="chip ${jan ? "warn" : ""}">${esc(next)}</span></div></div>`;
 }
-// ── 매매 표 (사용자 11/03): 전략마다 매일 실제·모의 매수·매도 ──
+// ── 매매 표 (사용자 11/03 설계): 1행 라벨 · 2행 합계 · 3행부터 시작일부터.
+//    이번 주는 날마다, 끝난 주는 주 단위, 4주보다 오래되면 월 단위로 묶는다(누르면 펼침). 무한매수는 싸이클마다 통계 줄.
+//    한 줄 = [날짜, 종가, 매수수량, 매수금액, 매도수량, 매도금액, 보유, 평단, 매입금액, 실현손익, T, 싸이클]
+const TCOLS = ["날짜", "종가", "매수", "매수금액", "매도", "매도금액", "보유", "평단", "매입금액", "평가손익", "실현손익", "T"];
+function tAgg(rows) {             // 여러 날 → 한 줄 (합계·기간 끝 값)
+  const f = rows[0], l = rows[rows.length - 1], n = (i) => rows.reduce((a, r) => a + Number(r[i] || 0), 0);
+  const rz = rows.some((r) => r[9] !== null && r[9] !== undefined) ? n(9) : null;
+  return { first: f, last: l, bq: n(2), ba: n(3), sq: n(4), sa: n(5), rz };
+}
+function tCells(a, label, cls) {
+  const l = a.last, close = Number(l[1] || 0), qty = l[6], cost = l[8] === null ? null : Number(l[8]);
+  const ev = close && cost !== null && qty ? close * qty - cost : null, evp = ev !== null && cost ? ev / cost * 100 : null;
+  const fc = Number(a.first[1] || 0), chg = a.first !== a.last && fc && close ? (close / fc - 1) * 100 : null;
+  const sg = (x) => x === null ? "-" : `<span class="${x > 0 ? "buy" : x < 0 ? "sell" : ""}">${x > 0 ? "+" : x < 0 ? "−" : ""}$${money(Math.abs(x))}</span>`;
+  const qn = (q) => q ? `${q.toLocaleString()}주` : '<span class="muted">-</span>';
+  const am = (x) => x ? "$" + money(x) : '<span class="muted">-</span>';
+  return `<tr class="${cls || ""}"><td class="num">${label}</td>
+    <td class="n">${l[1] ? money(l[1]) : "-"}${chg !== null ? `<div class="small ${chg > 0 ? "buy" : "sell"}">${chg > 0 ? "+" : ""}${chg.toFixed(1)}%</div>` : ""}</td>
+    <td class="n buy">${qn(a.bq)}</td><td class="n">${am(a.ba)}</td><td class="n sell">${qn(a.sq)}</td><td class="n">${am(a.sa)}</td>
+    <td class="n"><b>${Number(qty).toLocaleString()}주</b></td><td class="n">${l[7] ? money(l[7]) : "-"}</td><td class="n">${cost !== null ? "$" + money(cost) : "-"}</td>
+    <td class="n">${sg(ev)}${evp !== null ? `<div class="small">${evp > 0 ? "+" : ""}${evp.toFixed(1)}%</div>` : ""}</td>
+    <td class="n">${sg(a.rz)}</td><td class="n">${l[10] ? esc(l[10]) : "-"}</td></tr>`;
+}
+function weekKey(ds) { const d = new Date(ds + "T12:00:00Z"), w = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - w); return d.toISOString().slice(0, 10); }
+function tGroups(rows, lastWeek, recent) {   // [[키, 이름, 줄들, 날마다?]] — 이번 주는 날마다, 최근 끝난 4주는 주, 그 전은 월(주의 월요일 기준)
+  const out = [], seen = {};
+  for (const r of rows) {
+    const w = weekKey(r[0]);
+    let key, name;
+    if (w === lastWeek) { out.push([r[0], r[0].slice(5), [r], true]); continue; }
+    if (recent.has(w)) { key = "w" + w; name = `${w.slice(5)} 주`; } else { key = "m" + w.slice(0, 7); name = `${Number(w.slice(5, 7))}월`; }
+    if (!seen[key]) { seen[key] = [key, name, [], false]; out.push(seen[key]); }
+    seen[key][2].push(r);
+  }
+  return out;
+}
 function viewTrades(s) {
   const T = (S.snap.detail || {}).trades || {};
-  const strat = allStrategies(s).filter((g) => T[g.id]);
-  if (!strat.length) return `<div class="card"><div class="empty">아직 기록된 체결이 없습니다. 노트북 주문 감시가 증권사 주문내역을 저장한 날부터 쌓입니다.</div></div>`;
+  const strat = allStrategies(s).filter((g) => T[g.id] && (T[g.id].real || T[g.id].mock));
+  if (!strat.length) return `<div class="card"><div class="empty">아직 기록이 없습니다. 노트북이 증권사 주문내역·주문표를 저장한 날부터 쌓입니다.</div></div>`;
   if (!strat.some((g) => g.id === S.tradeSid)) S.tradeSid = strat[0].id;
-  const g = strat.find((x) => x.id === S.tradeSid), since = T[g.id].since, rows = T[g.id].days || {}, days = Object.keys(rows).sort().reverse();
-  const known = (d) => since && d >= since;
-  const cmp = (d) => !known(d) ? '<span class="chip">실제 기록 전</span>' : same(rows[d].real, rows[d].mock) ? '<span class="chip ok">같음</span>' : '<span class="chip warn">다름</span>';
-  const cell = (list, d) => d && !known(d) ? '<span class="small muted">기록 전</span>' : !list || !list.length ? '<span class="muted">-</span>' : list.map(([side, q, avg, amt]) =>
-    `<div class="${sideCls(side)}">${sideKo(side)} <b class="num">${q}주</b> <span class="num">@${money(avg)}</span> <span class="small muted num">$${money(amt)}</span></div>`).join("");
-  const same = (a, b) => JSON.stringify((a || []).map((x) => [x[0], x[1]])) === JSON.stringify((b || []).map((x) => [x[0], x[1]]));
-  const sum = (kind, side) => days.reduce((n, d) => n + (rows[d][kind] || []).filter((x) => x[0] === side).reduce((m, x) => m + Number(x[3]), 0), 0);
-  const cnt = (kind, side) => days.reduce((n, d) => n + (rows[d][kind] || []).filter((x) => x[0] === side).reduce((m, x) => m + x[1], 0), 0);
+  const g = strat.find((x) => x.id === S.tradeSid), e = T[g.id];
+  const kind = S.tradeKind === "mock" || !e.real ? "mock" : "real", rows = e[kind] || [];
+  S.tradeOpen = S.tradeOpen || {};
+  const isInf = g.kind === "sheet" || g.kind === "infinite_buy_v4";
+  const cycles = [...new Set(rows.map((r) => r[11]))];
+  const lastWeek = rows.length ? weekKey(rows[rows.length - 1][0]) : "";
+  const recent = new Set([...new Set(rows.map((r) => weekKey(r[0])))].filter((w) => w !== lastWeek).sort().slice(-4));
+  let body = "";
+  for (const c of cycles) {
+    const cr = rows.filter((r) => r[11] === c);
+    if (isInf || cycles.length > 1) {
+      const a = tAgg(cr), done = cr[cr.length - 1][6] === 0;
+      const rate = a.rz !== null && a.ba ? ` (${(a.rz / a.ba * 100).toFixed(1)}%)` : "";
+      body += `<tr class="t-cycle"><td colspan="${TCOLS.length}"><span class="t-cyc"><b>싸이클 ${c}</b> · ${esc(cr[0][0].slice(5))} ~ ${esc(cr[cr.length - 1][0].slice(5))}${done ? " 끝" : " 진행 중"}
+        ${e.cycles && e.cycles[c] ? ` · 규칙 ${esc(e.cycles[c])}` : ""} · 매수 $${money(a.ba)} · 매도 $${money(a.sa)} · 실현 ${a.rz === null ? "-" : (a.rz >= 0 ? "+" : "−") + "$" + money(Math.abs(a.rz)) + rate}</span></td></tr>`;
+    }
+    for (const [key, name, gr, daily] of tGroups(cr, lastWeek, recent)) {
+      if (daily) { body += tCells(tAgg(gr), esc(name)); continue; }
+      const open = S.tradeOpen[g.id + key];
+      body += tCells(tAgg(gr), `<button class="linkbtn" data-topen="${esc(g.id + key)}">${open ? "▾" : "▸"} ${esc(name)}</button><div class="small muted">${gr.length}일</div>`, "t-group");
+      if (open) body += gr.map((r) => tCells(tAgg([r]), `<span class="small">${esc(r[0].slice(5))}</span>`, "t-sub")).join("");
+    }
+  }
+  const total = rows.length ? tCells(tAgg(rows), "<b>합계</b>", "t-total") : "";
   return `<div class="seg" role="tablist" aria-label="전략" style="flex-wrap:wrap">${strat.map((x) => `<button role="tab" data-tradesid="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}" aria-selected="${x.id === g.id}"><span class="num">${esc(x.symbol)}</span> ${esc(stratName(x, (s.plans || {})[x.id]))}</button>`).join("")}</div>
-    <div class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2><span class="small muted">미국 장 날짜 · 최근 ${days.length}일</span></div>
-      <div class="small">실제 합계: <span class="buy">매수 ${cnt("real", "BUY")}주 $${money(sum("real", "BUY"))}</span> · <span class="sell">매도 ${cnt("real", "SELL")}주 $${money(sum("real", "SELL"))}</span></div>
-      <div class="small muted">모의 합계: 매수 ${cnt("mock", "BUY")}주 $${money(sum("mock", "BUY"))} · 매도 ${cnt("mock", "SELL")}주 $${money(sum("mock", "SELL"))}</div>
-      ${layout() === "phone"
-        ? days.map((d) => { const r = rows[d]; return `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="row between"><b class="num">${esc(d.slice(5))}</b>${cmp(d)}</div>
-            <div class="row" style="align-items:flex-start;gap:8px"><span class="small muted" style="min-width:30px">실제</span><div>${cell(r.real, d)}</div></div>
-            <div class="row" style="align-items:flex-start;gap:8px"><span class="small muted" style="min-width:30px">모의</span><div>${cell(r.mock)}</div></div></div>`; }).join("")
-        : `<div class="scroll"><table><thead><tr><th>날짜</th><th>실제 체결</th><th>모의 체결</th><th>비교</th></tr></thead><tbody>
-      ${days.map((d) => { const r = rows[d]; return `<tr><td class="num">${esc(d.slice(5))}</td><td>${cell(r.real, d)}</td><td>${cell(r.mock)}</td>
-        <td>${cmp(d)}</td></tr>`; }).join("")}
-      </tbody></table></div>`}
-      <div class="small muted">실제 = 증권사 주문내역(직접 넣은 주문 포함, ${since ? `미국 ${esc(since)} 장부터` : "노트북이 저장한 날부터"}), 모의 = 같은 전략을 가상 계좌로 굴린 결과. 한 계좌에 같은 종목 전략이 둘이면 실제는 나눌 수 없어 비워 둡니다.</div></div>`;
+    <div class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2>
+      <div class="seg" role="tablist" aria-label="실제·모의">${[["real", "실제"], ["mock", "모의"]].filter(([k]) => e[k]).map(([k, l]) => `<button role="tab" data-tradekind="${k}" class="${kind === k ? "on" : ""}" aria-selected="${kind === k}">${l}</button>`).join("")}</div></div>
+      ${rows.length ? `<div class="scroll ttable"><table><thead><tr>${TCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
+        <tbody>${total}${body}</tbody></table></div>` : `<div class="empty">${kind === "real" ? "실제" : "모의"} 기록이 아직 없습니다.</div>`}
+      <div class="small muted" style="margin-top:8px">미국 장 날짜 기준. 보유·평단·매입금액은 그날 장 끝 값, 평가손익 = 종가×보유 − 매입금액, 묶은 줄은 기간 합계(매수·매도·실현)와 기간 끝 값.
+        ${kind === "real" ? `실제 = 증권사 주문내역(직접 주문 포함, ${e.since ? `미국 ${esc(e.since)} 장부터` : "저장한 날부터"}).` : "모의 = 같은 전략을 가상 계좌로 굴린 결과."}
+        무한매수는 다 팔고 다시 사기 시작하면 새 싸이클입니다.</div></div>`;
 }
 function viewCalendar() {
   if (!S.snap) return `<div class="card"><div class="empty">노트북이 연결되면 주문표 달력이 보입니다.</div></div>`;
@@ -1595,6 +1644,8 @@ function bind() {
     S.actAs = actSel.value || null; try { if (S.actAs) localStorage.setItem("actAs", S.actAs); else localStorage.removeItem("actAs"); } catch (e) {}
     S.detail = null; S.msg = { text: S.actAs ? "공동 운영 계좌로 바꿨습니다. 승인·설정은 그 계좌 노트북으로 갑니다." : "내 계좌로 돌아왔습니다." }; await refresh(); };
   document.querySelectorAll("[data-tradesid]").forEach((b) => b.onclick = () => { S.tradeSid = b.dataset.tradesid; render(); });
+  document.querySelectorAll("[data-tradekind]").forEach((b) => b.onclick = () => { S.tradeKind = b.dataset.tradekind; render(); });
+  document.querySelectorAll("[data-topen]").forEach((b) => b.onclick = () => { S.tradeOpen[b.dataset.topen] = !S.tradeOpen[b.dataset.topen]; render(); });
   document.querySelectorAll("[data-uppurpose]").forEach((b) => b.onclick = () => { S.upPurpose = b.dataset.uppurpose; S.upOpen = true; render(); });
   const fup = document.getElementById("f-up"); if (fup) fup.onsubmit = (e) => { e.preventDefault();
     const files = document.getElementById("up-files").files; if (!files.length) return;
