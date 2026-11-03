@@ -111,6 +111,7 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
   color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-height: 56px }
 .lmain { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0 } .lval { font-weight: 600; font-size: 14px }
 .oline { display: grid; grid-template-columns: 36px 52px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line) }
+.oline:has(.cline) { grid-template-columns: 22px 36px 52px 1fr auto } .oline .cline { width: 18px; height: 18px }
 .member { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line) }
 .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--soft) }
 .seg button { border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); padding: 8px 12px; border-radius: 9px; cursor: pointer; min-height: 38px }
@@ -785,17 +786,47 @@ function realOrders(s, d, cur, acc) {
       <span class="small muted">미국 ${esc(r.trade_date)} 장</span></div>`;
     if (!row.approved) { out += `<div class="empty">아직 승인한 ${esc(r.trade_date)} 주문표가 없습니다 → 승인 탭</div></section>`; continue; }
     out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}실제 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
-      ${row.lines.map((l) => `<div class="oline"><span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
+      ${row.lines.map((l) => `<div class="oline">${confirmOn(acc) && l.price ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc([row.sid, l.side, l.kind, l.price, l.qty].join("|"))}" ${cfChecked([row.sid, l.side, l.kind, l.price, l.qty].join("|"), !l.later && !l.near && !l.catchup && !l.collar) && !l.collar ? "checked" : ""} ${l.collar ? "disabled" : ""} aria-label="이 줄 넣기">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
         <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`).join("")}
       ${row.usd_share != null ? `<div class="small" style="margin-top:6px">예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
       ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}</section>`;
   }
+  out += confirmPanel(cur, r);
   if (vr.length) out += `<div class="card"><div class="small muted">VR 은 2주 단위 예약주문(기간잔량)이라 매일 넣지 않습니다. 단계와 체결 여부는 전략 화면에서 확인하세요.</div>
     ${vr.map((g) => `<button class="btn" data-detail="${esc(g.id)}">${esc(g.symbol)} VR 사다리 보기</button>`).join("")}</div>`;
   return out;
 }
 
+// ── 관리자 확인 주문 (ADR 0043): 관리자가 줄을 골라 '넣기' → 업로드 암호로 잠가 노트북에 보냄 → 노트북이 다시 계산과 맞춰 본 뒤 메리츠에 냄 ──
+function cfChecked(k, def) { const m = S.cfSel || {}; return k in m ? m[k] : def; }
+function confirmOn(acc) { return !!(S.snap && S.snap.summary.confirm_orders && S.admin && owner() === S.user.id && acc && acc.api); }
+function confirmPanel(cur, r) {
+  const acc = (S.snap.summary.accounts || {})[cur];
+  if (!confirmOn(acc) || !r || !r.strategies) return "";
+  const P = S.confirmPlan && S.confirmPlan.acc === cur ? S.confirmPlan : null;
+  let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
+  if (!P) return `<div class="card"><div class="row between"><h2>관리자 확인 주문</h2><span class="small muted">체크한 줄만 노트북이 메리츠에 넣습니다</span></div>
+    <div class="small muted">기본 체크 = 지금 걸 주 매수·매도. 하락 대비·보충 줄은 필요할 때 체크, 거부 예상 줄은 넣을 수 없습니다.</div>
+    <div class="row"><button class="btn primary" data-confirm-review="${esc(cur)}">고른 줄 확인하기</button><button class="btn" data-confirm-test="${esc(cur)}">시험 주문 (SOXL 1주, 현재가 −25% LOC)</button></div></div>`;
+  const buy = (P.lines || []).filter((x) => x.side === "BUY").reduce((a, x) => a + Number(x.price) * x.qty, 0);
+  const cash = r.cash != null ? Number(r.cash) : null;
+  return `<div class="card warn-note"><h2>정말 넣을까요? — 실제 주문입니다</h2>
+    ${P.test ? `<div>시험 주문: <b>SOXL LOC 매수 1주</b> @ 현재가 −25% (노트북이 그 순간 시세로 계산)</div>`
+      : `${P.lines.map((x) => `<div class="small"><span class="${sideCls(x.side)}">${sideKo(x.side)}</span> ${esc(x.sid)} ${esc(KIND_KO[x.kind] || x.kind)} <b class="num">${money(x.price)} × ${x.qty}</b></div>`).join("")}
+         <div class="small">매수 합계 <b class="num">$${money(buy)}</b>${cash !== null ? ` · 주문가능 <b class="num">$${money(cash)}</b>${buy > cash ? ' <span class="chip bad">모자람 — 노트북이 넣지 않습니다</span>' : ""}` : ""}</div>`}
+    <label>업로드 암호 (관리자만 아는 두 번째 열쇠)<input type="password" id="cf-pass" value="${esc(saved)}" autocomplete="off"></label>
+    <div class="row"><button class="btn" data-confirm-cancel="1">취소</button><button class="btn danger" data-confirm-go="${esc(cur)}">넣기</button></div>
+    <div class="small muted">노트북이 지금 시세·보유로 다시 계산한 줄과 같을 때만, 10분 안에, 한 번만 넣습니다. 결과는 '최근 보낸 명령'과 텔레그램으로 옵니다.</div></div>`;
+}
+async function sendOrders(P, pass) {
+  if (!pass || pass.length < 12) { S.msg = { bad: true, text: "업로드 암호(12자 이상)를 넣어 주세요" }; render(); return; }
+  const body = { account: P.acc, lines: P.test ? [] : P.lines, test_symbol: P.test ? "SOXL" : null, ts: new Date().toISOString(), by: S.name };
+  const blob = await lockBytes(new TextEncoder().encode(JSON.stringify(body)), "orders", pass);
+  const b = new Uint8Array(await blob.arrayBuffer()); let bin = ""; for (const x of b) bin += String.fromCharCode(x);
+  S.confirmPlan = null;
+  await send("place_orders", { account: P.acc, sealed: btoa(bin), n: P.test ? 1 : P.lines.length });
+}
 function staleNote() {
   if (!S.snap) return "";
   const min = Math.round((Date.now() - new Date(S.snap.taken_at).getTime()) / 60000);
@@ -1111,7 +1142,7 @@ function viewApprove() {
   return out + cmdList();
 }
 const CMD_KO = { approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침",
-                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경" , upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록", set_telegram: "텔레그램 연결", create_profile: "노트북 칸 만들기"};
+                 add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경", place_orders: "관리자 확인 주문", upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록", set_telegram: "텔레그램 연결", create_profile: "노트북 칸 만들기"};
 function cmdList() {
   if (!S.cmds.length) return "";
   return `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => { const p = c.payload || {};
@@ -1772,6 +1803,14 @@ function bind() {
   if (bam) bam.onclick = () => { S.actAs = null; try { localStorage.removeItem("actAs"); } catch (e) {} refresh(); };
   document.querySelectorAll("[data-stopask]").forEach((b) => b.onclick = () => { S.stopAsk = b.dataset.stopask; render(); });
   document.querySelectorAll("[data-stopno]").forEach((b) => b.onclick = () => { S.stopAsk = null; render(); });
+  document.querySelectorAll("[data-confirm-review]").forEach((b) => b.onclick = () => { const acc = b.dataset.confirmReview;
+    const lines = [...document.querySelectorAll(`.cline[data-acc="${acc}"]:checked`)].map((c) => { const [sid, side, kind, price, qty] = c.dataset.l.split("|"); return { sid, side, kind, price, qty: Number(qty) }; });
+    if (!lines.length) { S.msg = { bad: true, text: "넣을 줄을 하나 이상 체크하세요" }; render(); return; }
+    S.confirmPlan = { acc, lines }; render(); });
+  document.querySelectorAll(".cline").forEach((c) => c.onchange = () => { S.cfSel = S.cfSel || {}; S.cfSel[c.dataset.l] = c.checked; });
+  document.querySelectorAll("[data-confirm-test]").forEach((b) => b.onclick = () => { S.confirmPlan = { acc: b.dataset.confirmTest, test: true, lines: [] }; render(); });
+  document.querySelectorAll("[data-confirm-cancel]").forEach((b) => b.onclick = () => { S.confirmPlan = null; render(); });
+  document.querySelectorAll("[data-confirm-go]").forEach((b) => b.onclick = () => sendOrders(S.confirmPlan, (document.getElementById("cf-pass") || {}).value));
   document.querySelectorAll("[data-stop]").forEach((b) => b.onclick = () => { S.stopAsk = null; send("set_strategy", { id: b.dataset.stop, active: false }); });
   document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
     ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
