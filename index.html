@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>내 자동매매</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://yusvlbnlrfawmoqqswso.supabase.co; connect-src https://yusvlbnlrfawmoqqswso.supabase.co wss://yusvlbnlrfawmoqqswso.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://yusvlbnlrfawmoqqswso.supabase.co; connect-src https://yusvlbnlrfawmoqqswso.supabase.co wss://yusvlbnlrfawmoqqswso.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#e9effa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0c1124" media="(prefers-color-scheme: dark)">
@@ -286,6 +286,36 @@ const SUPABASE_URL = "https://yusvlbnlrfawmoqqswso.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1c3ZsYm5scmZhd21vcXFzd3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMDgwNDAsImV4cCI6MjEwODg4NDA0MH0.Vu_HfzTH_VmnkD76rlbzlbzAShHBI4PI4MTO7S3_Zno";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+// 로봇 확인 (ADR 0035): Cloudflare Turnstile 사이트 키(공개용). 비어 있으면 로봇 확인 없이 동작한다.
+// 순서: 이 값을 채워 웹에 올린 뒤에 Supabase 의 CAPTCHA 를 켠다 (먼저 켜면 로그인이 막힘).
+const TURNSTILE_SITE_KEY = "";
+const PW_MIN = 10;   // 새 비밀번호 최소 길이 (가입·재설정). 예전 8자 비밀번호도 로그인은 된다.
+let tsWidget = null, tsToken = "";
+function mountTurnstile() {
+  tsToken = "";
+  if (!TURNSTILE_SITE_KEY) return;
+  if (!document.getElementById("l-captcha")) return;
+  const go = () => {
+    const box = document.getElementById("l-captcha"); if (!box) return;
+    try { if (tsWidget !== null) window.turnstile.remove(tsWidget); } catch (e) { /* 이미 지워짐 */ }
+    tsWidget = window.turnstile.render(box, { sitekey: TURNSTILE_SITE_KEY, language: "ko",
+      callback: (t) => { tsToken = t; }, "expired-callback": () => { tsToken = ""; }, "error-callback": () => { tsToken = ""; } });
+  };
+  if (window.turnstile) return go();
+  if (!document.getElementById("ts-js")) {
+    const sc = document.createElement("script"); sc.id = "ts-js"; sc.async = true;
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    sc.onerror = () => { const h = document.getElementById("l-cap-hint"); if (h) h.textContent = "로봇 확인을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요"; };
+    document.head.appendChild(sc);
+  }
+  document.getElementById("ts-js").addEventListener("load", go, { once: true });
+}
+const captchaOpts = () => TURNSTILE_SITE_KEY ? { captchaToken: tsToken } : {};
+function captchaReady() {
+  if (!TURNSTILE_SITE_KEY || tsToken) return true;
+  const h = document.getElementById("l-cap-hint"); if (h) h.textContent = "'로봇이 아닙니다' 확인이 끝날 때까지 잠깐 기다려 주세요";
+  return false;
+}
 const $app = document.getElementById("app");
 const S = { user: null, name: "", tab: "home", snap: null, cmds: [], owners: [], grants: [], viewing: null,
             viewSnap: null, confirm: null, msg: null, busy: false };
@@ -299,7 +329,9 @@ function clean(v) {
   return v;
 }
 const KO_ERR = [[/Invalid login credentials/i, "이메일 또는 비밀번호가 맞지 않습니다"], [/Email not confirmed/i, "메일함의 확인 링크를 먼저 눌러 주세요"],
-  [/User already registered/i, "이미 가입한 이메일입니다 — 로그인하세요"], [/Password should be at least/i, "비밀번호는 8자 이상으로 정해 주세요"],
+  [/User already registered/i, "이미 가입한 이메일입니다 — 로그인하세요"], [/Password should be at least/i, "비밀번호는 10자 이상으로 정해 주세요"],
+  [/Password should contain/i, "비밀번호에 영문·숫자를 섞어 주세요"], [/weak|pwned|known to be/i, "너무 쉽거나 유출된 적 있는 비밀번호입니다. 다른 것으로 정해 주세요"],
+  [/captcha/i, "'로봇이 아닙니다' 확인이 끝나지 않았거나 만료됐습니다. 다시 해 주세요"],
   [/rate limit|too many/i, "요청이 너무 잦습니다. 잠시 뒤 다시 해 주세요"], [/row-level security|permission denied/i, "권한이 없습니다 (관리자 승인 전이거나 다른 사람의 자료)"],
   [/Failed to fetch|NetworkError/i, "인터넷 연결을 확인해 주세요"]];
 const ko = (m) => { m = String(m || ""); for (const [re, t] of KO_ERR) if (re.test(m)) return t; return m; };
@@ -415,7 +447,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-04a";
+const APP_VERSION = "2026-11-04b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -599,7 +631,7 @@ function currentView() {
 }
 function renderRecovery() {
   $app.innerHTML = `<div class="card login"><h1>새 비밀번호 정하기</h1>
-    <form id="f-rec" style="display:flex;flex-direction:column;gap:10px"><label>새 비밀번호 (8자 이상)<input type="password" id="r-pw" minlength="8" autocomplete="new-password" required></label>
+    <form id="f-rec" style="display:flex;flex-direction:column;gap:10px"><label>새 비밀번호 (${PW_MIN}자 이상)<input type="password" id="r-pw" minlength="${PW_MIN}" autocomplete="new-password" required></label>
     <button class="btn primary">저장</button></form></div>`;
   document.getElementById("f-rec").onsubmit = async (e) => { e.preventDefault();
     const { error } = await sb.auth.updateUser({ password: document.getElementById("r-pw").value });
@@ -1667,28 +1699,36 @@ function renderLogin() {
     <form id="f-login" style="display:flex;flex-direction:column;gap:10px">
       <label>이메일<input type="email" id="l-email" autocomplete="username" required></label>
       <label>비밀번호<input type="password" id="l-pw" autocomplete="current-password" minlength="8" required></label>
+      <div id="l-pw-hint" class="small muted" hidden>새 비밀번호는 ${PW_MIN}자 이상 (영문·숫자를 섞어 주세요)</div>
       <label id="l-name-wrap" hidden>이름 (가족에게 보일 이름)<input type="text" id="l-name"></label>
+      ${TURNSTILE_SITE_KEY ? `<div id="l-captcha"></div><div id="l-cap-hint" class="small muted"></div>` : ""}
       <div class="row"><button class="btn primary" id="l-go">로그인</button><button class="btn" type="button" id="l-mode">처음이면 가입</button>
         <button class="btn ghost" type="button" id="l-reset">비밀번호를 잊었어요</button></div>
     </form></div>`;
   let signup = false;
+  mountTurnstile();
   document.getElementById("l-mode").onclick = () => { signup = !signup;
     document.getElementById("l-name-wrap").hidden = !signup;
+    document.getElementById("l-pw-hint").hidden = !signup;
+    const pw = document.getElementById("l-pw"); pw.minLength = signup ? PW_MIN : 8; pw.autocomplete = signup ? "new-password" : "current-password";
     document.getElementById("l-go").textContent = signup ? "가입" : "로그인";
     document.getElementById("l-mode").textContent = signup ? "이미 가입했으면 로그인" : "처음이면 가입"; };
   document.getElementById("l-reset").onclick = async () => {
     const email = document.getElementById("l-email").value.trim();
     if (!email) { S.msg = { bad: true, text: "이메일 칸을 먼저 채워 주세요" }; return render(); }
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (!captchaReady()) return;
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname, ...captchaOpts() });
     S.msg = error ? { bad: true, text: ko(error.message) } : { text: "비밀번호를 다시 정하는 링크를 메일로 보냈습니다." }; render(); };
   document.getElementById("f-login").onsubmit = async (e) => {
     e.preventDefault();
     const email = document.getElementById("l-email").value.trim(), password = document.getElementById("l-pw").value;
+    if (signup && password.length < PW_MIN) { S.msg = { bad: true, text: `비밀번호는 ${PW_MIN}자 이상으로 정해 주세요` }; return render(); }
+    if (!captchaReady()) return;
     if (signup) {
-      const { error } = await sb.auth.signUp({ email, password, options: { data: { display_name: document.getElementById("l-name").value.trim() || email.split("@")[0] } } });
+      const { error } = await sb.auth.signUp({ email, password, options: { ...captchaOpts(), data: { display_name: document.getElementById("l-name").value.trim() || email.split("@")[0] } } });
       S.msg = error ? { bad: true, text: "가입 실패: " + ko(error.message) } : { text: "가입했습니다. 메일함의 확인 링크를 누른 뒤 로그인하세요." };
     } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
+      const { error } = await sb.auth.signInWithPassword({ email, password, options: captchaOpts() });
       S.msg = error ? { bad: true, text: "로그인 실패: " + ko(error.message) } : null;
     }
     render();
