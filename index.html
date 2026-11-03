@@ -410,7 +410,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-03b";
+const APP_VERSION = "2026-11-03c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -765,12 +765,12 @@ function realOrders(s, d, cur, acc) {
     const lock = Number(r.lock_need ?? r.buy_need ?? 0), need = Number(r.buy_need || 0), catchup = Number(r.catchup_need || 0);
     const vrn = Number(r.vr_buy_need || 0), short = Number(r.short || 0), later = Number(r.later_lines || 0);
     const parts = `지금 걸 매수 <b class="num">$${money(lock)}</b>${vrn ? ` · VR 남은 매수 <b class="num">$${money(vrn)}</b>` : ""}`;
-    const note = `<div class="small muted">LOC 주문은 걸면 주문가능금액이 묶입니다 → 현재가보다 3% 넘게 낮은 아래 줄${later ? ` ${later}개` : ""}는 '마감 전 확인'(급락하면 텔레그램 알림).
+    const note = `<div class="small muted">LOC 주문은 걸면 주문가능금액이 묶입니다 → 현재가보다 기준(3~6%, 종목마다 스스로 맞춤)보다 더 낮은 아래 줄${later ? ` ${later}개` : ""}는 '마감 전 확인'(급락하면 텔레그램 알림).
       전략대로 다 체결돼도 최대 <b class="num">$${money(need)}</b> (LOC 는 종가로 체결)${catchup ? ` · 보충 매수 <b class="num">$${money(catchup)}</b> 는 별도` : ""}</div>`;
     out += r.cash === undefined || r.cash === null
       ? `<div class="card small">예수금: ${parts} (주문가능금액 조회 못 함)${note}</div>`
-      : `<div class="card ${short > 0 ? "warn-note" : ""}"><div class="row between"><b>${short > 0 ? "⚠ 예수금 부족" : "✅ 예수금 충분"}</b>
-          <span class="small">주문가능 <b class="num">$${money(r.cash)}</b> (원화 통합증거금 포함)</span></div>
+      : `<div class="card ${short > 0 ? "warn-note" : ""}"><div class="row between"><b>${short > 0 ? "⚠ 가용 금액 부족" : "✅ 가용 금액 충분"}</b>
+          <span class="small">가용 전체 <b class="num">$${money(r.cash)}</b> (원화 통합증거금 포함)${r.usd_cash != null ? ` · 달러 예수금 <b class="num">$${money(r.usd_cash)}</b>` : ""}</span></div>
           <div class="small">${parts}${short > 0 ? ` → <b class="num">$${money(short)}</b> 부족` : ""}</div>${note}</div>`;
   }
   for (const row of r.strategies || []) {
@@ -779,7 +779,9 @@ function realOrders(s, d, cur, acc) {
     if (!row.approved) { out += `<div class="empty">아직 승인한 ${esc(r.trade_date)} 주문표가 없습니다 → 승인 탭</div></section>`; continue; }
     out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}실제 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
       ${row.lines.map((l) => `<div class="oline"><span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
-        <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.later ? '<span class="chip" title="현재가보다 3% 넘게 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`).join("")}
+        <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`).join("")}
+      ${row.usd_share != null ? `<div class="small" style="margin-top:6px">예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
+      ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}</section>`;
   }
   if (vr.length) out += `<div class="card"><div class="small muted">VR 은 2주 단위 예약주문(기간잔량)이라 매일 넣지 않습니다. 단계와 체결 여부는 전략 화면에서 확인하세요.</div>
@@ -851,7 +853,7 @@ function todayCard(s, d, strat) {
   for (const [acc, r] of Object.entries(d.real_orders || {})) {
     if (!r || r.error) continue;
     const name = ACC_NAME[acc] || acc;
-    if (Number(r.short || 0) > 0) items.push(["orders", `${name}: 예수금 부족 $${money(r.short)}`, "bad"]);
+    if (Number(r.short || 0) > 0) items.push(["orders", `${name}: 가용 금액 부족 $${money(r.short)}`, "bad"]);
     const rej = (r.strategies || []).flatMap((x) => x.lines || []).filter((l) => l.collar).length;
     if (rej) items.push(["orders", `${name}: 거부 예상 ${rej}줄 (시세 대비 28% 넘게 벗어남)`, "bad"]);
   }
