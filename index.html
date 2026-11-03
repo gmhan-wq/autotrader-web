@@ -415,7 +415,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-03g";
+const APP_VERSION = "2026-11-04a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1480,13 +1480,33 @@ function tGroups(rows, lastWeek, recent) {   // [[키, 이름, 줄들, 날마다
   }
   return out;
 }
+// VR 매매 표 (사용자 11/04, 엑셀 양식): 2주 주기마다 한 줄 — 마지막 종가·G·평가금·V·최소·최대·거래액·Pool·투자원금·계좌총액·수익률·개수·원금·평단
+const VRCOLS = ["주차", "마지막 종가", "G", "평가금 E", "V", "최소", "최대", "거래액", "시작 Pool", "마지막 Pool", "투자원금", "계좌총액", "수익률", "수익금", "개수", "매수원금", "평단"];
+function vrTable(g, rows) {
+  if (!rows.length) return `<div class="empty">VR 주기 기록이 아직 없습니다.</div>`;
+  const n = (x) => x === null || x === undefined || x === "" ? null : Number(x);
+  const m = (x) => n(x) === null ? "-" : money(x);
+  const body = rows.map((r) => { const [wk, st, close, G, E, V, mn, mx, tr, p0, p1, pr, qty, cost, done] = r;
+    const total = n(E) !== null ? n(E) + n(p1) : null, prn = n(pr), ret = total !== null && prn ? (total / prn - 1) * 100 : null;
+    const c = n(cost) || null;
+    return `<tr class="${done ? "" : "t-total"}"><td class="num"><b>${wk}</b><div class="small muted">${esc(String(st).slice(5))}${done ? "" : " 진행 중"}</div></td>
+      <td class="n">${m(close)}</td><td class="n">${esc(G ?? "-")}</td><td class="n">${m(E)}</td><td class="n"><b>${m(V)}</b></td><td class="n">${m(mn)}</td><td class="n">${m(mx)}</td>
+      <td class="n ${n(tr) < 0 ? "buy" : n(tr) > 0 ? "sell" : ""}">${m(tr)}</td><td class="n">${m(p0)}</td><td class="n">${m(p1)}</td><td class="n">${m(pr)}</td>
+      <td class="n">${total === null ? "-" : money(total)}</td>
+      <td class="n ${ret > 0 ? "buy" : ret < 0 ? "sell" : ""}">${ret === null ? "-" : (ret > 0 ? "+" : "") + ret.toFixed(2) + "%"}</td>
+      <td class="n">${total === null || !prn ? "-" : (total - prn >= 0 ? "+" : "−") + money(Math.abs(total - prn))}</td>
+      <td class="n"><b>${qty}</b></td><td class="n">${c ? money(c) : "-"}</td><td class="n">${c && qty ? money(c / qty) : "-"}</td></tr>`; }).join("");
+  return `<div class="small muted" style="margin:4px 0">${Number(g.multiplier) > 1 ? `${g.multiplier}배수 금액 · ` : ""}거래액 = 그 주기 매매 합계(매수 −, 매도 +), 마지막 Pool = 시작 Pool + 거래액, 계좌총액 = 평가금 + Pool.
+    ${rows.some((r) => !r[11]) ? "투자원금을 아직 정하지 않아 수익률은 '-' 입니다." : ""}</div>
+    <div class="scroll ttable"><table><thead><tr>${VRCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
 function viewTrades(s) {
   const T = (S.snap.detail || {}).trades || {};
-  const strat = allStrategies(s).filter((g) => T[g.id] && (T[g.id].real || T[g.id].mock));
+  const strat = allStrategies(s).filter((g) => T[g.id] && (T[g.id].real || T[g.id].mock || T[g.id].vr));
   if (!strat.length) return `<div class="card"><div class="empty">아직 기록이 없습니다. 노트북이 증권사 주문내역·주문표를 저장한 날부터 쌓입니다.</div></div>`;
   if (!strat.some((g) => g.id === S.tradeSid)) S.tradeSid = strat[0].id;
   const g = strat.find((x) => x.id === S.tradeSid), e = T[g.id];
-  const kind = S.tradeKind === "mock" || !e.real ? "mock" : "real", rows = e[kind] || [];
+  const kind = S.tradeKind === "mock" || !(e.real || (e.vr && e.vr.real)) ? "mock" : "real", rows = e[kind] || [];
   S.tradeOpen = S.tradeOpen || {};
   const isInf = g.kind === "sheet" || g.kind === "infinite_buy_v4";
   const cycles = [...new Set(rows.map((r) => r[11]))];
@@ -1511,12 +1531,15 @@ function viewTrades(s) {
   const total = rows.length ? tCells(tAgg(rows), "<b>합계</b>", "t-total") : "";
   return `<div class="seg" role="tablist" aria-label="전략" style="flex-wrap:wrap">${strat.map((x) => `<button role="tab" data-tradesid="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}" aria-selected="${x.id === g.id}"><span class="num">${esc(x.symbol)}</span> ${esc(stratName(x, (s.plans || {})[x.id]))}</button>`).join("")}</div>
     <div class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2>
-      <div class="seg" role="tablist" aria-label="실제·모의">${[["real", "실제"], ["mock", "모의"]].filter(([k]) => e[k]).map(([k, l]) => `<button role="tab" data-tradekind="${k}" class="${kind === k ? "on" : ""}" aria-selected="${kind === k}">${l}</button>`).join("")}</div></div>
+      <div class="seg" role="tablist" aria-label="실제·모의">${[["real", "실제"], ["mock", "모의"]].filter(([k]) => e[k] || (e.vr && e.vr[k])).map(([k, l]) => `<button role="tab" data-tradekind="${k}" class="${kind === k ? "on" : ""}" aria-selected="${kind === k}">${l}</button>`).join("")}</div></div>
+      ${e.vr ? vrTable(g, (e.vr || {})[kind] || []) : ""}
+      ${e.vr ? `<details style="margin-top:8px"><summary class="small muted">날짜별 체결 보기</summary>` : ""}
       ${rows.length ? `<div class="scroll ttable"><table><thead><tr>${TCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
-        <tbody>${total}${body}</tbody></table></div>` : `<div class="empty">${kind === "real" ? "실제" : "모의"} 기록이 아직 없습니다.</div>`}
-      <div class="small muted" style="margin-top:8px">미국 장 날짜 기준. 보유·평단·매입금액은 그날 장 끝 값, 평가손익 = 종가×보유 − 매입금액, 묶은 줄은 기간 합계(매수·매도·실현)와 기간 끝 값.
+        <tbody>${total}${body}</tbody></table></div>` : `<div class="empty">${kind === "real" ? "실제" : "모의"} 체결 기록이 아직 없습니다.</div>`}
+      ${e.vr ? `</details>` : ""}
+      ${e.vr ? "" : `<div class="small muted" style="margin-top:8px">미국 장 날짜 기준. 보유·평단·매입금액은 그날 장 끝 값, 평가손익 = 종가×보유 − 매입금액, 묶은 줄은 기간 합계(매수·매도·실현)와 기간 끝 값.
         ${kind === "real" ? `실제 = 증권사 주문내역(직접 주문 포함, ${e.since ? `미국 ${esc(e.since)} 장부터` : "저장한 날부터"}).` : "모의 = 같은 전략을 가상 계좌로 굴린 결과."}
-        무한매수는 다 팔고 다시 사기 시작하면 새 싸이클입니다.</div></div>`;
+        무한매수는 다 팔고 다시 사기 시작하면 새 싸이클입니다.</div>`}</div>`;
 }
 function viewCalendar() {
   if (!S.snap) return `<div class="card"><div class="empty">노트북이 연결되면 주문표 달력이 보입니다.</div></div>`;
