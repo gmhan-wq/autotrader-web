@@ -450,7 +450,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-04b";
+const APP_VERSION = "2026-11-05";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -543,6 +543,12 @@ function viewFeedbackBoard(kind) {
       ${f.reply ? `<div class="reply"><b>처리 결과</b>${f.replied_at ? ` <span class="small muted">${esc(when(f.replied_at))}</span>` : ""}<div>${esc(f.reply)}</div></div>` : ""}</div>`; }).join("");
   return out + "</div>";
 }
+function brokerNote(b) {
+  // 메리츠 계좌 기준 = 실제 보유 × 종가 + 달러 예수금 (제보 #11). API 없는 계좌는 원장 값
+  const p = (b.partial || []).length ? ` · ${b.partial.map((a) => ACC_NAME[a] || a).join("·")} 원장` : "";
+  return `보유 $${money(b.holdings)} + 달러 예수금 $${money(b.usd)}${p}`;
+}
+
 function feedbackButtons(mode) {
   if (!S.user || S.flags.feedback === false) return "";
   const b = `<button class="btn fb-bug" data-fbopen="bug">오류제보</button><button class="btn fb-idea" data-fbopen="idea">기능개선</button>`;
@@ -753,11 +759,13 @@ function renderInner() {
       </div>${feedbackModal()}`;
   } else {
     const t = S.snap ? (S.snap.summary.totals || {}) : {};
+    const bk = S.snap ? S.snap.summary.broker : null, tv = bk ? bk.value : t.value;
     const tabs = GROUPS.map((g) => [g[0], g[1]]);
     $app.innerHTML = `
       <header class="ph-top card">
         <div class="row"><b>${esc(S.name)}</b><span class="chip warn">모의</span><span class="grow"></span>${engine}</div>${actSwitch()}
-        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (원장 기준)</span><b class="num">$${money(t.value)}</b>${krw(t.value) ? `<span class="krw">${krw(t.value)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
+        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (${bk ? "메리츠 계좌 기준" : "원장 기준"})</span><b class="num">$${money(tv)}</b>${krw(tv) ? `<span class="krw">${krw(tv)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
+          ${bk ? `<span class="small muted">${brokerNote(bk)} · 원장 기준 $${money(t.value)}</span>` : ""}
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
           : `<h1>${S.detail ? "전략" : esc(groupOf(S.tab)[1])}</h1>`}
       </header>
@@ -883,7 +891,8 @@ function viewHome(snap, mine) {
   const signed = (x) => x === null || x === undefined ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + "$" + money(Math.abs(Number(x)));
   const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
   const kpis = [
-    ["평가금액", "$" + money(t.value), `${krw(t.value) ? krw(t.value) + " · " : ""}원장 기준`, ""],
+    ...(s.broker ? [["평가금액 (메리츠)", "$" + money(s.broker.value), `${krw(s.broker.value) ? krw(s.broker.value) + " · " : ""}${brokerNote(s.broker)}`, ""]] : []),
+    [s.broker ? "평가금액 (원장)" : "평가금액", "$" + money(t.value), `${krw(t.value) ? krw(t.value) + " · " : ""}원장 기준 (보유 + 주문표 잔금)`, ""],
     ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 기준" : "평단 있는 보유 기준", pnlCls(t.eval_pnl)],
     ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
     ["전략 잔금", "$" + money(t.cash), "주문표·VR Pool 합계", ""],
