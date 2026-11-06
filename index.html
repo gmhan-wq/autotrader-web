@@ -450,7 +450,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-06";
+const APP_VERSION = "2026-11-07";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -983,6 +983,8 @@ function todayCard(s, d, strat) {
     const rej = (r.strategies || []).flatMap((x) => x.lines || []).filter((l) => l.collar).length;
     if (rej) items.push(["orders", `${name}: 거부 예상 ${rej}줄 (시세 대비 28% 넘게 벗어남)`, "bad"]);
   }
+  for (const [sid, g] of Object.entries(s.cycle_gates || {})) if (g.real || g.mock)
+    items.push(["mystrat", `${sid}: 싸이클 ${g.no} 끝${g.real ? "" : " (모의)"} — 새 싸이클 규칙 정하기 (그 전까지 매수 멈춤)`, "warn"]);
   if (myVoteNeeded().length) items.push(["consensus", `전략 수정 합의: 내 동의가 필요한 제안 ${myVoteNeeded().length}건`, "warn"]);
   if (readyToApply().length) items.push(["consensus", `전략 수정 합의 완료 ${readyToApply().length}건 — 계좌 주인이 '적용'`, "warn"]);
   if (!s.telegram) items.push(["telegram", "텔레그램 연결하기 (알림을 폰으로)", ""]);
@@ -1397,12 +1399,21 @@ function myStrategies(s) {
             ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}">정지</button><button class="btn" data-stopno="1">취소</button></span>`
             : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}">⛔ 비상 정지</button></span>`)
             : `<span class="chip bad" title="다시 켜기는 계좌 주인·관리자·공동 운영자 합의 (ADR 0037)">꺼짐 · 다시 켜기는 합의</span>`}</div>
+        ${cycleBanner(s, g)}
         ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}">✍ 수정·다시 켜기 제안</button></div>`}
         <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div></div>`).join("")
         : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
     <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList();
+}
+// 무한매수 싸이클 관문 (사용자 11/03): 전량 매도로 싸이클이 끝나면 규칙을 정할 때까지 새 매수 멈춤
+function cycleBanner(s, g) {
+  const c = (s.cycle_gates || {})[g.id];
+  if (!c || !(c.real || c.mock)) return "";
+  return `<div class="card warn-note" style="margin:6px 0"><b>🔁 싸이클 ${c.no} 끝</b> <span class="small">(전량 매도${c.ended ? ", 미국 " + esc(c.ended) : ""}${c.real ? "" : " · 모의만"})</span>
+    <div class="small">새 싸이클 규칙을 정할 때까지 이 전략의 <b>새 매수를 멈춥니다</b>. 종전 규칙 계속은 당사자 누구나, 새 규칙은 합의로 정합니다.</div>
+    <div class="row"><button class="btn primary" data-cycle-same="${esc(g.id)}">종전 규칙으로 계속</button><button class="btn" data-propose="${esc(g.id)}" data-cyclenew="1">새 규칙 제안 (합의)</button></div></div>`;
 }
 function allStrategiesFlat() {
   const s = S.snap ? S.snap.summary : {};
@@ -1416,6 +1427,8 @@ function changeForm(g, accs) {
     ${g.kind === "dynamic" && g.params ? `<label class="inl"><input type="checkbox" id="ch-params" ${S.chParams ? "checked" : ""}> 단계·손절·익절 값 바꾸기</label>
       ${S.chParams ? dynSection() + `<div class="grid2"><label>확인 시각 (개장 뒤 분)<input type="text" id="ch-checks" value="${esc((g.params.check_offsets_min || []).join(", "))}"></label>
         <label>모의 기간 마지막 날<input type="date" id="ch-until" value="${esc(g.params.until || "")}"></label></div>` : ""}` : ""}
+    ${(((S.snap || {}).summary || {}).cycle_gates || {})[g.id] && (S.snap.summary.cycle_gates[g.id].real || S.snap.summary.cycle_gates[g.id].mock)
+      ? `<label>새 싸이클 규칙 (예: 30분할 · 목표 15% · 1회 매수금 $600)<input type="text" id="ch-cycle" maxlength="200" ${S.cycleNew ? "required" : ""}></label>` : ""}
     <label>이유 (왜 바꾸는지 — 당사자에게 보입니다)<textarea id="ch-note" rows="2" maxlength="500" required></textarea></label>
     <div class="row"><span class="grow"></span><button type="button" class="btn" data-propose-cancel="1">취소</button><button class="btn primary">제안 보내기</button></div>
   </form>`;
@@ -1849,7 +1862,7 @@ function bind() {
   }, { passive: false });
   document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
     const g = allStrategiesFlat().find((x) => x.id === b.dataset.propose);
-    S.editSid = b.dataset.propose; S.chParams = false;
+    S.editSid = b.dataset.propose; S.chParams = false; S.cycleNew = !!b.dataset.cyclenew;
     if (g && g.params) S.dynForm = { rules: (g.params.rules || []).map(([a, w]) => [+a, +w]), stops: (g.params.stops || []).map(([a, w]) => [+a, +w]),
       tp: +(g.params.tp_pct || 5), tpSell: +(g.params.tp_sell_pct || 50) };
     render(); });
@@ -1860,6 +1873,7 @@ function bind() {
   if (fch) fch.onsubmit = async (e) => { e.preventDefault();
     const sid = fch.dataset.sid, g = allStrategiesFlat().find((x) => x.id === sid) || {}, change = {}, parts = [];
     const on = document.getElementById("ch-on"); if (on && on.checked) { change.active = true; parts.push("다시 켜기"); }
+    const cy = document.getElementById("ch-cycle"); if (cy && cy.value.trim()) { change.cycle_rule = cy.value.trim(); parts.push(`새 싸이클 규칙: ${change.cycle_rule}`); }
     const acc = document.getElementById("ch-acc").value; if (acc && acc !== g.account) { change.account = acc; parts.push(`계좌 → ${ACC_NAME[acc] || acc}`); }
     if (S.chParams) { const f = dynForm(), ser = (a) => [...a].sort((x, y) => x[0] - y[0]).map(([d, w]) => `${d}:${w}`).join(",");
       change.params = { rules: ser(f.rules), stops: ser(f.stops), tp: String(f.tp), tp_sell: String(f.tpSell),
@@ -1890,6 +1904,7 @@ function bind() {
   document.querySelectorAll("[data-confirm-test]").forEach((b) => b.onclick = () => { S.confirmPlan = { acc: b.dataset.confirmTest, test: true, lines: [] }; render(); });
   document.querySelectorAll("[data-confirm-cancel]").forEach((b) => b.onclick = () => { S.confirmPlan = null; render(); });
   document.querySelectorAll("[data-confirm-go]").forEach((b) => b.onclick = () => sendOrders(S.confirmPlan, (document.getElementById("cf-pass") || {}).value));
+  document.querySelectorAll("[data-cycle-same]").forEach((b) => b.onclick = () => send("set_strategy", { id: b.dataset.cycleSame, cycle: "same" }));
   document.querySelectorAll("[data-stop]").forEach((b) => b.onclick = () => { S.stopAsk = null; send("set_strategy", { id: b.dataset.stop, active: false }); });
   document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
     ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
