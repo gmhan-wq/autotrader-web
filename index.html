@@ -450,7 +450,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-05";
+const APP_VERSION = "2026-11-06";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -821,7 +821,7 @@ function realOrders(s, d, cur, acc) {
       전략대로 다 체결돼도 최대 <b class="num">$${money(need)}</b> (LOC 는 종가로 체결)${catchup ? ` · 보충 매수 <b class="num">$${money(catchup)}</b> 는 별도` : ""}</div>`;
     out += r.cash === undefined || r.cash === null
       ? `<div class="card small">예수금: ${parts} (주문가능금액 조회 못 함)${note}</div>`
-      : `<div class="card ${short > 0 ? "warn-note" : ""}"><div class="row between"><b>${short > 0 ? "⚠ 가용 금액 부족" : "✅ 가용 금액 충분"}</b>
+      : `<div class="card ${short > 0 ? "warn-note" : ""}"><div class="row between"><b>${short > 0 ? "⚠ 계좌 전체 부족 (원화 포함)" : "✅ 계좌 전체 충분 (원화 포함)"}</b>
           <span class="small">가용 전체 <b class="num">$${money(r.cash)}</b> (원화 통합증거금 포함)${r.usd_cash != null ? ` · 달러 예수금 <b class="num">$${money(r.usd_cash)}</b>` : ""}</span></div>
           <div class="small">${parts}${short > 0 ? ` → <b class="num">$${money(short)}</b> 부족` : ""}</div>${note}</div>`;
   }
@@ -832,7 +832,7 @@ function realOrders(s, d, cur, acc) {
     out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}실제 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
       ${row.lines.map((l) => `<div class="oline">${confirmOn(acc) && l.price ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc([row.sid, l.side, l.kind, l.price, l.qty].join("|"))}" ${cfChecked([row.sid, l.side, l.kind, l.price, l.qty].join("|"), !l.later && !l.near && !l.catchup && !l.collar) && !l.collar ? "checked" : ""} ${l.collar ? "disabled" : ""} aria-label="이 줄 넣기">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
         <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`).join("")}
-      ${row.usd_share != null ? `<div class="small" style="margin-top:6px">예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
+      ${row.usd_share != null ? `<div class="small" style="margin-top:6px">예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">달러 기준 $${money(row.usd_short)} 부족</span>` : '<span class="chip ok">달러 기준 충분</span>'}</div>` : ""}
       ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}</section>`;
   }
@@ -979,7 +979,7 @@ function todayCard(s, d, strat) {
   for (const [acc, r] of Object.entries(d.real_orders || {})) {
     if (!r || r.error) continue;
     const name = ACC_NAME[acc] || acc;
-    if (Number(r.short || 0) > 0) items.push(["orders", `${name}: 가용 금액 부족 $${money(r.short)}`, "bad"]);
+    if (Number(r.short || 0) > 0) items.push(["orders", `${name}: 계좌 전체 부족 $${money(r.short)} (원화 포함)`, "bad"]);
     const rej = (r.strategies || []).flatMap((x) => x.lines || []).filter((l) => l.collar).length;
     if (rej) items.push(["orders", `${name}: 거부 예상 ${rej}줄 (시세 대비 28% 넘게 벗어남)`, "bad"]);
   }
@@ -1069,23 +1069,26 @@ function stratName(g, plan) {
   return kindKo(g.kind);
 }
 function equityChart(rows) {
-  const pts = rows.filter((r) => r.value !== null && r.value !== undefined).map((r) => ({ d: r.date, v: Number(r.value) }));
-  if (pts.length < 2) return `<div class="empty">오늘부터 매일 한 번 평가금액을 기록합니다. 이틀째부터 그래프가 그려집니다.${pts.length ? ` (오늘 $${money(pts[0].v)})` : ""}</div>`;
-  const W = window.innerWidth < 700 ? 460 : 1000, H = window.innerWidth < 700 ? 260 : 240, P = 34, lo = Math.min(...pts.map((p) => p.v)), hi = Math.max(...pts.map((p) => p.v));
+  // 두 선 (점검 1번, 11/06): 메리츠 계좌 기준(broker, 굵은 선) · 원장 기준(value, 점선). 메리츠 기록은 11/06 부터.
+  const ok = (v) => v !== null && v !== undefined && !isNaN(Number(v));
+  const pts = rows.filter((r) => ok(r.value) || ok(r.broker)).map((r) => ({ d: r.date, v: ok(r.value) ? Number(r.value) : null, b: ok(r.broker) ? Number(r.broker) : null }));
+  if (pts.length < 2) return `<div class="empty">오늘부터 매일 한 번 평가금액을 기록합니다. 이틀째부터 그래프가 그려집니다.${pts.length ? ` (오늘 $${money(pts[0].b ?? pts[0].v)})` : ""}</div>`;
+  const all = pts.flatMap((p) => [p.v, p.b]).filter((x) => x !== null);
+  const W = window.innerWidth < 700 ? 460 : 1000, H = window.innerWidth < 700 ? 260 : 240, P = 34, lo = Math.min(...all), hi = Math.max(...all);
   const pad = (hi - lo) * 0.15 || hi * 0.02, y0 = lo - pad, y1 = hi + pad;
   const X = (i) => P + i * (W - P * 2) / (pts.length - 1), Y = (v) => H - 24 - (v - y0) / (y1 - y0) * (H - 44);
-  const line = pts.map((p, i) => `${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" ");
-  const area = `${X(0).toFixed(1)},${H - 24} ${line} ${X(pts.length - 1).toFixed(1)},${H - 24}`;
+  const path = (k) => pts.map((p, i) => p[k] === null ? null : `${X(i).toFixed(1)},${Y(p[k]).toFixed(1)}`).filter(Boolean).join(" ");
   const ticks = [y0 + (y1 - y0) * 0.2, y0 + (y1 - y0) * 0.5, y0 + (y1 - y0) * 0.8];
-  const last = pts[pts.length - 1];
+  const last = pts[pts.length - 1], hasB = pts.some((p) => p.b !== null);
+  const lastB = [...pts].reverse().find((p) => p.b !== null), iB = lastB ? pts.indexOf(lastB) : -1;
   return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="평가금액 추이 ${pts[0].d}부터 ${last.d}까지">
-    <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
     ${ticks.map((v) => `<line x1="${P}" x2="${W - P}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${P}" y="${(Y(v) - 4).toFixed(1)}" font-size="12" fill="var(--muted)">$${money(v, 0)}</text>`).join("")}
-    <polygon points="${area}" fill="url(#eqg)"/>
-    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
-    <circle cx="${X(pts.length - 1).toFixed(1)}" cy="${Y(last.v).toFixed(1)}" r="5" fill="var(--accent)"/>
+    <polyline points="${path("v")}" fill="none" stroke="var(--muted)" stroke-width="${hasB ? 1.5 : 2.5}" stroke-dasharray="${hasB ? "5 4" : ""}" stroke-linejoin="round"/>
+    ${hasB ? `<polyline points="${path("b")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle cx="${X(iB).toFixed(1)}" cy="${Y(lastB.b).toFixed(1)}" r="5" fill="var(--accent)"/>` : `<circle cx="${X(pts.length - 1).toFixed(1)}" cy="${Y(last.v).toFixed(1)}" r="5" fill="var(--muted)"/>`}
     <text x="${P}" y="${H - 4}" font-size="12" fill="var(--muted)">${esc(pts[0].d.slice(5))}</text>
-    <text x="${W - P}" y="${H - 4}" font-size="12" text-anchor="end" fill="var(--muted)">${esc(last.d.slice(5))} · $${money(last.v)}</text></svg>`;
+    <text x="${W - P}" y="${H - 4}" font-size="12" text-anchor="end" fill="var(--muted)">${esc(last.d.slice(5))}${hasB ? ` · 메리츠 $${money(lastB.b)}` : ""}${last.v !== null ? ` · 원장 $${money(last.v)}` : ""}</text></svg>
+    <div class="small muted">${hasB ? "━ 메리츠 계좌 기준 (실제 보유 × 종가 + 달러 예수금, 11/06부터) · ┅ 원장 기준 (보유 + 주문표 잔금)" : "원장 기준 (보유 × 종가 + 주문표 잔금)"}</div>`;
 }
 function viewStrategy(s, d, sid) {
   const g = allStrategies(s).find((x) => x.id === sid);
