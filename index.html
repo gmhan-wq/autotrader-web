@@ -291,7 +291,7 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 // 로봇 확인 (ADR 0035): Cloudflare Turnstile 사이트 키(공개용). 비어 있으면 로봇 확인 없이 동작한다.
 // 순서: 이 값을 채워 웹에 올린 뒤에 Supabase 의 CAPTCHA 를 켠다 (먼저 켜면 로그인이 막힘).
-const TURNSTILE_SITE_KEY = "";
+const TURNSTILE_SITE_KEY = "0x4AAAAAAF2Dq98Cp-_-66WH";
 const PW_MIN = 10;   // 새 비밀번호 최소 길이 (가입·재설정). 예전 8자 비밀번호도 로그인은 된다.
 let tsWidget = null, tsToken = "";
 function mountTurnstile() {
