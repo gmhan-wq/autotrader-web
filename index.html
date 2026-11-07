@@ -1678,7 +1678,7 @@ function calDay(td, v) {
       ${Object.entries(c.hold || {}).map(([sym, [a, b]]) => `<div class="small">${a === b ? "✅" : "❌"} ${esc(sym)} 보유: 실제 ${a}주 / 모의 ${b}주</div>`).join("")}
       ${!(c.rows || []).length && !Object.keys(c.hold || {}).length ? `<div class="small muted">체결·보유 ${c.fills_ok ? "일치" : "다름"} / ${c.hold_ok ? "일치" : "다름"} (자세한 줄은 다음 비교부터 기록)</div>` : ""}</div>`).join("")}</section>`;
   } else if (v.sheets.length) {
-    out += `<div class="card"><div class="small muted">실제 vs 모의 비교는 이 날 장이 끝난 뒤 아침 07:10 에 기록됩니다.</div></div>`;
+    out += `<div class="card"><div class="small muted">실제 vs 모의 비교는 이 날 애프터장이 끝난 뒤 아침 10:00 에 기록됩니다.</div></div>`;
   }
   return out;
 }
