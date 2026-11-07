@@ -453,7 +453,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07e";
+const APP_VERSION = "2026-11-07f";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -634,7 +634,7 @@ function currentView() {
     case "research": S.addMock = true; v = need(addStrategy); break;
     case "addstrat": S.addMock = false; v = need(addStrategy); break;
     case "consensus": v = viewConsensus(); break;
-    case "privacy": S.upOpen = true; v = need(privacyCard) + uploadCard("privacy"); break;
+    case "privacy": S.upOpen = true; v = need(privacyCard) + privacyLog() + uploadCard("privacy"); break;
     case "calendar": v = viewCalendar(); break;
     case "trades": S.tradeKind = "real"; v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
@@ -1409,6 +1409,17 @@ function privacyCard(s) {
       <span>${on ? "켜짐 — 보고서를 받습니다" : "꺼짐"}</span>
       <button class="btn ${on ? "" : "primary"}" data-privacy="${on ? "0" : "1"}">${on ? "끄기" : "켜기"}</button></div>
       ${on && !s.telegram ? `<div class="small sell">텔레그램을 먼저 연결해야 보고서를 받을 수 있습니다 (위 텔레그램 칸).</div>` : ""}`}
+  </div>`;
+}
+// 프라이버시 분석 기록 (11/07): 노트북이 보낸 분석 보고서 전체, 최근 것 먼저. 사진·판독 표·규칙 숫자는 노트북에만
+function privacyLog() {
+  const rows = (S.snap && S.snap.detail && S.snap.detail.privacy_reports) || [];
+  return `<div class="card"><div class="row between"><h2>분석 기록</h2><span class="small muted">${rows.length ? `최근 ${rows.length}건` : ""}</span></div>
+    ${rows.length ? rows.map((r, i) => {
+      const first = String(r.text || "").split("\n")[0];
+      return `<details ${i === 0 ? "open" : ""} class="plog"><summary><span class="small muted num">${esc(String(r.at || "").replace("T", " ").slice(0, 16))}</span> ${esc(first)}</summary>
+        <pre class="small" style="white-space:pre-wrap;margin:6px 0 0">${esc(r.text || "")}</pre></details>`;
+    }).join("") : `<div class="empty">아직 기록이 없습니다. 노트북을 업데이트한 뒤 들어오는 프라이버시 사진부터 분석 보고서가 여기에 쌓입니다 (텔레그램으로도 계속 옵니다).</div>`}
   </div>`;
 }
 function accountsView(s) {
