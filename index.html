@@ -458,7 +458,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07j";
+const APP_VERSION = "2026-11-07k";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -470,6 +470,12 @@ function loadScript(src) {
     const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = () => bad(new Error("캡처 도구를 불러오지 못했습니다")); document.head.appendChild(t); });
 }
 // 오류제보·기능개선(화면 캡처·제보 창·게시판)은 11/07 사용자 요청으로 없앰
+function brokerNote(b) {
+  // 메리츠 계좌 기준 = 실제 보유 × 종가 + 달러 예수금 (제보 #11). API 없는 계좌는 원장 값
+  const p = (b.partial || []).length ? ` · ${b.partial.map((a) => ACC_NAME[a] || a).join("·")} 원장` : "";
+  return `보유 $${money(b.holdings)} + 달러 예수금 $${money(b.usd)}${p}`;
+}
+
 function typing() {
   // 제보 창이 열려 있거나 입력 칸에 쓰는 중이면 화면을 다시 그리지 않는다 (쓰던 글이 지워지지 않게)
   const a = document.activeElement;
