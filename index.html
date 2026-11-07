@@ -460,7 +460,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-08a";
+const APP_VERSION = "2026-11-08b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -981,7 +981,9 @@ function strategyCard(s, g) {
   const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
   const metric = plan ? ["T · 단계", `${plan.T} / ${plan.splits} · ${plan.phase || "-"}`] :
                  vr ? ["V · Pool", `${money(vr.V)} · ${money(vr.pool)}`] : ["상태", g.active ? "켜짐" : "꺼짐"];
-  const status = !g.active ? ["꺼짐", ""] : plan && plan.source === "calc" ? ["계산 주문표", "ok"] : ["켜짐", "ok"];
+  const gw = g.gap_watch || {};   // ADR 0051: 주문표보다 적게 보유가 이어지면 알림 → 3거래일째 주문 멈춤
+  const status = !g.active ? ["꺼짐", ""] : gw.paused ? [`주문 멈춤 (${gw.days}거래일째 ${gw.gap}주 모자람)`, "bad"]
+    : gw.days ? [`보충 필요 ${gw.days}거래일째`, "warn"] : plan && plan.source === "calc" ? ["계산 주문표", "ok"] : ["켜짐", "ok"];
   return `<button class="card scard" data-detail="${esc(g.id)}" aria-label="${esc(g.id)} 자세히">
     <div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div>
     ${ledgers3(g, plan, vr, m)}
