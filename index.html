@@ -88,8 +88,11 @@ h2 { font-size: 15.5px; margin: 0; text-wrap: balance; font-weight: 700 }
 body[data-layout="pc"] .wrap { max-width: 1360px }
 header.pc-top.card { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border-radius: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 6 }
 .brand { font-size: 17px; letter-spacing: -0.01em }
-.pc-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start }
-nav.pc-nav.card { gap: 2px; padding: 10px; position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain }
+.pc-body { display: flex; flex-direction: column; gap: 14px }
+/* 11/07: 왼쪽 메뉴 → 위쪽 가로 메뉴 (위 줄 = 큰 메뉴, 아래 줄 = 그 안의 화면) */
+nav.pc-nav.card { gap: 6px; padding: 8px 10px }
+.pc-nav-row { display: flex; flex-wrap: wrap; gap: 4px }
+.pc-nav-row.sub { border-top: 1px solid var(--line); padding-top: 6px }
 .nav-h { font-size: 12px; color: var(--muted); padding: 12px 10px 4px }
 .nav-i { display: flex; align-items: center; gap: 8px; text-align: left; font: 500 14px var(--sans); color: var(--ink); background: transparent; border: 0;
   padding: 9px 10px; border-radius: 10px; cursor: pointer; min-height: 40px }
@@ -177,15 +180,8 @@ button.btn.primary { background: linear-gradient(135deg, var(--accent), var(--ic
 :root[data-theme="dark"] button.btn.primary { color: var(--accent-ink); text-shadow: none }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.btn.primary { color: var(--accent-ink); text-shadow: none } }
 button.btn.danger { color: var(--bad) }
-button.btn.fb-bug { background: #c62828; color: #ffffff; border-color: #c62828; font-weight: 700 }
-button.btn.fb-idea { background: #2e7d32; color: #ffffff; border-color: #2e7d32; font-weight: 700 }
-.fab { position: fixed; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; z-index: 30 }
-.fab button.btn { min-height: 40px; padding: 6px 12px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
-.fab.mini { gap: 6px; opacity: .88 }
 .l3 { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 2px 8px; font-size: 12.5px; margin: 6px 0; text-align: right } .l3 .l3n { text-align: left; font-weight: 600 }
 .warn-t { color: var(--warn, #b26b00) }
-body:has(.fab) #view { padding-bottom: 84px }  /* 맨 아래 내용이 제보 단추에 가리지 않게 */
-.fab.mini button.btn { min-height: 30px; padding: 3px 9px; font-size: 11.5px }
 .modal-bg { position: fixed; inset: 0; background: rgba(10, 14, 30, .55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px }
 /* 제보 #5: 흐림(blur) 효과가 있으면 글자를 칠 때마다 아래 화면 전체를 다시 그려 느려진다 → 제보 창과 그 뒤는 흐림 없이 */
 .modal.card { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg) }
@@ -259,7 +255,7 @@ summary { cursor: pointer; color: var(--ice) }
 .subnav { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; margin-bottom: 4px }
 .subnav .badge { margin-left: 4px }
 .nav-i.nav-g { font-weight: 700 }
-.nav-i.nav-sub { padding-left: 22px; font-size: 13px }
+.nav-i.nav-sub { font-size: 13px; min-height: 34px; padding: 6px 12px }
 .actband { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; margin-bottom: 8px;
   background: color-mix(in srgb, var(--warn) 18%, var(--glass-strong)); border: 1px solid var(--warn); color: var(--ink); font-size: 14px }
 .actband .btn { margin-left: auto; padding: 6px 12px }
@@ -453,7 +449,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07f";
+const APP_VERSION = "2026-11-07g";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -464,113 +460,17 @@ function loadScript(src) {
   return new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok();
     const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = () => bad(new Error("캡처 도구를 불러오지 못했습니다")); document.head.appendChild(t); });
 }
-async function captureScreen() {
-  await loadScript("https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js");
-  const node = document.getElementById("app");
-  const bg = getComputedStyle(document.body).backgroundColor;
-  const timeout = new Promise((_, bad) => setTimeout(() => bad(new Error("캡처 시간 초과 (Safari 등)")), 9000));
-  return Promise.race([timeout, window.htmlToImage.toJpeg(node, { quality: 0.72, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5), skipFonts: true,
-    backgroundColor: bg && bg !== "rgba(0, 0, 0, 0)" ? bg : "#eef3fb", width: node.scrollWidth, height: Math.min(node.scrollHeight, 6000) })]);
-}
-async function openFeedback(kind) {
-  S.fbForm = { kind, shot: null, attach: kind === "bug", busy: kind === "bug", note: kind === "bug" ? "화면을 캡처하는 중… (길어지면 내용만 보내도 됩니다)" : "" };
-  render();
-  if (kind !== "bug") return;                    // 기능개선은 캡처 없이 바로 쓰기
-  try {
-    document.querySelector(".modal-bg").style.visibility = "hidden";          // 캡처에 창이 찍히지 않게
-    S.fbForm.shot = await captureScreen();
-    S.fbForm.note = "";
-  } catch (e) { if (S.fbForm) { S.fbForm.note = "화면 캡처 실패 — 내용만 보내도 됩니다 (" + (e.message || e) + ")"; S.fbForm.attach = false; } }
-  if (!S.fbForm) return;
-  const typed = (document.getElementById("fb-body") || {}).value || "";
-  S.fbForm.busy = false; render();
-  const ta = document.getElementById("fb-body"); if (ta && typed) ta.value = typed;
-}
-function fbContext() {
-  return { name: S.name, tab: S.tab, detail: S.detail, layout: layout(), w: window.innerWidth, h: window.innerHeight, ua: navigator.userAgent.slice(0, 160),
-    version: APP_VERSION, snap_at: S.snap && S.snap.taken_at, msg: S.msg && S.msg.text, errors: S.jsErrors,
-    pending_cmds: (S.cmds || []).filter((c) => c.status !== "done").map((c) => `${c.command}:${c.status}`).slice(0, 5) };
-}
-async function sendFeedback(body) {
-  const f = S.fbForm; f.busy = true; f.note = "보내는 중…"; render();
-  let shot_path = null; const ctx = fbContext();
-  try {
-    if (f.attach && f.shot) {
-      try {                                          // 캡처 올리기가 안 돼도 내용은 보낸다
-        const [hd, b64] = f.shot.split(","), bin = atob(b64), arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        const blob = new Blob([arr], { type: (hd.match(/data:([^;]+)/) || [])[1] || "image/jpeg" });
-        const path = `${S.user.id}/${Date.now()}.jpg`;
-        const up = await sb.storage.from("feedback").upload(path, blob, { contentType: "image/jpeg", upsert: false });
-        if (up.error) ctx.shot_error = up.error.message; else shot_path = path;
-      } catch (e) { ctx.shot_error = String(e.message || e); }
-    }
-    const r = await sb.from("feedback").insert({ kind: f.kind, body, context: ctx, shot_path });
-    if (r.error) { f.busy = false; f.note = "보내기 실패: " + ko(r.error.message) + " (" + r.error.message + ")"; return render(); }
-  } catch (e) { f.busy = false; f.note = "보내기 실패: " + (e.message || e); return render(); }
-  S.fbForm = null; S.msg = { text: f.kind === "bug" ? "오류제보를 보냈습니다. 처리 결과는 PC 화면 '오류제보' 게시판에서 볼 수 있습니다." : "기능개선 건의를 보냈습니다. 고맙습니다!" };
-  render();
-}
-function feedbackModal() {
-  const f = S.fbForm; if (!f) return "";
-  const bug = f.kind === "bug";
-  return `<div class="modal-bg" role="dialog" aria-modal="true" aria-label="${bug ? "오류제보" : "기능개선"}"><div class="card modal">
-    <div class="row between"><h2>${bug ? "🐞 오류제보" : "💡 기능개선 건의"}</h2><button class="btn ghost" data-fbclose="1" aria-label="닫기">✕</button></div>
-    <div class="small muted">${bug ? "무엇을 하다가 어떤 문제가 났는지 짧게 적어 주세요. 지금 화면과 사용 환경(탭·기기·최근 오류)이 함께 갑니다." : "불편한 점이나 바뀌었으면 하는 것을 적어 주세요 (UI·편의성·기능)."}</div>
-    <textarea id="fb-body" maxlength="2000" data-keep="1" placeholder="${bug ? "예) 주문표 달력에서 10/30 을 눌렀는데 아무것도 안 나와요" : "예) 오늘 밤 주문을 메리츠 앱 순서대로 보여 주면 좋겠어요"}">${esc(f.text || "")}</textarea>
-    ${f.shot ? `<label class="chk small"><input type="checkbox" id="fb-attach" ${f.attach ? "checked" : ""}> 화면 첨부 (제보한 사람과 관리자만 봅니다)</label>${f.attach ? `<img class="shot" src="${f.shot}" alt="캡처한 화면">` : ""}` : ""}
-    ${f.note ? `<div class="small muted">${esc(f.note)}</div>` : ""}
-    <div class="row"><span class="grow"></span><button class="btn" data-fbclose="1">취소</button>
-      <button class="btn ${bug ? "fb-bug" : "fb-idea"}" id="fb-send" ${f.busy ? "disabled" : ""}>보내기</button></div></div></div>`;
-}
-const FB_STATUS = { open: ["접수", ""], checking: ["확인 중", "warn"], done: ["처리 완료", "ok"], wontfix: ["보류", ""] };
-async function loadFeedback(kind) {
-  const r = await sb.from("feedback").select("id,user_id,kind,body,context,shot_path,status,reply,replied_at,created_at")
-    .eq("kind", kind).order("id", { ascending: false }).limit(100);
-  S.fbList[kind] = r.error ? { error: ko(r.error.message) } : r.data;
-}
-function viewFeedbackBoard(kind) {
-  const bug = kind === "bug", list = S.fbList[kind];
-  let out = `<div class="card"><div class="row between"><h2>${bug ? "🐞 오류제보" : "💡 기능개선"} 게시판</h2>
-    <button class="btn ${bug ? "fb-bug" : "fb-idea"}" data-fbopen="${kind}">${bug ? "오류제보" : "기능개선"} 쓰기</button></div>
-    <div class="small muted">${S.admin ? "관리자: 모든 회원의 제보가 보입니다." : "내가 보낸 제보와 처리 결과만 보입니다."} Claude 가 노트북에서 확인·수정한 뒤 처리 결과를 남깁니다.</div>`;
-  if (!list) out += `<div class="empty">불러오는 중…</div>`;
-  else if (list.error) out += `<div class="empty">불러오지 못했습니다 (${esc(list.error)}) — 관리자가 최신 SQL 을 실행했는지 확인</div>`;
-  else if (!list.length) out += `<div class="empty">아직 제보가 없습니다.</div>`;
-  else out += list.map((f) => { const st = FB_STATUS[f.status] || [f.status, ""];
-    const who = S.admin ? ((S.members || []).find((m) => m.user_id === f.user_id) || {}).display_name || (f.context || {}).name || "" : "";
-    return `<div class="fbrow"><div class="row"><b class="num">#${f.id}</b><span class="chip ${st[1]}">${st[0]}</span>
-        <span class="small muted">${esc(when(f.created_at))}${who ? " · " + esc(who) : ""}${f.context && f.context.tab ? " · " + esc(f.context.tab) + " 화면" : ""}</span></div>
-      <div>${esc(f.body)}</div>
-      ${f.shot_path ? (S.fbShot && S.fbShot.id === f.id ? `<img class="shot" src="${esc(S.fbShot.url)}" alt="제보 화면 #${f.id}">` : `<button class="btn ghost small" data-fbshot="${f.id}" data-path="${esc(f.shot_path)}">화면 보기</button>`) : ""}
-      ${f.reply ? `<div class="reply"><b>처리 결과</b>${f.replied_at ? ` <span class="small muted">${esc(when(f.replied_at))}</span>` : ""}<div>${esc(f.reply)}</div></div>` : ""}</div>`; }).join("");
-  return out + "</div>";
-}
-function brokerNote(b) {
-  // 메리츠 계좌 기준 = 실제 보유 × 종가 + 달러 예수금 (제보 #11). API 없는 계좌는 원장 값
-  const p = (b.partial || []).length ? ` · ${b.partial.map((a) => ACC_NAME[a] || a).join("·")} 원장` : "";
-  return `보유 $${money(b.holdings)} + 달러 예수금 $${money(b.usd)}${p}`;
-}
-
-function feedbackButtons(mode) {
-  if (!S.user || S.flags.feedback === false) return "";
-  const b = `<button class="btn fb-bug" data-fbopen="bug">오류제보</button><button class="btn fb-idea" data-fbopen="idea">기능개선</button>`;
-  // 폰: 홈은 큰 단추, 다른 화면은 내용을 덜 가리게 작은 단추 (제보 #9)
-  return mode === "pc" ? b : `<div class="fab${mode === "mini" ? " mini" : ""}">${b}</div>`;
-}
-
+// 오류제보·기능개선(화면 캡처·제보 창·게시판)은 11/07 사용자 요청으로 없앰
 function typing() {
   // 제보 창이 열려 있거나 입력 칸에 쓰는 중이면 화면을 다시 그리지 않는다 (쓰던 글이 지워지지 않게)
   const a = document.activeElement;
-  if (S.fbForm) return true;
   if (a && a.closest && a.closest(".dial")) return true;          // 다이얼을 돌리는 중
   if (!a || !["INPUT", "TEXTAREA", "SELECT"].includes(a.tagName)) return false;
   return a.type !== "checkbox" && a.type !== "button" && a.type !== "submit";
 }
 async function refresh(auto) {
   if (!S.user) return;
-  try { await loadMine(); if (S.tab === "family") await loadFamily(); if (S.admin) await loadAdmin();
-    if (S.tab === "fb_bug" || S.tab === "fb_idea") await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea"); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  try { await loadMine(); if (S.tab === "family") await loadFamily(); if (S.admin) await loadAdmin(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
   if (auto === true && typing()) { S.renderLater = true; return; }
   render();
 }
@@ -599,15 +499,15 @@ const GROUPS = [
   ["home", "홈", [["home", "대시보드"]]],
   ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"], ["upload", "사진 올리기"]]],
   ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"]]],
-  ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
+  ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"]]],   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
   // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
   ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["privacy", "프라이버시"]]],
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
-const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm" };      // 예전 이름 → 새 화면
+const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm", fb_bug: "board", fb_idea: "board" };      // 예전 이름 → 새 화면
 function pagesOf(g) {
-  return g[2].filter(([k]) => (k !== "admin" || S.admin) && (!k.startsWith("fb_") || S.flags.feedback !== false));
+  return g[2].filter(([k]) => k !== "admin" || S.admin);
 }
 function groupOf(tab) { return GROUPS.find((g) => g[2].some(([k]) => k === tab)) || GROUPS[0]; }
 const VIEWS = Object.fromEntries(GROUPS.flatMap((g) => g[2]));
@@ -639,8 +539,7 @@ function currentView() {
     case "trades": S.tradeKind = "real"; v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
     case "board": v = viewBoard(); break;
-    case "fb_bug": v = viewFeedbackBoard("bug"); break;
-    case "fb_idea": v = viewFeedbackBoard("idea"); break;
+
     case "accounts": v = need(accountsView); break;
     case "telegram": v = need(telegramCard); break;
     case "admin": v = viewAdmin(); break;
@@ -678,10 +577,7 @@ function viewAdmin() {
   const pend = ms.filter((m) => m.status === "pending");
   const ago = (t) => { if (!t) return "노트북 칸 없음"; const m = Math.round((Date.now() - new Date(t).getTime()) / 60000);
     return "노트북 갱신 " + (m < 60 ? m + "분" : m < 2880 ? Math.round(m / 60) + "시간" : Math.round(m / 1440) + "일") + " 전"; };
-  return `<div class="card"><div class="row between"><h2>오류제보·기능개선 버튼</h2>
-      <button class="btn ${S.flags.feedback !== false ? "" : "primary"}" data-flag="feedback" data-val="${S.flags.feedback === false}">${S.flags.feedback !== false ? "끄기 (안정화 뒤)" : "다시 켜기"}</button></div>
-    <div class="small muted">지금 ${S.flags.feedback !== false ? "<b>켜짐</b> — 모든 회원 화면에 빨간·초록 버튼과 PC 게시판이 보입니다" : "<b>꺼짐</b> — 버튼·게시판이 숨겨집니다 (지난 제보는 그대로 보관)"}.</div></div>
-    <div class="card"><div class="row between"><h2>회원 관리</h2><span class="chip">관리자</span></div>
+  return `<div class="card"><div class="row between"><h2>회원 관리</h2><span class="chip">관리자</span></div>
     <div class="small muted">웹앱 주소를 받은 사람이 가입하면 여기에 '승인 대기'로 나옵니다. 승인해야 현황·승인·공유를 쓸 수 있습니다.</div>
     ${pend.length ? `<h2 style="font-size:14px">승인 대기 ${pend.length}명</h2>` : ""}
     ${ms.map((m) => `<div class="member">
@@ -733,7 +629,6 @@ function render() {
   restoreForm(kept);
 }
 function renderInner() {
-  document.body.classList.toggle("modal-open", !!S.fbForm);
   if (!S.user) return renderLogin();
   if (S.status && S.status !== "approved") return renderPending();
   const mode = layout();
@@ -753,26 +648,26 @@ function renderInner() {
     $app.innerHTML = `
       <header class="pc-top card">
         <b class="brand">자동매매 콘솔</b><span class="muted small">${esc(S.name)}</span>
-        <span class="chip warn">모의 실행</span>${engine}
-        <span class="grow"></span>${actSwitch()}${feedbackButtons("pc")}${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
+        ${engine}
+        <span class="grow"></span>${actSwitch()}${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
       </header>
       <div class="pc-body">
         <nav class="pc-nav card" aria-label="주 메뉴">
-          ${GROUPS.map((g) => { const pages = pagesOf(g), on = grp === g[0] && !S.detail;
+          <div class="pc-nav-row">${GROUPS.map((g) => { const on = grp === g[0] && !S.detail;
             const badge = g[0] === "order" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
-            return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`
-              + (on && pages.length > 1 ? pages.map(([k, l]) => `<button class="nav-i nav-sub" data-tab="${k}" aria-current="${S.tab === k}">${esc(l)}</button>`).join("") : "")
-              ; }).join("")}
+            return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`; }).join("")}</div>
+          ${(() => { const g = GROUPS.find((x) => x[0] === grp), pages = g ? pagesOf(g) : [];
+            return !S.detail && pages.length > 1 ? `<div class="pc-nav-row sub">${pages.map(([k, l]) => `<button class="nav-i nav-sub" data-tab="${k}" aria-current="${S.tab === k}">${esc(l)}</button>`).join("")}</div>` : ""; })()}
         </nav>
         <main class="pc-main">${actBand}${notes}<div id="view">${currentView()}</div></main>
-      </div>${feedbackModal()}`;
+      </div>`;
   } else {
     const t = S.snap ? (S.snap.summary.totals || {}) : {};
     const bk = S.snap ? S.snap.summary.broker : null, tv = bk ? bk.value : t.value;
     const tabs = GROUPS.map((g) => [g[0], g[1]]);
     $app.innerHTML = `
       <header class="ph-top card">
-        <div class="row"><b>${esc(S.name)}</b><span class="chip warn">모의</span><span class="grow"></span>${engine}</div>${actSwitch()}
+        <div class="row"><b>${esc(S.name)}</b><span class="grow"></span>${engine}</div>${actSwitch()}
         ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (${bk ? "메리츠 계좌 기준" : "원장 기준"})</span><b class="num">$${money(tv)}</b>${krw(tv) ? `<span class="krw">${krw(tv)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
           ${bk ? `<span class="small muted">${brokerNote(bk)} · 원장 기준 $${money(t.value)}</span>` : ""}
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
@@ -782,7 +677,7 @@ function renderInner() {
       ${notes}
       <div id="view">${currentView()}</div>
       ${grp === "settings" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
-      ${feedbackButtons(S.tab === "home" && !S.detail ? "phone" : "mini")}${feedbackModal()}
+
       <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${grp === k && !S.detail}">${l}${k === "order" && drafts ? `<span class="badge">${drafts}</span>` : ""}${k === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</nav>`;
   }
   bind();
@@ -1063,7 +958,7 @@ function viewMock(s) {
   const cards = strat.map((g) => {
     const plan = (s.plans || {})[g.id];
     const m = ((s.shadow || {})[g.account] || {})[g.id] || (g.sim ? { qty: g.qty, avg: g.avg, cash: g.cash, realized: g.realized } : null);
-    if (!m) return `<div class="card"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b></div><div class="empty">모의 기록이 아직 없습니다 (다음 아침 자동 실행부터)</div></div>`;
+    if (!m) return `<div class="card"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b></div><div class="empty">가투 기록이 아직 없습니다 (다음 아침 자동 실행부터)</div></div>`;
     const px = Number(closes[g.symbol] || 0), q = Number(m.qty || 0), avg = Number(m.avg || 0), cash = Number(m.cash || 0);
     const val = q * px + cash, pnl = avg && q ? (px - avg) * q : null;
     tv += val; tp += pnl || 0; any = true;
@@ -1071,9 +966,9 @@ function viewMock(s) {
     return `<div class="card"><div class="row between"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b>
         <span class="muted small">${esc(ACC_NAME[g.account] || g.account)}${g.mock_only ? " · 가투 전용" : " · 실제 전략의 가투"}</span></div><span class="chip ok">${g.active === false ? "꺼짐" : "자동 진행"}</span></div>
       <div class="kv2">
-        <span class="muted">모의 보유 / 평단</span><span class="num">${q}주 / ${avg ? money(avg) : "-"}</span>
-        <span class="muted">${g.kind === "vr" ? "모의 Pool" : "모의 잔금"}</span><span class="num">$${money(cash)}</span>
-        <span class="muted">모의 평가금액</span><span class="num">$${money(val)}</span>
+        <span class="muted">가투 보유 / 평단</span><span class="num">${q}주 / ${avg ? money(avg) : "-"}</span>
+        <span class="muted">${g.kind === "vr" ? "가투 Pool" : "가투 잔금"}</span><span class="num">$${money(cash)}</span>
+        <span class="muted">가투 평가금액</span><span class="num">$${money(val)}</span>
         <span class="muted">평가손익 · 실현</span><span class="num"><span class="${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span> · ${m.realized != null ? "$" + money(m.realized) : "-"}</span>
       </div>
       ${tn.length ? `<details><summary class="small muted">오늘 밤 가상 주문 ${tn.length}건</summary>${tn.map((o) => `<div class="oline"><span class="${sideCls(o.side)}">${sideKo(o.side)}</span><span class="small muted num">${esc(KIND_KO[o.kind] || o.kind)}</span><b class="num">${money(o.price)} × ${o.qty}</b></div>`).join("")}</details>` : ""}
@@ -1844,7 +1739,6 @@ function bind() {
     const r = await sb.rpc("set_operate", { p_grant: Number(b.dataset.operate), p_on: b.dataset.on === "true" });
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: b.dataset.on === "true" ? "공동 운영을 켰습니다. 상대가 내 계좌를 승인·설정할 수 있습니다." : "공동 운영을 껐습니다." };
     await loadFamily(); render(); });
-  const fbBody = document.getElementById("fb-body"); if (fbBody) fbBody.oninput = () => { if (S.fbForm) S.fbForm.text = fbBody.value; };
   // 암호 칸: 한/영 상태 때문에 한글로 입력되면 노트북 암호(영문)와 달라진다 → 바로 알려 주고 '보기'로 확인
   ["up-pass", "k-pass", "tg-pass"].forEach((id) => {
     const el = document.getElementById(id); if (!el || el.dataset.hw) return; el.dataset.hw = "1";
@@ -1861,14 +1755,6 @@ function bind() {
   document.querySelectorAll("[data-keycancel]").forEach((b) => b.onclick = () => { S.keyFor = null; render(); });
   const fkey = document.getElementById("f-key"); if (fkey) fkey.onsubmit = (e) => { e.preventDefault();
     sendKey(fkey.dataset.acc, document.getElementById("k-key").value, document.getElementById("k-secret").value, document.getElementById("k-pass").value); };
-  document.querySelectorAll("[data-fbopen]").forEach((b) => b.onclick = () => openFeedback(b.dataset.fbopen));
-  document.querySelectorAll("[data-fbclose]").forEach((b) => b.onclick = () => { S.fbForm = null; render(); });
-  const fbAt = document.getElementById("fb-attach"); if (fbAt) fbAt.onchange = () => { const t = document.getElementById("fb-body").value; S.fbForm.attach = fbAt.checked; render(); document.getElementById("fb-body").value = t; };
-  const fbSend = document.getElementById("fb-send"); if (fbSend) fbSend.onclick = () => { const t = document.getElementById("fb-body").value.trim();
-    if (!t) { S.fbForm.note = "내용을 한 줄이라도 적어 주세요"; const v = t; render(); document.getElementById("fb-body").value = v; return; } sendFeedback(t); };
-  document.querySelectorAll("[data-fbshot]").forEach((b) => b.onclick = async () => {
-    const r = await sb.storage.from("feedback").createSignedUrl(b.dataset.path, 600);
-    S.fbShot = r.error ? null : { id: Number(b.dataset.fbshot), url: r.data.signedUrl }; if (r.error) S.msg = { bad: true, text: ko(r.error.message) }; render(); });
   document.querySelectorAll("[data-flag]").forEach((b) => b.onclick = async () => {
     const val = b.dataset.val === "true";
     const r = await sb.from("site_flags").upsert({ key: b.dataset.flag, value: val, updated_at: new Date().toISOString() });
@@ -1885,7 +1771,6 @@ function bind() {
     (S.lastSub = S.lastSub || {})[groupOf(S.tab)[0]] = S.tab;
     S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
     if (S.tab === "family") await loadFamily().catch(() => {});
-    if (S.tab === "fb_bug" || S.tab === "fb_idea") { S.fbShot = null; await loadFeedback(S.tab === "fb_bug" ? "bug" : "idea").catch(() => {}); }
     render(); });
   document.querySelectorAll("input[data-n]").forEach((cb) => cb.onchange = () =>
     send("toggle_line", { sid: cb.dataset.sid, n: Number(cb.dataset.n), trade_date: cb.dataset.td }));
@@ -1899,12 +1784,6 @@ function bind() {
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
   bindDials();
-  // 제보 #4: 왼쪽 메뉴 위에서 굴려도 오른쪽 내용이 움직이지 않게 (메뉴가 짧으면 굴림을 메뉴에서 끝낸다)
-  const pnav = document.querySelector("nav.pc-nav");
-  if (pnav) pnav.addEventListener("wheel", (e) => {
-    const top = pnav.scrollTop <= 0, bottom = pnav.scrollTop + pnav.clientHeight >= pnav.scrollHeight - 1;
-    if ((e.deltaY < 0 && top) || (e.deltaY > 0 && bottom)) e.preventDefault();
-  }, { passive: false });
   document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
     const g = allStrategiesFlat().find((x) => x.id === b.dataset.propose);
     S.editSid = b.dataset.propose; S.chParams = false; S.cycleNew = !!b.dataset.cyclenew;
