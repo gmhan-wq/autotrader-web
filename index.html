@@ -449,7 +449,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07g";
+const APP_VERSION = "2026-11-07h";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1879,18 +1879,32 @@ function bind() {
 }
 
 // ── 시작 ──
+// 11/07: '불러오는 중'에서 멈추지 않게 — 응답이 늦으면 시간 제한 + 안내 + 다시 시도
+const withTimeout = (pr, ms, what) => Promise.race([pr, new Promise((_, bad) => setTimeout(() => bad(new Error(what + " 응답이 " + Math.round(ms / 1000) + "초 넘게 없음")), ms))]);
+function loadingStuck(reason) {
+  const el = document.getElementById("loading"); if (!el) return;
+  el.innerHTML = `<div><b>불러오기가 오래 걸립니다</b></div>
+    <div class="small muted">${esc(reason || "서버(Supabase) 응답을 기다리는 중")}${S.jsErrors.length ? "<br>오류: " + esc(S.jsErrors.join(" / ")) : ""}</div>
+    <div class="small muted">인터넷 연결을 확인하고 다시 시도해 주세요. 계속되면 이 화면을 Claude 에게 보내 주세요.</div>
+    <div class="row"><button class="btn primary" onclick="location.reload()">다시 시도</button></div>`;
+}
+setTimeout(() => loadingStuck(), 15000);
 async function onSession(session) {
+  try { await onSessionInner(session); }
+  catch (e) { if (document.getElementById("loading")) loadingStuck(String(e.message || e)); else { S.msg = { bad: true, text: "불러오지 못했습니다: " + (e.message || e) }; render(); } }
+}
+async function onSessionInner(session) {
   S.user = session ? session.user : null;
   if (S.user) {
-    const p = await sb.from("profiles").select("display_name,status,role").eq("user_id", S.user.id).limit(1);
+    const p = await withTimeout(sb.from("profiles").select("display_name,status,role").eq("user_id", S.user.id).limit(1), 12000, "회원 정보");
     const me = (p.data && p.data[0]) || {};
     S.name = me.display_name || S.user.email.split("@")[0];
     S.status = me.status || "approved";            // 회원 승인 기능 이전 데이터베이스면 승인으로 본다
     S.admin = me.role === "admin";
     if (S.status !== "approved") return renderPending();
-    await loadFlags().catch(() => {});
-    await loadOps().catch(() => {});
-    await refresh();
+    await withTimeout(loadFlags(), 8000, "설정").catch(() => {});
+    await withTimeout(loadOps(), 8000, "공동 운영").catch(() => {});
+    await withTimeout(refresh(), 20000, "현황");
   } else render();
 }
 sb.auth.onAuthStateChange((ev, session) => {
