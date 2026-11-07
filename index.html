@@ -182,6 +182,8 @@ button.btn.fb-idea { background: #2e7d32; color: #ffffff; border-color: #2e7d32;
 .fab { position: fixed; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; z-index: 30 }
 .fab button.btn { min-height: 40px; padding: 6px 12px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
 .fab.mini { gap: 6px; opacity: .88 }
+.l3 { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 2px 8px; font-size: 12.5px; margin: 6px 0; text-align: right } .l3 .l3n { text-align: left; font-weight: 600 }
+.warn-t { color: var(--warn, #b26b00) }
 body:has(.fab) #view { padding-bottom: 84px }  /* 맨 아래 내용이 제보 단추에 가리지 않게 */
 .fab.mini button.btn { min-height: 30px; padding: 3px 9px; font-size: 11.5px }
 .modal-bg { position: fixed; inset: 0; background: rgba(10, 14, 30, .55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px }
@@ -451,7 +453,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07d";
+const APP_VERSION = "2026-11-07e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1002,7 +1004,8 @@ function phoneBlocks(s, d, B) {
         ${lc ? `<span class="chip ${lc.ok ? "ok" : "warn"}">${lc.ok ? "실제=모의" : "비교 다름"}</span>` : ""}</div>
       ${rows.length ? rows.map((g) => { const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id], px = (s.closes || {})[g.symbol];
         const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
-        const sub = `${g.qty}주${g.avg ? " · 평단 " + money(g.avg) : ""}${plan ? " · T " + plan.T : vr ? " · V " + money(vr.V) : ""}`;
+        const planQ = plan && plan.holding != null ? Number(plan.holding) * Number(plan.multiplier || 1) : null, gap = planQ != null ? planQ - Number(g.qty || 0) : 0;
+        const sub = `실제 ${g.qty}주${g.avg ? " · 평단 " + money(g.avg) : ""}${plan ? " · 계획 " + planQ + "주 · T " + plan.T : vr ? " · V " + money(vr.V) : ""}${gap > 0 ? " · 보충 " + gap + "주" : ""}`;
         return `<button class="lrow" data-detail="${esc(g.id)}"><span class="sym num">${esc(g.symbol)}</span>
           <span class="lmain"><b>${esc(stratName(g, plan))}</b><span class="small muted num">${esc(sub)}</span></span>
           <span class="lval num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "$" + money(g.cash) : (pnl >= 0 ? "+" : "−") + money(Math.abs(pnl))}</span></button>`; }).join("")
@@ -1031,13 +1034,26 @@ function strategyCard(s, g) {
   const status = !g.active ? ["꺼짐", ""] : plan && plan.source === "calc" ? ["계산 주문표", "ok"] : ["켜짐", "ok"];
   return `<button class="card scard" data-detail="${esc(g.id)}" aria-label="${esc(g.id)} 자세히">
     <div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div>
+    ${ledgers3(g, plan, vr, m)}
     <div class="kv2">
-      <span class="muted">보유 / 평단</span><span class="num">${g.qty}주 / ${money(g.avg)}</span>
-      <span class="muted">${vr ? "Pool(잔금)" : "원장 잔금"}</span><span class="num">$${money(g.cash)}</span>
       <span class="muted">${metric[0]}</span><span class="num">${esc(metric[1])}</span>
-      <span class="muted">평가손익</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
+      <span class="muted">평가손익 (실제)</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
     </div>
     <span class="chip ${status[1]}" style="align-self:flex-start">${status[0]}</span></button>`;
+}
+// 세 장부 (ADR 0048, 11/07 사용자): 실제 = 메리츠 · 계획 = 주문표(주문을 정함) · 가투 = 가상 체결
+function ledgers3(g, plan, vr, m) {
+  // 버튼(카드) 안이라 표 대신 칸 나눔 (span)
+  const cell = (x, cls = "num") => `<span class="${cls}">${x}</span>`;
+  const row = (name, q, avg, cash) => cell(name, "l3n") + cell(q == null ? "-" : q + "주") + cell(avg ? money(avg) : "-") + cell(cash == null ? "-" : "$" + money(cash));
+  const mult = plan ? Number(plan.multiplier || 1) : 1;
+  const planQ = plan && plan.holding != null ? Number(plan.holding) * mult : null;
+  const gap = planQ != null ? planQ - Number(g.qty || 0) : null;
+  return `<span class="l3">${cell("", "l3n")}${cell("보유", "muted")}${cell("평단", "muted")}${cell(vr ? "Pool" : "잔금", "muted")}
+    ${row("실제 · 메리츠", g.qty, g.avg, g.cash)}
+    ${plan ? row("계획 · 주문표", planQ, plan.avg, plan.cash != null ? Number(plan.cash) * mult : null) : vr ? row("계획 · VR", null, null, vr.pool) : ""}
+    ${m ? row("가투", m.qty, m.avg, m.cash) : ""}</span>
+  ${gap ? `<span class="small ${gap > 0 ? "warn-t" : ""}">${gap > 0 ? `보충 필요 ${gap}주 (계획보다 실제가 적음)` : `실제가 계획보다 ${-gap}주 많음`}</span>` : ""}`;
 }
 // ── 모의 (11/07): 투자 분석용. 진행 중 전략의 모의는 매일 자동으로 이어진다 ──
 function viewMock(s) {
