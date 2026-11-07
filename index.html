@@ -370,18 +370,26 @@ const nameOf = (uid) => uid === S.user.id ? "나" : (((S.ops || []).find((o) => 
 const myVoteNeeded = () => (S.changes || []).filter((c) => c.status === "open" && (c.required || []).includes(S.user.id) && !(c.approvals || {})[S.user.id]);
 const readyToApply = () => (S.changes || []).filter((c) => c.status === "open" && c.owner_id === S.user.id && (c.required || []).every((u) => (c.approvals || {})[u]));
 async function loadMine() {
-  try { await loadChanges(); } catch (e) {}
+  // 11/07: 하나가 늦어도 나머지는 보이게 — 단계마다 시간 제한, 실패는 건너뜀 (현황 스냅숏만 꼭 필요)
+  S.stage = "현황: 수정 합의 목록";
+  try { await withTimeout(loadChanges(), 8000, "수정 합의 목록"); } catch (e) { S.jsErrors = [...S.jsErrors, e.message].slice(-5); }
+  S.stage = "현황: 노트북 현황(스냅숏)";
   if (owner() !== S.user.id) {                       // 공동 운영: 주인의 현황을 보고 주인 이름으로 명령
-    const r = await sb.rpc("view_snapshot", { p_owner: owner() });
+    const r = await withTimeout(sb.rpc("view_snapshot", { p_owner: owner() }), 15000, "노트북 현황");
     S.snap = r.data ? clean(r.data) : null;
   } else {
-    const { data } = await sb.from("status_snapshots").select("taken_at,host,summary,detail")
-      .eq("user_id", S.user.id).order("taken_at", { ascending: false }).limit(1);
-    S.snap = data && data[0] ? clean(data[0]) : null;
+    const r = await withTimeout(sb.from("status_snapshots").select("taken_at,host,summary,detail")
+      .eq("user_id", S.user.id).order("taken_at", { ascending: false }).limit(1), 15000, "노트북 현황");
+    if (r.error) throw new Error("노트북 현황: " + r.error.message);
+    S.snap = r.data && r.data[0] ? clean(r.data[0]) : null;
   }
-  const c = await sb.from("web_commands").select("id,command,payload,status,result,created_at")
-    .eq("user_id", owner()).order("id", { ascending: false }).limit(8);
-  S.cmds = clean(c.data || []);
+  S.stage = "현황: 보낸 명령";
+  try {
+    const c = await withTimeout(sb.from("web_commands").select("id,command,payload,status,result,created_at")
+      .eq("user_id", owner()).order("id", { ascending: false }).limit(8), 8000, "보낸 명령");
+    S.cmds = clean(c.data || []);
+  } catch (e) { S.cmds = S.cmds || []; S.jsErrors = [...S.jsErrors, e.message].slice(-5); }
+  S.stage = "";
 }
 function actSwitch() {
   if (!(S.ops || []).length) return "";
@@ -450,7 +458,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07i";
+const APP_VERSION = "2026-11-07j";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -471,7 +479,9 @@ function typing() {
 }
 async function refresh(auto) {
   if (!S.user) return;
-  try { await loadMine(); if (S.tab === "family") await loadFamily(); if (S.admin) await loadAdmin(); } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message }; }
+  try { await loadMine(); if (S.tab === "family") await loadFamily();
+    if (S.admin) { S.stage = "현황: 회원 관리"; await withTimeout(loadAdmin(), 8000, "회원 관리").catch((e) => { S.jsErrors = [...S.jsErrors, e.message].slice(-5); }); S.stage = ""; }
+  } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message + (S.stage ? " (단계: " + S.stage + ")" : "") }; }
   if (auto === true && typing()) { S.renderLater = true; return; }
   render();
 }
@@ -1889,7 +1899,7 @@ function loadingStuck(reason) {
     <div class="small muted">인터넷 연결을 확인하고 다시 시도해 주세요. 계속되면 이 화면을 Claude 에게 보내 주세요.</div>
     <div class="row"><button class="btn primary" onclick="location.reload()">다시 시도</button></div>`;
 }
-setTimeout(() => loadingStuck(), 15000);
+setTimeout(() => loadingStuck(), 35000);
 async function onSession(session) {
   try { await onSessionInner(session); }
   catch (e) { if (document.getElementById("loading")) loadingStuck(String(e.message || e)); else { S.msg = { bad: true, text: "불러오지 못했습니다: " + (e.message || e) }; render(); } }
@@ -1907,7 +1917,7 @@ async function onSessionInner(session) {
     await withTimeout(loadFlags(), 8000, "설정").catch(() => {});
     await withTimeout(loadOps(), 8000, "공동 운영").catch(() => {});
     S.stage = "현황";
-    await withTimeout(refresh(), 20000, "현황");
+    await withTimeout(refresh(), 33000, "현황");
   } else render();
 }
 sb.auth.onAuthStateChange((ev, session) => {
