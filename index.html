@@ -101,7 +101,7 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
 .ph-total { display: flex; flex-direction: column; gap: 2px } .ph-total b { font-size: 30px; font-weight: 600 }
 .banner { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 16px; border-radius: 14px; border: 1px solid currentColor;
   background: var(--glass-strong); color: var(--warn); font: 700 14px var(--sans); cursor: pointer }
-.ph-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+.ph-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   padding: 6px max(8px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px));
   background: var(--glass-strong); border-top: 1px solid var(--glass-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px) }
 .ph-nav button { min-height: 52px; border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); border-radius: 12px; cursor: pointer }
@@ -451,7 +451,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07b";
+const APP_VERSION = "2026-11-07c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -592,15 +592,17 @@ function layout() {
   if (pref === "pc" || pref === "phone") return pref;
   return window.innerWidth >= 900 ? "pc" : "phone";
 }
-// 메뉴 다섯 개 (2026-11-01 개편): PC 왼쪽 메뉴 = 폰 아래 탭. 각 메뉴 안의 화면은 위쪽 버튼으로 고른다.
+// 메뉴 여섯 개 (2026-11-01 개편, 11/07 모의 추가): PC 왼쪽 메뉴 = 폰 아래 탭. 각 메뉴 안의 화면은 위쪽 버튼으로 고른다.
 const GROUPS = [
   ["home", "홈", [["home", "대시보드"]]],
-  ["order", "주문", [["orders", "오늘 밤 주문"], ["approve", "주문표 승인"], ["upload", "사진 올리기"]]],
-  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["privacy", "프라이버시"]]],
+  ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"], ["upload", "사진 올리기"]]],
+  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"]]],
   ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
+  // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
+  ["mock", "모의", [["mockstat", "모의 현황"], ["mocktrades", "모의 매매 기록"], ["addstrat", "투자 전략 추가"], ["privacy", "프라이버시"]]],
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
-const LEGACY_TAB = { settings: "accounts", more: "accounts" };      // 예전 이름 → 새 화면
+const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm" };      // 예전 이름 → 새 화면
 function pagesOf(g) {
   return g[2].filter(([k]) => (k !== "admin" || S.admin) && (!k.startsWith("fb_") || S.flags.feedback !== false));
 }
@@ -612,7 +614,7 @@ function subNav() {
   const g = groupOf(S.tab), pages = pagesOf(g);
   if (pages.length < 2 || S.detail || layout() === "pc") return "";       // PC 는 왼쪽 메뉴에 같은 목록이 있다
   return `<div class="seg subnav" role="tablist" aria-label="${esc(g[1])}">${pages.map(([k, l]) =>
-    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "approve" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "consensus" && myVoteNeeded().length + readyToApply().length ? `<span class="badge">${myVoteNeeded().length + readyToApply().length}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
+    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "confirm" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "consensus" && myVoteNeeded().length + readyToApply().length ? `<span class="badge">${myVoteNeeded().length + readyToApply().length}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
 }
 function currentView() {
   const s = S.snap ? S.snap.summary : null;
@@ -620,15 +622,17 @@ function currentView() {
   let v;
   switch (S.tab) {
     case "home": v = viewHome(S.snap, true); break;
-    case "orders": v = viewOrders(); break;
-    case "approve": v = viewApprove(); break;
+    case "confirm": v = (draftCount() ? `<div class="msg">📷 주문표 사진이 시스템 계산과 다릅니다 — 원인을 보고 [승인](사진 값으로 바꾸기) 또는 [버리기](계산 유지)를 고르세요.</div>` + viewApprove() : "") + viewOrders(); break;
+    case "auto": v = viewAuto(); break;
+    case "mockstat": v = need(viewMock); break;
+    case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
     case "upload": S.upOpen = true; v = uploadCard("sheet") + `<div class="small muted">주문표 사진은 시스템 계산과 비교합니다 — 같으면 알림만, 다르면 원인과 함께 '주문표 승인'에 올라옵니다. 프라이버시 사진은 전략 → 프라이버시에서 올리세요.</div>`; break;
     case "mystrat": v = need(myStrategies); break;
     case "addstrat": v = need(addStrategy); break;
     case "consensus": v = viewConsensus(); break;
     case "privacy": S.upOpen = true; v = need(privacyCard) + uploadCard("privacy"); break;
     case "calendar": v = viewCalendar(); break;
-    case "trades": v = need(viewTrades); break;
+    case "trades": S.tradeKind = "real"; v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
     case "board": v = viewBoard(); break;
     case "fb_bug": v = viewFeedbackBoard("bug"); break;
@@ -770,7 +774,7 @@ function renderInner() {
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
           : `<h1>${S.detail ? "전략" : esc(groupOf(S.tab)[1])}</h1>`}
       </header>
-      ${actBand}${drafts && S.tab !== "approve" && S.tab !== "home" ? `<button class="banner" data-tab="approve">주문표 승인 대기 ${drafts}건 <span aria-hidden="true">›</span></button>` : ""}
+      ${actBand}${drafts && S.tab !== "confirm" && S.tab !== "home" ? `<button class="banner" data-tab="confirm">주문표 사진 확인 필요 ${drafts}건 <span aria-hidden="true">›</span></button>` : ""}
       ${notes}
       <div id="view">${currentView()}</div>
       ${grp === "settings" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
@@ -785,26 +789,11 @@ function viewOrders() {
   const s = S.snap.summary, d = S.snap.detail || {};
   const accs = Object.entries(s.accounts || {}).filter(([, a]) => a.strategies.length);
   const cur = S.ordAcc && accs.find(([k]) => k === S.ordAcc) ? S.ordAcc : (accs[0] || [])[0];
-  const kind = S.ordKind || "real";
-  let out = `<div class="row">${accs.map(([k, a]) => `<button class="btn ${k === cur ? "primary" : ""}" data-ordacc="${esc(k)}">${esc(ACC_NAME[k] || a.name)}</button>`).join("")}
-    <span class="grow"></span>
-    <div class="seg" role="group" aria-label="주문 종류"><button class="${kind === "real" ? "on" : ""}" data-ordkind="real">실제로 넣을 주문</button><button class="${kind === "sim" ? "on" : ""}" data-ordkind="sim">모의 주문</button></div></div>`;
+  // 모의 주문은 '모의 → 모의 현황'으로 옮김 (11/07). 여기는 실제로 넣을 주문만.
+  let out = `<div class="row">${accs.map(([k, a]) => `<button class="btn ${k === cur ? "primary" : ""}" data-ordacc="${esc(k)}">${esc(ACC_NAME[k] || a.name)}</button>`).join("")}</div>`;
   const acc = (s.accounts || {})[cur];
   if (!acc) return out;
-  if (kind === "real") return out + realOrders(s, d, cur, acc);
-  const tn = (d.tonight || {})[cur] || [];
-  for (const g of acc.strategies) {
-    const plan = (s.plans || {})[g.id];
-    const rows = plan ? plan.lines.map((l) => ({ ...l, st: l.on ? "걸림" : "체크 해제" }))
-                      : tn.filter((o) => o.strategy_id === g.id).map((o) => ({ ...o, st: "걸림" }));
-    out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, plan))}</h2>
-        <span class="small muted">${plan ? `미국 ${esc(plan.trade_date)} 장 · ${esc(plan.phase || "")}` : ""}</span></div>
-      ${rows.length ? rows.map((r) => `<div class="oline ${r.st === "걸림" ? "" : "off"}"><span class="${sideCls(r.side)}">${sideKo(r.side)}</span>
-          <span class="small muted num">${esc(r.kind)}</span><b class="num">${money(r.price)} × ${r.qty}</b>
-          <span class="chip ${r.st === "걸림" ? "ok" : ""}">${r.st}</span></div>`).join("") : `<div class="empty">오늘 밤 주문 없음 (승인 전이거나 해당 없음)</div>`}
-    </section>`;
-  }
-  return out;
+  return out + realOrders(s, d, cur, acc);
 }
 const KIND_KO = { LOC: "LOC", LIMIT: "지정가", MARKET: "시장가", MOC: "MOC", LIMIT_VWAP: "VWAP" };
 function realOrders(s, d, cur, acc) {
@@ -915,23 +904,6 @@ function viewHome(snap, mine) {
       <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`]);
     B.push(["equity", "자산 추이", `<div class="card"><div class="row between"><h2>자산 추이 (USD)</h2><span class="small muted">하루 한 번 기록</span></div>${equityChart(d.equity || [])}</div>`]);
     B.push(["strategies", "전략별 현황", `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`]);
-    if (tonight.length && mine !== null) B.push(["tonight", "오늘 밤 주문(모의)", `<details class="card" ${window.innerWidth >= 820 ? "open" : ""}><summary class="row between"><h2 style="display:inline">오늘 밤 주문 ${tonight.length}건</h2><span class="small muted">모의 실행이 건 가상 주문 · 실제 주문은 tonight 목록으로</span></summary>
-      <div class="scroll"><table><thead><tr><th>전략</th><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th></tr></thead><tbody>
-      ${tonight.map((o) => `<tr><td class="small">${esc(o.strategy_id)}</td><td class="${sideCls(o.side)}">${sideKo(o.side)}</td><td class="small muted">${esc(o.kind)}</td>
-        <td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td></tr>`).join("")}</tbody></table></div></details>`]);
-    let accs = "";
-    for (const [accId, acc] of Object.entries(s.accounts || {})) {
-      if (!acc.strategies.length) continue;
-      const ready = (s.readiness || {})[accId], lc = (s.last_check || {})[accId];
-      accs += `<div class="card"><div class="row between"><h2>${esc(ACC_NAME[accId] || acc.name || accId)}</h2>
-          <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API 연결" : "수동 계좌"}</span></div>
-        ${lc ? `<div class="small">실제 vs 모의 (미국 ${esc(lc.date)}): ${lc.ok ? '<span class="chip ok">일치</span>' : `<span class="chip warn">다름 ${lc.fills_ok ? "" : "· 체결"} ${lc.hold_ok ? "" : "· 보유"}</span>`}</div>` : ""}
-        ${ready ? `<div class="small muted">${esc(ready.replace("🚦 ", ""))}</div>` : ""}</div>`;
-    }
-    if (accs) B.push(["accounts", "계좌별 실제 vs 모의", accs]);
-    const v4 = Object.entries(s.v4 || {});
-    if (v4.length) B.push(["v4", "V4.0 전환 준비", `<div class="card"><h2>무한매수 V4.0 전환 준비</h2>${v4.map(([sid, r]) =>
-      `<div class="row between small"><span>${esc(sid)}</span><span class="chip ${r.ready ? "ok" : ""}">연속 일치 ${r.streak}/${r.need}일${r.missing && r.missing.length ? " · 남은 경우 " + r.missing.map((k) => k === "buy" ? "매수일" : "매도일").join(",") : ""}</span></div>`).join("")}</div>`]);
   }
   return out + arrangeBlocks(B, mine);
 }
@@ -976,7 +948,7 @@ function bindArrange() {
 function todayCard(s, d, strat) {
   const items = [];
   const drafts = Object.keys(s.drafts || {}).length;
-  if (drafts) items.push(["approve", `주문표 승인 대기 ${drafts}건`, "warn"]);
+  if (drafts) items.push(["confirm", `주문표 사진이 계산과 다름 ${drafts}건 — 확인`, "warn"]);
   for (const [acc, r] of Object.entries(d.real_orders || {})) {
     if (!r || r.error) continue;
     const name = ACC_NAME[acc] || acc;
@@ -1044,8 +1016,9 @@ function realCount(d) {
   const r = d.real_orders; if (!r || !Object.keys(r).length) return null;
   return Object.values(r).reduce((n, a) => n + (a.strategies || []).reduce((m, x) => m + (x.lines || []).length, 0), 0);
 }
-function allStrategies(s) {
-  return Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+function allStrategies(s, withMock = false) {
+  const real = Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+  return withMock ? real.concat((s.mock_strategies || []).map((g) => ({ ...g, mock_only: true }))) : real;   // 모의 전용 (11/07)
 }
 function strategyCard(s, g) {
   const px = (s.closes || {})[g.symbol], plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
@@ -1053,7 +1026,7 @@ function strategyCard(s, g) {
   const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
   const metric = plan ? ["T · 단계", `${plan.T} / ${plan.splits} · ${plan.phase || "-"}`] :
                  vr ? ["V · Pool", `${money(vr.V)} · ${money(vr.pool)}`] : ["상태", g.active ? "켜짐" : "꺼짐"];
-  const status = !g.active ? ["꺼짐", ""] : m ? (m.qty === g.qty ? ["실제 = 모의", "ok"] : [`모의 ${m.qty}주와 다름`, "warn"]) : ["모의 기록 없음", ""];
+  const status = !g.active ? ["꺼짐", ""] : plan && plan.source === "calc" ? ["계산 주문표", "ok"] : ["켜짐", "ok"];
   return `<button class="card scard" data-detail="${esc(g.id)}" aria-label="${esc(g.id)} 자세히">
     <div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div>
     <div class="kv2">
@@ -1063,6 +1036,54 @@ function strategyCard(s, g) {
       <span class="muted">평가손익</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
     </div>
     <span class="chip ${status[1]}" style="align-self:flex-start">${status[0]}</span></button>`;
+}
+// ── 모의 (11/07): 투자 분석용. 진행 중 전략의 모의는 매일 자동으로 이어진다 ──
+function viewMock(s) {
+  const d = (S.snap && S.snap.detail) || {}, closes = s.closes || {};
+  const strat = allStrategies(s, true);
+  let tv = 0, tp = 0, any = false;
+  const cards = strat.map((g) => {
+    const plan = (s.plans || {})[g.id];
+    const m = ((s.shadow || {})[g.account] || {})[g.id] || (g.sim ? { qty: g.qty, avg: g.avg, cash: g.cash, realized: g.realized } : null);
+    if (!m) return `<div class="card"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b></div><div class="empty">모의 기록이 아직 없습니다 (다음 아침 자동 실행부터)</div></div>`;
+    const px = Number(closes[g.symbol] || 0), q = Number(m.qty || 0), avg = Number(m.avg || 0), cash = Number(m.cash || 0);
+    const val = q * px + cash, pnl = avg && q ? (px - avg) * q : null;
+    tv += val; tp += pnl || 0; any = true;
+    const tn = ((d.tonight || {})[g.account] || []).filter((o) => o.strategy_id === g.id);
+    return `<div class="card"><div class="row between"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b>
+        <span class="muted small">${esc(ACC_NAME[g.account] || g.account)}${g.mock_only ? " · 모의 전용" : " · 실제 전략의 모의"}</span></div><span class="chip ok">${g.active === false ? "꺼짐" : "자동 진행"}</span></div>
+      <div class="kv2">
+        <span class="muted">모의 보유 / 평단</span><span class="num">${q}주 / ${avg ? money(avg) : "-"}</span>
+        <span class="muted">${g.kind === "vr" ? "모의 Pool" : "모의 잔금"}</span><span class="num">$${money(cash)}</span>
+        <span class="muted">모의 평가금액</span><span class="num">$${money(val)}</span>
+        <span class="muted">평가손익 · 실현</span><span class="num"><span class="${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span> · ${m.realized != null ? "$" + money(m.realized) : "-"}</span>
+      </div>
+      ${tn.length ? `<details><summary class="small muted">오늘 밤 가상 주문 ${tn.length}건</summary>${tn.map((o) => `<div class="oline"><span class="${sideCls(o.side)}">${sideKo(o.side)}</span><span class="small muted num">${esc(KIND_KO[o.kind] || o.kind)}</span><b class="num">${money(o.price)} × ${o.qty}</b></div>`).join("")}</details>` : ""}
+    </div>`;
+  }).join("");
+  return `<div class="msg">모의는 <b>투자 분석용</b>입니다 — 실제 주문 없이 같은 전략을 가상 돈(전략 잔금 전부)으로 매일 자동으로 이어 갑니다.
+      진행 중 전략·동적 분할매수·프라이버시가 계속 돌고, 새 전략은 '투자 전략 추가'로 모의부터 시작합니다. 날짜별 기록은 '모의 매매 기록'.</div>
+    ${any ? `<div class="card"><div class="row between"><b>모의 합계</b><span class="num">평가금액 $${money(tv)} · 평가손익 <span class="${tp >= 0 ? "buy" : "sell"}">${(tp >= 0 ? "+" : "−") + "$" + money(Math.abs(tp))}</span></span></div>
+      <div class="small muted">가격 = 직전 종가. 다른 분(예: 김정희 님 동적 분할매수)의 모의는 위쪽에서 그 분 계좌를 고르면 보입니다.</div></div>` : ""}
+    <section class="cards">${cards || `<div class="card"><div class="empty">모의 중인 전략이 없습니다.</div></div>`}</section>
+    <div class="card"><div class="row between"><b>프라이버시 투자법</b><button class="btn" data-tab="privacy">보기 ›</button></div><div class="small muted">사진 판독 → 다음 거래일 주문표 예측 (모의 예측, 주문 없음)</div></div>`;
+}
+// ── 자동 주문 (11/07): 지금은 꺼져 있음. 켜는 조건과 켜지면 하는 일 ──
+function viewAuto() {
+  const s = S.snap ? S.snap.summary : {};
+  const conf = !!s.confirm_orders;
+  return `<div class="card"><div class="row between"><h2>자동 주문</h2><span class="chip">꺼짐</span></div>
+      <div class="small">지금은 <b>관리자 확인 주문</b> 단계입니다 — 매일 18:00 프리장이 열리면 텔레그램으로 오늘 밤 주문을 알리고, 관리자가 '관리자 확인 주문'에서 골라 넣습니다.</div>
+      <div class="small" style="margin-top:6px">관리자 확인 주문: <span class="chip ${conf ? "ok" : ""}">${conf ? "노트북에서 켜짐" : "노트북에서 아직 안 켜짐 (.env CONFIRM_ORDERS=YES)"}</span></div></div>
+    <div class="card"><h2>자동 주문이 켜지면</h2>
+      <div class="small">· 18:00 프리장 개장 때 노트북이 오늘 밤 주문(계산 주문표·VR)을 메리츠에 직접 넣습니다.<br>
+        · 마감 전 '근처' 하락 대비 줄도 조건이 되면 넣고, 체결·거부는 지금처럼 알립니다.<br>
+        · 끄기(비상 정지)는 누구나 바로, 다시 켜기는 합의로 (ADR 0037).</div></div>
+    <div class="card"><h2>켜는 조건 <span class="chip">제안 · 결정 대기</span></h2>
+      <div class="small">① 관리자 확인 주문 '시험 주문'(SOXL 1주 −25% LOC)이 메리츠에 정상 접수<br>
+        ② 관리자 확인 주문으로 매수일·매도일 각 한 번 이상 정상 체결<br>
+        ③ 계좌 주인이 결정 → 관리자가 노트북 .env 에서 켬 (웹에서는 켤 수 없음)</div>
+      <div class="small muted" style="margin-top:6px">예전 조건 '5거래일 실제 = 모의'는 11/07 사용자 결정으로 없앴습니다 (모의는 분석용).</div></div>`;
 }
 function stratName(g, plan) {
   if (g.kind === "sheet") return `무한매수 ${plan && plan.splits ? Number(plan.splits) + "분할" : ""} 주문표`;
@@ -1094,7 +1115,7 @@ function equityChart(rows) {
     <div class="small muted">${hasB ? "━ 메리츠 계좌 기준 (실제 보유 × 종가 + 달러 예수금, 11/06부터) · ┅ 원장 기준 (보유 + 주문표 잔금)" : "원장 기준 (보유 × 종가 + 주문표 잔금)"}</div>`;
 }
 function viewStrategy(s, d, sid) {
-  const g = allStrategies(s).find((x) => x.id === sid);
+  const g = allStrategies(s, true).find((x) => x.id === sid);
   if (!g) { S.detail = null; return viewHome({ summary: s, detail: d }, true); }
   const plan = (s.plans || {})[sid], vr = (s.vr || {})[sid], px = (s.closes || {})[g.symbol];
   let out = `<div class="row"><button class="btn" data-back-home="1">← 현황</button>
@@ -1391,11 +1412,11 @@ function accountsView(s) {
 }
 function myStrategies(s) {
   const accs = Object.entries(s.accounts || {});
-  const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+  const strat = allStrategies(s, true);              // 모의 전용 전략도 (수정 합의·비상 정지)
   return `
     <div class="card"><h2>전략</h2>
       ${strat.length ? strat.map((g) => `<div class="strat">
-        <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(g.id)}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}</span></span>
+        <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(g.id)}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}${g.mock_only ? ' · <span class="chip">모의 전용</span>' : ""}</span></span>
           ${g.active ? (S.stopAsk === g.id
             ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}">정지</button><button class="btn" data-stopno="1">취소</button></span>`
             : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}">⛔ 비상 정지</button></span>`)
@@ -1403,7 +1424,7 @@ function myStrategies(s) {
         ${cycleBanner(s, g)}
         ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}">✍ 수정·다시 켜기 제안</button></div>`}
         <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div></div>`).join("")
-        : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
+        : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">투자 전략 추가 (모의)</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
     <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList();
@@ -1417,8 +1438,7 @@ function cycleBanner(s, g) {
     <div class="row"><button class="btn primary" data-cycle-same="${esc(g.id)}">종전 규칙으로 계속</button><button class="btn" data-propose="${esc(g.id)}" data-cyclenew="1">새 규칙 제안 (합의)</button></div></div>`;
 }
 function allStrategiesFlat() {
-  const s = S.snap ? S.snap.summary : {};
-  return Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
+  return allStrategies(S.snap ? S.snap.summary : {}, true);
 }
 function changeForm(g, accs) {
   return `<form id="f-change" data-sid="${esc(g.id)}" class="card" style="gap:10px;background:var(--soft)">
@@ -1458,7 +1478,8 @@ function addStrategy(s) {
   const kind = S.newKind || "sheet";
   return `
     <div class="card small" style="border-left:4px solid var(--accent)">📜 새 전략은 <b>투자헌법</b>에 맞아야 합니다 — 특히 제3조 생존 우선(퇴출될 위험 금지)·제4조 적극적 투자는 정해진 한도 안에서. <button class="btn ghost small" data-tab="constitution">투자헌법 보기</button></div>
-    <div class="card"><h2>전략 추가</h2>
+    <div class="card"><h2>투자 전략 추가 <span class="chip">모의로 시작</span></h2>
+      <div class="small muted">여기서 만든 전략은 <b>모의 전용</b>으로 시작합니다 — 실제 주문·원장·홈 합계에 들어가지 않고 매일 모의로만 돌며 '모의 현황'·'모의 매매 기록'에 쌓입니다. 실제로 돌리려면 '수정 합의'로 정합니다.</div>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
         <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
           `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}">${t}</button>`).join("")}</div>
@@ -1475,7 +1496,7 @@ function addStrategy(s) {
       </form>
     </div>` + cmdList();
 }
-// ── 주문표 달력: 실행일(미국 장 날짜)을 고르면 그날 주문표·모의 체결·실제 vs 모의 결과 ──
+// ── 주문표 달력: 실행일(미국 장 날짜)을 고르면 그날 주문표·모의 체결 ──
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const ymd = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 function calData() {
@@ -1564,11 +1585,12 @@ function vrTable(g, rows) {
 }
 function viewTrades(s) {
   const T = (S.snap.detail || {}).trades || {};
-  const strat = allStrategies(s).filter((g) => T[g.id] && (T[g.id].real || T[g.id].mock || T[g.id].vr));
+  const mockTab = S.tradeKind === "mock";
+  const strat = allStrategies(s, mockTab).filter((g) => T[g.id] && (mockTab ? (T[g.id].mock || (T[g.id].vr && T[g.id].vr.mock)) : (T[g.id].real || (T[g.id].vr && T[g.id].vr.real))));
   if (!strat.length) return `<div class="card"><div class="empty">아직 기록이 없습니다. 노트북이 증권사 주문내역·주문표를 저장한 날부터 쌓입니다.</div></div>`;
   if (!strat.some((g) => g.id === S.tradeSid)) S.tradeSid = strat[0].id;
   const g = strat.find((x) => x.id === S.tradeSid), e = T[g.id];
-  const kind = S.tradeKind === "mock" || !(e.real || (e.vr && e.vr.real)) ? "mock" : "real", rows = e[kind] || [];
+  const kind = S.tradeKind === "mock" ? "mock" : "real", rows = e[kind] || [];   // 기록 = 실제, 모의 메뉴 = 모의
   S.tradeOpen = S.tradeOpen || {};
   const isInf = g.kind === "sheet" || g.kind === "infinite_buy_v4";
   const cycles = [...new Set(rows.map((r) => r[11]))];
@@ -1593,7 +1615,7 @@ function viewTrades(s) {
   const total = rows.length ? tCells(tAgg(rows), "<b>합계</b>", "t-total") : "";
   return `<div class="seg" role="tablist" aria-label="전략" style="flex-wrap:wrap">${strat.map((x) => `<button role="tab" data-tradesid="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}" aria-selected="${x.id === g.id}"><span class="num">${esc(x.symbol)}</span> ${esc(stratName(x, (s.plans || {})[x.id]))}</button>`).join("")}</div>
     <div class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2>
-      <div class="seg" role="tablist" aria-label="실제·모의">${[["real", "실제"], ["mock", "모의"]].filter(([k]) => e[k] || (e.vr && e.vr[k])).map(([k, l]) => `<button role="tab" data-tradekind="${k}" class="${kind === k ? "on" : ""}" aria-selected="${kind === k}">${l}</button>`).join("")}</div></div>
+      <span class="chip">${kind === "mock" ? "모의" : "실제"}</span></div>
       ${e.vr ? vrTable(g, (e.vr || {})[kind] || []) : ""}
       ${e.vr ? `<details style="margin-top:8px"><summary class="small muted">날짜별 체결 보기</summary>` : ""}
       ${rows.length ? `<div class="scroll ttable"><table><thead><tr>${TCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
@@ -1671,16 +1693,7 @@ function calDay(td, v) {
       ${off.length ? `<details><summary class="small muted">꺼 둔 아래 사다리 ${off.length}줄${off.some((l) => l[5]) ? " (일부 모의 체결)" : ""}</summary>
         <div class="scroll"><table><tbody>${off.map(row).join("")}</tbody></table></div></details>` : ""}</section>`;
   }
-  const checks = Object.entries(v.checks);
-  if (checks.length) {
-    out += `<section class="card"><h2>실제 vs 모의</h2>${checks.map(([acc, c]) => `<div style="margin-top:6px"><div class="row"><b>${esc(ACC_NAME[acc] || acc)}</b>
-        <span class="chip ${c.ok ? "ok" : "warn"}">${c.ok ? "일치" : "차이 있음"}</span></div>
-      ${(c.rows || []).map((r) => `<div class="small">${r.real_qty === r.sim_qty ? "✅" : "❌"} ${esc(r.sym)} ${sideKo(r.side)}: 실제 <b class="num">${r.real_qty}주</b>${r.real_avg ? " @" + money(r.real_avg) : ""} / 모의 <b class="num">${r.sim_qty}주</b>${r.sim_avg ? " @" + money(r.sim_avg) : ""}</div>`).join("")}
-      ${Object.entries(c.hold || {}).map(([sym, [a, b]]) => `<div class="small">${a === b ? "✅" : "❌"} ${esc(sym)} 보유: 실제 ${a}주 / 모의 ${b}주</div>`).join("")}
-      ${!(c.rows || []).length && !Object.keys(c.hold || {}).length ? `<div class="small muted">체결·보유 ${c.fills_ok ? "일치" : "다름"} / ${c.hold_ok ? "일치" : "다름"} (자세한 줄은 다음 비교부터 기록)</div>` : ""}</div>`).join("")}</section>`;
-  } else if (v.sheets.length) {
-    out += `<div class="card"><div class="small muted">실제 vs 모의 비교는 이 날 애프터장이 끝난 뒤 아침 10:00 에 기록됩니다.</div></div>`;
-  }
+  // 실제 vs 모의 비교는 11/07 사용자 결정으로 없앰 (모의는 모의 메뉴에서 분석용으로만)
   return out;
 }
 
