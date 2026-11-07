@@ -286,7 +286,8 @@ summary { cursor: pointer; color: var(--ice) }
 const SUPABASE_URL = "https://yusvlbnlrfawmoqqswso.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1c3ZsYm5scmZhd21vcXFzd3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMDgwNDAsImV4cCI6MjEwODg4NDA0MH0.Vu_HfzTH_VmnkD76rlbzlbzAShHBI4PI4MTO7S3_Zno";
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+// 11/07: 브라우저 탭 잠금(navigator.locks)에서 로그인 확인이 멈추는 경우가 있어 잠금 없이 바로 실행
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { lock: async (_name, _t, fn) => fn() } });
 // 로봇 확인 (ADR 0035): Cloudflare Turnstile 사이트 키(공개용). 비어 있으면 로봇 확인 없이 동작한다.
 // 순서: 이 값을 채워 웹에 올린 뒤에 Supabase 의 CAPTCHA 를 켠다 (먼저 켜면 로그인이 막힘).
 const TURNSTILE_SITE_KEY = "0x4AAAAAAF2Dq98Cp-_-66WH";
@@ -449,7 +450,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07h";
+const APP_VERSION = "2026-11-07i";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1884,7 +1885,7 @@ const withTimeout = (pr, ms, what) => Promise.race([pr, new Promise((_, bad) => 
 function loadingStuck(reason) {
   const el = document.getElementById("loading"); if (!el) return;
   el.innerHTML = `<div><b>불러오기가 오래 걸립니다</b></div>
-    <div class="small muted">${esc(reason || "서버(Supabase) 응답을 기다리는 중")}${S.jsErrors.length ? "<br>오류: " + esc(S.jsErrors.join(" / ")) : ""}</div>
+    <div class="small muted">${esc(reason || "서버(Supabase) 응답을 기다리는 중")}${S.stage ? " · 단계: " + esc(S.stage) : ""}${S.jsErrors.length ? "<br>오류: " + esc(S.jsErrors.join(" / ")) : ""}</div>
     <div class="small muted">인터넷 연결을 확인하고 다시 시도해 주세요. 계속되면 이 화면을 Claude 에게 보내 주세요.</div>
     <div class="row"><button class="btn primary" onclick="location.reload()">다시 시도</button></div>`;
 }
@@ -1896,6 +1897,7 @@ async function onSession(session) {
 async function onSessionInner(session) {
   S.user = session ? session.user : null;
   if (S.user) {
+    S.stage = "회원 정보";
     const p = await withTimeout(sb.from("profiles").select("display_name,status,role").eq("user_id", S.user.id).limit(1), 12000, "회원 정보");
     const me = (p.data && p.data[0]) || {};
     S.name = me.display_name || S.user.email.split("@")[0];
@@ -1904,12 +1906,18 @@ async function onSessionInner(session) {
     if (S.status !== "approved") return renderPending();
     await withTimeout(loadFlags(), 8000, "설정").catch(() => {});
     await withTimeout(loadOps(), 8000, "공동 운영").catch(() => {});
+    S.stage = "현황";
     await withTimeout(refresh(), 20000, "현황");
   } else render();
 }
 sb.auth.onAuthStateChange((ev, session) => {
   if (ev === "PASSWORD_RECOVERY") { S.recovery = true; S.user = session && session.user; return renderRecovery(); } if ((session && session.user.id) !== (S.user && S.user.id)) onSession(session); });
-sb.auth.getSession().then(({ data }) => onSession(data.session));
+S.stage = "로그인 확인";
+withTimeout(sb.auth.getSession(), 10000, "로그인 확인").then(({ data }) => onSession(data.session)).catch((e) => {
+  // 로그인 확인이 멈추면: 저장된 로그인 정보를 지우고 로그인 화면으로 (다시 로그인하면 됨)
+  try { Object.keys(localStorage).filter((k) => k.startsWith("sb-") && k.endsWith("-auth-token")).forEach((k) => localStorage.removeItem(k)); } catch (x) {}
+  S.user = null; S.msg = { bad: true, text: "로그인 확인이 멈춰 저장된 로그인을 지웠습니다 — 다시 로그인해 주세요 (" + (e.message || e) + ")" }; render();
+});
 setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 30000);
 // 실시간 시세: 화면을 보고 있고 장 시간이면 5초마다 가져와 시세 줄만 바꾼다 (화면 전체를 다시 그리지 않음).
 // 30초마다 '보고 있음'을 알려야 관리자 노트북이 5초 시세를 올린다 (아무도 안 보면 메리츠를 부르지 않음).
