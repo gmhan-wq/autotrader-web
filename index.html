@@ -460,7 +460,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07m";
+const APP_VERSION = "2026-11-07n";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -474,7 +474,7 @@ function loadScript(src) {
 // 오류제보·기능개선(화면 캡처·제보 창·게시판)은 11/07 사용자 요청으로 없앰
 function brokerNote(b) {
   // 메리츠 계좌 기준 = 실제 보유 × 종가 + 달러 예수금 (제보 #11). API 없는 계좌는 원장 값
-  const p = (b.partial || []).length ? ` · ${b.partial.map((a) => ACC_NAME[a] || a).join("·")} 원장` : "";
+  const p = (b.partial || []).length ? ` · ${b.partial.map((a) => ACC_NAME[a] || a).join("·")} 실제 장부` : "";
   return `보유 $${money(b.holdings)} + 달러 예수금 $${money(b.usd)}${p}`;
 }
 
@@ -684,8 +684,8 @@ function renderInner() {
     $app.innerHTML = `
       <header class="ph-top card">
         <div class="row"><b>${esc(S.name)}</b><span class="grow"></span>${engine}</div>${actSwitch()}
-        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (${bk ? "메리츠 계좌 기준" : "원장 기준"})</span><b class="num">$${money(tv)}</b>${krw(tv) ? `<span class="krw">${krw(tv)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
-          ${bk ? `<span class="small muted">${brokerNote(bk)} · 원장 기준 $${money(t.value)}</span>` : ""}
+        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (${bk ? "메리츠 계좌 기준" : "실제 장부 기준"})</span><b class="num">$${money(tv)}</b>${krw(tv) ? `<span class="krw">${krw(tv)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
+          ${bk ? `<span class="small muted">${brokerNote(bk)} · 실제 장부 $${money(t.value)}</span>` : ""}
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
           : `<h1>${S.detail ? "전략" : esc(groupOf(S.tab)[1])}</h1>`}
       </header>
@@ -797,10 +797,10 @@ function viewHome(snap, mine) {
   const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
   const kpis = [
     ...(s.broker ? [["평가금액 (메리츠)", "$" + money(s.broker.value), `${krw(s.broker.value) ? krw(s.broker.value) + " · " : ""}${brokerNote(s.broker)}`, ""]] : []),
-    [s.broker ? "평가금액 (원장)" : "평가금액", "$" + money(t.value), `${krw(t.value) ? krw(t.value) + " · " : ""}원장 기준 (보유 + 주문표 잔금)`, ""],
+    [s.broker ? "평가금액 (실제 장부)" : "평가금액", "$" + money(t.value), `${krw(t.value) ? krw(t.value) + " · " : ""}실제 장부: 보유 × 종가 + 달러 예수금 몫 + VR Pool`, ""],
     ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 기준" : "평단 있는 보유 기준", pnlCls(t.eval_pnl)],
     ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
-    ["전략 잔금", "$" + money(t.cash), "주문표·VR Pool 합계", ""],
+    ["전략 잔금", "$" + money(t.cash), "실제 장부: 달러 예수금 몫 + VR Pool", ""],
     ["오늘 밤 주문", realCount(d) !== null ? realCount(d) + "건" : tonight.length + "건", realCount(d) !== null ? "실제로 넣을 주문" : "가상(모의) 주문 기준", ""],
     ["승인 대기", draftN + "건", draftN ? "승인 탭에서 확인" : "없음", draftN ? "warnc" : ""],
   ];
@@ -1029,7 +1029,7 @@ const EQ_COLORS = ["#5b4bc9", "#c11d3d", "#17794a", "#1b5bc9", "#9a5a00", "#8a3f
 function eqSeries(rows, kind) {
   const s = S.snap ? S.snap.summary : {};
   const names = Object.fromEntries(allStrategies(s, true).map((g) => [g.id, `${g.symbol} ${stratName(g, (s.plans || {})[g.id])}`]));
-  if (kind === "total") return [["broker", "메리츠 계좌 기준", (r) => r.broker], ["value", "원장 기준", (r) => r.value]].filter(([, , f]) => rows.some((r) => f(r) != null));
+  if (kind === "total") return [["broker", "메리츠 계좌 기준", (r) => r.broker], ["value", "실제 장부 기준", (r) => r.value]].filter(([, , f]) => rows.some((r) => f(r) != null));
   const field = { acc: "acc", sym: "sym", strat: "strat" }[kind];
   const keys = [...new Set(rows.flatMap((r) => Object.keys(r[field] || {})))];
   const label = (k) => kind === "acc" ? (ACC_NAME[k] || k) : kind === "strat" ? (names[k] || k) : k;
