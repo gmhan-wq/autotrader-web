@@ -405,13 +405,14 @@ async function lockBytes(data, name, pass) {
   const out = new Uint8Array(32 + ct.length); out.set(enc.encode("ATP1"), 0); out.set(salt, 4); out.set(iv, 20); out.set(ct, 32);
   return new Blob([out], { type: "application/octet-stream" });
 }
-function uploadCard() {
+function uploadCard(purpose) {
+  // 용도는 화면이 정한다 (11/07): 주문 → 사진 올리기 = 주문표, 전략 → 프라이버시 = 프라이버시 연구
+  if (purpose) S.upPurpose = purpose;
   let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
-  return `<details class="card" ${S.upOpen ? "open" : ""} id="up-card"><summary class="row between"><h2 style="display:inline">📷 사진 올리기</h2>
+  const priv = S.upPurpose === "privacy";
+  return `<details class="card" ${S.upOpen ? "open" : ""} id="up-card"><summary class="row between"><h2 style="display:inline">📷 ${priv ? "프라이버시 사진 올리기" : "주문표 사진 올리기"}</h2>
       <span class="small muted">텔레그램 대신 여기서 — 잠가서 보내고 노트북이 받는 즉시 클라우드에서 지움</span></summary>
     <form id="f-up" style="display:flex;flex-direction:column;gap:10px">
-      <div class="seg" role="group" aria-label="용도"><button type="button" class="${S.upPurpose !== "privacy" ? "on" : ""}" data-uppurpose="sheet">주문표 판독</button>
-        <button type="button" class="${S.upPurpose === "privacy" ? "on" : ""}" data-uppurpose="privacy">프라이버시 연구</button></div>
       <label>사진 (여러 장 가능)<input type="file" id="up-files" accept="image/jpeg,image/png,image/webp" multiple required></label>
       <label>업로드 암호 <span class="small muted">(${owner() === S.user.id ? "내 노트북 칸" : "<b>" + esc(((S.ops || []).find((o) => o.owner_id === owner()) || {}).display_name || "") + "</b> 계좌 주인 칸"}의 UPLOAD_PASSPHRASE — 계좌마다 다름)</span>
         <input type="password" id="up-pass" autocomplete="off" value="${esc(saved)}" required minlength="8"></label>
@@ -450,7 +451,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07";
+const APP_VERSION = "2026-11-07b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -621,11 +622,11 @@ function currentView() {
     case "home": v = viewHome(S.snap, true); break;
     case "orders": v = viewOrders(); break;
     case "approve": v = viewApprove(); break;
-    case "upload": S.upOpen = true; v = uploadCard() + `<div class="small muted">주문표 사진은 판독 뒤 '주문표 승인'에, 프라이버시 사진은 노트북 연구 폴더로 갑니다.</div>`; break;
+    case "upload": S.upOpen = true; v = uploadCard("sheet") + `<div class="small muted">주문표 사진은 시스템 계산과 비교합니다 — 같으면 알림만, 다르면 원인과 함께 '주문표 승인'에 올라옵니다. 프라이버시 사진은 전략 → 프라이버시에서 올리세요.</div>`; break;
     case "mystrat": v = need(myStrategies); break;
     case "addstrat": v = need(addStrategy); break;
     case "consensus": v = viewConsensus(); break;
-    case "privacy": v = need(privacyCard); break;
+    case "privacy": S.upOpen = true; v = need(privacyCard) + uploadCard("privacy"); break;
     case "calendar": v = viewCalendar(); break;
     case "trades": v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
@@ -1362,7 +1363,7 @@ function telegramCard(s) {
 function privacyCard(s) {
   const pv = s.privacy || {}, on = !!pv.on;
   return `<div class="card"><h2>프라이버시 투자법 <span class="chip">모의 예측</span></h2>
-    <div class="small muted">프라이버시 주문표 사진을 올리면(사진 올리기 → 프라이버시 연구) 관리자 노트북이 판독해
+    <div class="small muted">프라이버시 주문표 사진을 아래 '프라이버시 사진 올리기'로 올리면 관리자 노트북이 판독해
       <b>분석 보고서</b>(판독값·규칙 대조)와 <b>다음 거래일 주문표 예상</b>을 텔레그램으로 보내 드립니다.
       규칙은 사진 50장마다 다시 맞춥니다. 아직 주문은 내지 않습니다.</div>
     ${pv.admin ? `<div class="small">관리자는 늘 받습니다.</div>` : `<div class="row between">
