@@ -460,7 +460,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07o";
+const APP_VERSION = "2026-11-07p";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -515,7 +515,7 @@ function layout() {
 }
 // 메뉴 여섯 개 (2026-11-01 개편, 11/07 모의 추가): PC 왼쪽 메뉴 = 폰 아래 탭. 각 메뉴 안의 화면은 위쪽 버튼으로 고른다.
 const GROUPS = [
-  ["home", "홈", [["home", "대시보드"]]],
+  ["home", "자산", [["home", "자산"]]],
   ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"], ["upload", "사진 올리기"]]],
   ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"]]],
   ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"]]],   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
@@ -838,7 +838,7 @@ function sortedBlocks(B) {
 function arrangeBlocks(B, mine) {
   const list = sortedBlocks(B);
   if (S.arrange && mine) {
-    return `<div class="card"><div class="row between"><h2>홈 카드 순서 바꾸기</h2><button class="btn primary" id="arrDone">완료</button></div>
+    return `<div class="card"><div class="row between"><h2>자산 카드 순서 바꾸기</h2><button class="btn primary" id="arrDone">완료</button></div>
       <div class="small muted">↑↓ 로 순서, '숨기기'로 감추기. 이 기기(${layout() === "phone" ? "폰 화면" : "PC 화면"})에만 저장됩니다.</div>
       ${list.map(([k, label, , hid], i) => `<div class="row between arr-row" style="padding:6px 0;border-top:1px solid var(--line)">
         <span class="${hid ? "muted" : ""}">${esc(label)}${hid ? " (숨김)" : ""}</span>
@@ -955,7 +955,7 @@ function strategyCard(s, g) {
     </div>
     <span class="chip ${status[1]}" style="align-self:flex-start">${status[0]}</span></button>`;
 }
-// 세 장부 (ADR 0048, 11/07 사용자): 실제 = 메리츠 · 계획 = 주문표(주문을 정함) · 가투 = 가상 체결
+// 메리츠 · 주문표 두 줄 (ADR 0048, 11/07 사용자: 자산 화면에서 가투 줄 없앰 — 가투는 가투 메뉴에서)
 // VR 등 한 계좌 한 전략이면 메리츠 달러 예수금을 그대로, 아니면 전략 몫(노트북이 나눈 값)
 function merUsd(g) {
   const s = S.snap ? S.snap.summary : {}, a = ((s.broker || {}).accounts || {})[g.account];
@@ -972,7 +972,7 @@ function ledgers3(g, plan, vr, m) {
   return `<span class="l3">${cell("", "l3n")}${cell("보유", "muted")}${cell("평단", "muted")}${cell(vr ? "Pool" : "잔금", "muted")}
     ${row("메리츠", g.qty, g.avg, vr ? merUsd(g) : g.cash)}
     ${plan ? row("주문표", planQ, plan.avg, plan.cash != null ? Number(plan.cash) * mult : null) : vr ? row("주문표", null, null, vr.pool) : ""}
-    ${m ? row("가투", m.qty, m.avg, m.cash) : ""}</span>
+</span>
   ${gap ? `<span class="small ${gap > 0 ? "warn-t" : ""}">${gap > 0 ? `보충 필요 ${gap}주 (주문표보다 메리츠 보유가 적음)` : `메리츠 보유가 주문표보다 ${-gap}주 많음`}</span>` : ""}`;
 }
 // ── 모의 (11/07): 투자 분석용. 진행 중 전략의 모의는 매일 자동으로 이어진다 ──
@@ -1449,8 +1449,8 @@ function addStrategy(s) {
     <div class="card small" style="border-left:4px solid var(--accent)">📜 새 전략은 <b>투자헌법</b>에 맞아야 합니다 — 특히 제3조 생존 우선(퇴출될 위험 금지)·제4조 적극적 투자는 정해진 한도 안에서. <button class="btn ghost small" data-tab="constitution">투자헌법 보기</button></div>
     <div class="card"><h2>${S.addMock ? "투자 전략 연구" : "전략 추가"} <span class="chip ${S.addMock ? "" : "warn"}">${S.addMock ? "가투 전용" : "운영 전략 (메리츠)"}</span></h2>
       <div class="small muted">${S.addMock
-        ? "여기서 만든 전략은 <b>가투(가상 투자) 전용</b>입니다 — 메리츠 주문·홈 합계에 들어가지 않고 매일 가상으로만 돌며 '가투 현황'·'가투 매매 기록'에 쌓입니다. 메리츠에서 운영하려면 '수정 합의'로 정합니다."
-        : "여기서 만든 전략은 <b>운영 전략</b>입니다 — 메리츠 주문·오늘 밤 주문·홈 합계에 들어갑니다. 새 아이디어를 먼저 시험하려면 '가투 → 투자 전략 연구'를 쓰세요."}</div>
+        ? "여기서 만든 전략은 <b>가투(가상 투자) 전용</b>입니다 — 메리츠 주문·자산 합계에 들어가지 않고 매일 가상으로만 돌며 '가투 현황'·'가투 매매 기록'에 쌓입니다. 메리츠에서 운영하려면 '수정 합의'로 정합니다."
+        : "여기서 만든 전략은 <b>운영 전략</b>입니다 — 메리츠 주문·오늘 밤 주문·자산 합계에 들어갑니다. 새 아이디어를 먼저 시험하려면 '가투 → 투자 전략 연구'를 쓰세요."}</div>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
         <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
           `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}">${t}</button>`).join("")}</div>
