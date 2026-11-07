@@ -451,7 +451,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07c";
+const APP_VERSION = "2026-11-07d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -596,10 +596,11 @@ function layout() {
 const GROUPS = [
   ["home", "홈", [["home", "대시보드"]]],
   ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"], ["upload", "사진 올리기"]]],
-  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"]]],
+  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"]]],
   ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"], ["fb_bug", "오류제보"], ["fb_idea", "기능개선"]]],
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
-  ["mock", "모의", [["mockstat", "모의 현황"], ["mocktrades", "모의 매매 기록"], ["addstrat", "투자 전략 추가"], ["privacy", "프라이버시"]]],
+  // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
+  ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["privacy", "프라이버시"]]],
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
 const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm" };      // 예전 이름 → 새 화면
@@ -628,7 +629,8 @@ function currentView() {
     case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
     case "upload": S.upOpen = true; v = uploadCard("sheet") + `<div class="small muted">주문표 사진은 시스템 계산과 비교합니다 — 같으면 알림만, 다르면 원인과 함께 '주문표 승인'에 올라옵니다. 프라이버시 사진은 전략 → 프라이버시에서 올리세요.</div>`; break;
     case "mystrat": v = need(myStrategies); break;
-    case "addstrat": v = need(addStrategy); break;
+    case "research": S.addMock = true; v = need(addStrategy); break;
+    case "addstrat": S.addMock = false; v = need(addStrategy); break;
     case "consensus": v = viewConsensus(); break;
     case "privacy": S.upOpen = true; v = need(privacyCard) + uploadCard("privacy"); break;
     case "calendar": v = viewCalendar(); break;
@@ -758,7 +760,7 @@ function renderInner() {
             const badge = g[0] === "order" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
             return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`
               + (on && pages.length > 1 ? pages.map(([k, l]) => `<button class="nav-i nav-sub" data-tab="${k}" aria-current="${S.tab === k}">${esc(l)}</button>`).join("") : "")
-              + (g[0] === "strategy" ? strat.map((x) => `<button class="nav-i nav-sub" data-detail="${esc(x.id)}" aria-current="${S.tab === "home" && S.detail === x.id}"><span class="sym num">${esc(x.symbol)}</span>${esc(stratName(x, (S.snap.summary.plans || {})[x.id]))}</button>`).join("") : ""); }).join("")}
+              ; }).join("")}
         </nav>
         <main class="pc-main">${actBand}${notes}<div id="view">${currentView()}</div></main>
       </div>${feedbackModal()}`;
@@ -1051,7 +1053,7 @@ function viewMock(s) {
     tv += val; tp += pnl || 0; any = true;
     const tn = ((d.tonight || {})[g.account] || []).filter((o) => o.strategy_id === g.id);
     return `<div class="card"><div class="row between"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b>
-        <span class="muted small">${esc(ACC_NAME[g.account] || g.account)}${g.mock_only ? " · 모의 전용" : " · 실제 전략의 모의"}</span></div><span class="chip ok">${g.active === false ? "꺼짐" : "자동 진행"}</span></div>
+        <span class="muted small">${esc(ACC_NAME[g.account] || g.account)}${g.mock_only ? " · 가투 전용" : " · 실제 전략의 가투"}</span></div><span class="chip ok">${g.active === false ? "꺼짐" : "자동 진행"}</span></div>
       <div class="kv2">
         <span class="muted">모의 보유 / 평단</span><span class="num">${q}주 / ${avg ? money(avg) : "-"}</span>
         <span class="muted">${g.kind === "vr" ? "모의 Pool" : "모의 잔금"}</span><span class="num">$${money(cash)}</span>
@@ -1061,9 +1063,9 @@ function viewMock(s) {
       ${tn.length ? `<details><summary class="small muted">오늘 밤 가상 주문 ${tn.length}건</summary>${tn.map((o) => `<div class="oline"><span class="${sideCls(o.side)}">${sideKo(o.side)}</span><span class="small muted num">${esc(KIND_KO[o.kind] || o.kind)}</span><b class="num">${money(o.price)} × ${o.qty}</b></div>`).join("")}</details>` : ""}
     </div>`;
   }).join("");
-  return `<div class="msg">모의는 <b>투자 분석용</b>입니다 — 실제 주문 없이 같은 전략을 가상 돈(전략 잔금 전부)으로 매일 자동으로 이어 갑니다.
-      진행 중 전략·동적 분할매수·프라이버시가 계속 돌고, 새 전략은 '투자 전략 추가'로 모의부터 시작합니다. 날짜별 기록은 '모의 매매 기록'.</div>
-    ${any ? `<div class="card"><div class="row between"><b>모의 합계</b><span class="num">평가금액 $${money(tv)} · 평가손익 <span class="${tp >= 0 ? "buy" : "sell"}">${(tp >= 0 ? "+" : "−") + "$" + money(Math.abs(tp))}</span></span></div>
+  return `<div class="msg">가투(가상 투자)는 <b>투자 분석용</b>입니다 — 실제 주문 없이 같은 전략을 가상 돈(전략 잔금 전부)으로 매일 자동으로 이어 갑니다.
+      진행 중 전략·동적 분할매수·프라이버시가 계속 돌고, 새 아이디어는 '투자 전략 연구'로 시작합니다. 날짜별 기록은 '가투 매매 기록'.</div>
+    ${any ? `<div class="card"><div class="row between"><b>가투 합계</b><span class="num">평가금액 $${money(tv)} · 평가손익 <span class="${tp >= 0 ? "buy" : "sell"}">${(tp >= 0 ? "+" : "−") + "$" + money(Math.abs(tp))}</span></span></div>
       <div class="small muted">가격 = 직전 종가. 다른 분(예: 김정희 님 동적 분할매수)의 모의는 위쪽에서 그 분 계좌를 고르면 보입니다.</div></div>` : ""}
     <section class="cards">${cards || `<div class="card"><div class="empty">모의 중인 전략이 없습니다.</div></div>`}</section>
     <div class="card"><div class="row between"><b>프라이버시 투자법</b><button class="btn" data-tab="privacy">보기 ›</button></div><div class="small muted">사진 판독 → 다음 거래일 주문표 예측 (모의 예측, 주문 없음)</div></div>`;
@@ -1119,7 +1121,7 @@ function viewStrategy(s, d, sid) {
   if (!g) { S.detail = null; return viewHome({ summary: s, detail: d }, true); }
   const plan = (s.plans || {})[sid], vr = (s.vr || {})[sid], px = (s.closes || {})[g.symbol];
   let out = `<div class="row"><button class="btn" data-back-home="1">← 현황</button>
-    <span class="sym num">${esc(g.symbol)}</span><h2>${esc(stratName(g, plan))}</h2><span class="chip ${g.active ? "ok" : ""}">${g.active ? "켜짐 · 모의" : "꺼짐"}</span></div>`;
+    <span class="sym num">${esc(g.symbol)}</span><h2>${esc(stratName(g, plan))}</h2><span class="chip ${g.active ? "ok" : ""}">${g.active ? (g.mock_only ? "켜짐 · 가투 전용" : "켜짐") : "꺼짐"}</span></div>`;
   if (plan) {
     const facts = [["1회매수시도 B", money(plan.unit), "잔금 ÷ (분할수 − T)"], ["현재 회차 T", plan.T, `${Number(plan.splits)}분할 · ${plan.phase}`],
       ["★%", (Number(plan.star_pct) > 0 ? "+" : "") + plan.star_pct + "%", `목표 ${Number(plan.target_pct)}% × (1 − 2T/분할수)`], ["★지점", money(plan.star_price), "평단 × (1 + ★%)"],
@@ -1416,7 +1418,7 @@ function myStrategies(s) {
   return `
     <div class="card"><h2>전략</h2>
       ${strat.length ? strat.map((g) => `<div class="strat">
-        <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(g.id)}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}${g.mock_only ? ' · <span class="chip">모의 전용</span>' : ""}</span></span>
+        <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(g.id)}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}${g.mock_only ? ' · <span class="chip">가투 전용</span>' : ""}</span></span>
           ${g.active ? (S.stopAsk === g.id
             ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}">정지</button><button class="btn" data-stopno="1">취소</button></span>`
             : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}">⛔ 비상 정지</button></span>`)
@@ -1424,7 +1426,7 @@ function myStrategies(s) {
         ${cycleBanner(s, g)}
         ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}">✍ 수정·다시 켜기 제안</button></div>`}
         <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div></div>`).join("")
-        : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">투자 전략 추가 (모의)</button></div>`}
+        : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
     <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList();
@@ -1478,8 +1480,10 @@ function addStrategy(s) {
   const kind = S.newKind || "sheet";
   return `
     <div class="card small" style="border-left:4px solid var(--accent)">📜 새 전략은 <b>투자헌법</b>에 맞아야 합니다 — 특히 제3조 생존 우선(퇴출될 위험 금지)·제4조 적극적 투자는 정해진 한도 안에서. <button class="btn ghost small" data-tab="constitution">투자헌법 보기</button></div>
-    <div class="card"><h2>투자 전략 추가 <span class="chip">모의로 시작</span></h2>
-      <div class="small muted">여기서 만든 전략은 <b>모의 전용</b>으로 시작합니다 — 실제 주문·원장·홈 합계에 들어가지 않고 매일 모의로만 돌며 '모의 현황'·'모의 매매 기록'에 쌓입니다. 실제로 돌리려면 '수정 합의'로 정합니다.</div>
+    <div class="card"><h2>${S.addMock ? "투자 전략 연구" : "전략 추가"} <span class="chip ${S.addMock ? "" : "warn"}">${S.addMock ? "가투 전용" : "실제 전략"}</span></h2>
+      <div class="small muted">${S.addMock
+        ? "여기서 만든 전략은 <b>가투(가상 투자) 전용</b>입니다 — 실제 주문·원장·홈 합계에 들어가지 않고 매일 가상으로만 돌며 '가투 현황'·'가투 매매 기록'에 쌓입니다. 실제로 돌리려면 '수정 합의'로 정합니다."
+        : "여기서 만든 전략은 <b>실제 전략</b>입니다 — 실제 원장·오늘 밤 주문·홈 합계에 들어갑니다. 새 아이디어를 먼저 시험하려면 '가투 → 투자 전략 연구'를 쓰세요."}</div>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
         <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
           `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}">${t}</button>`).join("")}</div>
@@ -1935,7 +1939,7 @@ function bind() {
   const fs = document.getElementById("f-str");
   if (fs) fs.onsubmit = (e) => { e.preventDefault();
     const kind = S.newKind || "sheet", v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
-    const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account") };
+    const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account"), mock_only: !!S.addMock };
     for (const [k] of KIND_FIELDS[kind]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
     if (kind === "dynamic") {
       const f = dynForm(), ser = (a) => [...a].sort((x, y) => x[0] - y[0]).map(([d, w]) => `${d}:${w}`).join(",");
