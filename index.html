@@ -90,9 +90,10 @@ header.pc-top.card { flex-direction: row; align-items: center; flex-wrap: wrap; 
 .brand { font-size: 17px; letter-spacing: -0.01em }
 .pc-body { display: flex; flex-direction: column; gap: 14px }
 /* 11/07: 왼쪽 메뉴 → 위쪽 가로 메뉴 (위 줄 = 큰 메뉴, 아래 줄 = 그 안의 화면) */
-nav.pc-nav.card { gap: 6px; padding: 8px 10px }
+/* 11/07: 제목·메뉴·단추를 한 줄로 (아래 줄 = 그 메뉴 안의 화면, 있을 때만) */
+nav.pc-nav { display: flex; margin-left: 12px }
 .pc-nav-row { display: flex; flex-wrap: wrap; gap: 4px }
-.pc-nav-row.sub { border-top: 1px solid var(--line); padding-top: 6px }
+.pc-nav-row.sub { flex-basis: 100%; border-top: 1px solid var(--line); padding-top: 6px }
 .nav-h { font-size: 12px; color: var(--muted); padding: 12px 10px 4px }
 .nav-i { display: flex; align-items: center; gap: 8px; text-align: left; font: 500 14px var(--sans); color: var(--ink); background: transparent; border: 0;
   padding: 9px 10px; border-radius: 10px; cursor: pointer; min-height: 40px }
@@ -458,7 +459,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07k";
+const APP_VERSION = "2026-11-07l";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -664,18 +665,15 @@ function renderInner() {
     const item = (k, t, extra = "") => `<button class="nav-i" data-tab="${k}" aria-current="${S.tab === k && !S.detail}">${t}${extra}</button>`;
     $app.innerHTML = `
       <header class="pc-top card">
-        <b class="brand">자동매매 콘솔</b><span class="muted small">${esc(S.name)}</span>
-        ${engine}
+        <b class="brand">자동매매 콘솔</b><span class="muted small">${esc(S.name)}</span>${engine}
+        <nav class="pc-nav" aria-label="주 메뉴"><div class="pc-nav-row">${GROUPS.map((g) => { const on = grp === g[0] && !S.detail;
+            const badge = g[0] === "order" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
+            return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`; }).join("")}</div></nav>
         <span class="grow"></span>${actSwitch()}${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
+        ${(() => { const g = GROUPS.find((x) => x[0] === grp), pages = g ? pagesOf(g) : [];
+          return !S.detail && pages.length > 1 ? `<div class="pc-nav-row sub">${pages.map(([k, l]) => `<button class="nav-i nav-sub" data-tab="${k}" aria-current="${S.tab === k}">${esc(l)}</button>`).join("")}</div>` : ""; })()}
       </header>
       <div class="pc-body">
-        <nav class="pc-nav card" aria-label="주 메뉴">
-          <div class="pc-nav-row">${GROUPS.map((g) => { const on = grp === g[0] && !S.detail;
-            const badge = g[0] === "order" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
-            return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`; }).join("")}</div>
-          ${(() => { const g = GROUPS.find((x) => x[0] === grp), pages = g ? pagesOf(g) : [];
-            return !S.detail && pages.length > 1 ? `<div class="pc-nav-row sub">${pages.map(([k, l]) => `<button class="nav-i nav-sub" data-tab="${k}" aria-current="${S.tab === k}">${esc(l)}</button>`).join("")}</div>` : ""; })()}
-        </nav>
         <main class="pc-main">${actBand}${notes}<div id="view">${currentView()}</div></main>
       </div>`;
   } else {
