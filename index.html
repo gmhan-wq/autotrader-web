@@ -460,7 +460,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07s";
+const APP_VERSION = "2026-11-08a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1486,7 +1486,7 @@ function addStrategy(s) {
     <div class="card"><h2>${S.addMock ? "투자 전략 연구" : "전략 추가"} <span class="chip ${S.addMock ? "" : "warn"}">${S.addMock ? "가투 전용" : "운영 전략 (메리츠)"}</span></h2>
       <div class="small muted">${S.addMock
         ? "여기서 만든 전략은 <b>가투(가상 투자) 전용</b>입니다 — 메리츠 주문·자산 합계에 들어가지 않고 매일 가상으로만 돌며 '가투 현황'·'가투 매매 기록'에 쌓입니다. 메리츠에서 운영하려면 '수정 합의'로 정합니다."
-        : "여기서 만든 전략은 <b>운영 전략</b>입니다 — 메리츠 주문·오늘 밤 주문·자산 합계에 들어갑니다. 새 아이디어를 먼저 시험하려면 '가투 → 투자 전략 연구'를 쓰세요."}</div>
+        : "여기서 만든 전략은 <b>운영 전략</b>입니다 — 메리츠 주문·오늘 밤 주문·자산 합계에 들어갑니다. 새 아이디어를 먼저 시험하려면 '가투 → 투자 전략 연구'를 쓰세요. <b>원칙: VR 과 무한매수는 다른 계좌에서</b> 운용합니다 (계좌가 부족해 같이 쓰면 달러 예수금은 VR Pool 먼저)."}</div>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
         <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
           `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}">${t}</button>`).join("")}</div>
