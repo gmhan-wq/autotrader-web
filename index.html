@@ -348,7 +348,7 @@ const krw = (usd) => { const r = S.snap && S.snap.summary.fx && Number(S.snap.su
   return (v < 0 ? "−" : "") + "₩" + (a >= 1e8 ? (a / 1e8).toFixed(2) + "억" : Math.round(a / 1e4).toLocaleString("ko-KR") + "만"); };
 const sideKo = (s) => s === "BUY" ? "매수" : s === "SELL" ? "매도" : esc(s);
 const sideCls = (s) => s === "BUY" ? "buy" : "sell";
-const ACC_NAME = { main: "A계좌", b: "B계좌", c: "C계좌" };
+const ACC_NAME = { main: "S01", b: "S04", c: "S05" };   // 11/07 사용자: A·B·C계좌 → S01·S04·S05
 const ago = (iso) => { if (!iso) return "-"; const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   return m < 1 ? "방금" : m < 60 ? m + "분 전" : m < 1440 ? Math.round(m / 60) + "시간 전" : Math.round(m / 1440) + "일 전"; };
 const when = (iso) => { if (!iso) return "-"; const d = new Date(iso);
@@ -460,7 +460,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-07q";
+const APP_VERSION = "2026-11-07r";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
