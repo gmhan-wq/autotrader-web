@@ -207,6 +207,12 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
 .strat { display: flex; flex-direction: column; gap: 4px; padding: 9px 0; border-bottom: 1px solid var(--line) }
 .strat:last-child { border-bottom: 0 }
+.sess-box { border: 1px solid var(--line); border-radius: 14px; padding: 6px 12px 10px; margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.sess-box legend { font-size: 13px; color: var(--ink); padding: 0 4px }
+.sess-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--line) }
+.sess-box input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent) }
+label.sess-ot { font-size: 13px; color: var(--ink); gap: 5px } label.sess-ot.muted { color: var(--muted) }
+th.on, td.on { color: var(--accent); font-weight: 600 } tr.on td { background: var(--soft) }
 .sw input { width: 20px; height: 20px; accent-color: var(--accent) }
 .cmd { padding: 7px 0; border-bottom: 1px solid var(--line) } .cmd:last-child { border-bottom: 0 }
 .notice { padding: 9px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px }
@@ -322,7 +328,7 @@ function captchaReady() {
 }
 const $app = document.getElementById("app");
 const S = { user: null, name: "", tab: "home", snap: null, cmds: [], owners: [], grants: [], viewing: null,
-            viewSnap: null, confirm: null, msg: null, busy: false };
+            viewSnap: null, confirm: null, msg: null, busy: false, sessSel: {} };
 S.tab = "home";   // 첫 화면은 늘 대시보드 (마지막에 보던 화면으로 열리지 않게)
 
 // 다른 사람이 올린 현황(가족 보기)에 화면을 깨거나 스크립트를 넣는 글자가 섞여 있어도 안전하게: 받자마자 걸러 낸다
@@ -460,7 +466,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-08b";
+const APP_VERSION = "2026-11-09";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -517,7 +523,7 @@ function layout() {
 const GROUPS = [
   ["home", "자산", [["home", "자산"]]],
   ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"], ["upload", "사진 올리기"]]],
-  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"]]],
+  ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["sessions", "장·주문 방법"]]],   // 장·주문 방법: 11/09 작업 ⑬
   ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"]]],   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
   // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
@@ -557,6 +563,7 @@ function currentView() {
     case "calendar": v = viewCalendar(); break;
     case "trades": S.tradeKind = "real"; v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
+    case "sessions": v = viewSessions(s); break;              // 노트북 연결 전에도 (브라우저 계산)
     case "board": v = viewBoard(); break;
 
     case "accounts": v = need(accountsView); break;
@@ -1430,7 +1437,8 @@ function myStrategies(s) {
             : `<span class="chip bad" title="다시 켜기는 계좌 주인·관리자·공동 운영자 합의 (ADR 0037)">꺼짐 · 다시 켜기는 합의</span>`}</div>
         ${cycleBanner(s, g)}
         ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}">✍ 수정·다시 켜기 제안</button></div>`}
-        <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div></div>`).join("")
+        <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div>
+        ${sessLine(g)}</div>`).join("")
         : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
@@ -1457,6 +1465,8 @@ function changeForm(g, accs) {
         <label>모의 기간 마지막 날<input type="date" id="ch-until" value="${esc(g.params.until || "")}"></label></div>` : ""}` : ""}
     ${(((S.snap || {}).summary || {}).cycle_gates || {})[g.id] && (S.snap.summary.cycle_gates[g.id].real || S.snap.summary.cycle_gates[g.id].mock)
       ? `<label>새 싸이클 규칙 (예: 30분할 · 목표 15% · 1회 매수금 $600)<input type="text" id="ch-cycle" maxlength="200" ${S.cycleNew ? "required" : ""}></label>` : ""}
+    <label class="inl"><input type="checkbox" id="ch-sess" ${S.chSess ? "checked" : ""}> 운용 장 · 주문 방법 바꾸기 <span class="small muted">지금: ${esc(sessText(sessOf(g)))}</span></label>
+    ${S.chSess && S.sessSel.ch && S.sessSel.ch.sid === g.id ? sessEditor("ch") : ""}
     <label>이유 (왜 바꾸는지 — 당사자에게 보입니다)<textarea id="ch-note" rows="2" maxlength="500" required></textarea></label>
     <div class="row"><span class="grow"></span><button type="button" class="btn" data-propose-cancel="1">취소</button><button class="btn primary">제안 보내기</button></div>
   </form>`;
@@ -1482,7 +1492,8 @@ function viewConsensus() {
 function addStrategy(s) {
   const accs = Object.entries(s.accounts || {});
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
-  const kind = S.newKind || "sheet";
+  const kind = S.newKind || "sheet", fam = sessFamily({ kind });
+  if (!S.sessSel.add || S.sessSel.add.fam !== fam) S.sessSel.add = { fam, sel: sessDefault(fam) };   // 종류가 바뀌면 그 종류 기본값
   return `
     <div class="card small" style="border-left:4px solid var(--accent)">📜 새 전략은 <b>투자헌법</b>에 맞아야 합니다 — 특히 제3조 생존 우선(퇴출될 위험 금지)·제4조 적극적 투자는 정해진 한도 안에서. <button class="btn ghost small" data-tab="constitution">투자헌법 보기</button></div>
     <div class="card"><h2>${S.addMock ? "투자 전략 연구" : "전략 추가"} <span class="chip ${S.addMock ? "" : "warn"}">${S.addMock ? "가투 전용" : "운영 전략 (메리츠)"}</span></h2>
@@ -1499,11 +1510,123 @@ function addStrategy(s) {
           ${KIND_FIELDS[kind].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
         ${kind === "dynamic" ? dynSection() : ""}
+        ${sessEditor("add")}
         <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 판단합니다. 첫날 기준가는 전날 종가, 둘째 날부터는 시가(개장 N분). 지금은 모의로만 체결합니다." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
         <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
     </div>` + cmdList();
+}
+// ── 운용 장 · 주문 방법 (ADR 0053, 작업 ⑬) — 전략 칸 sessions 는 표시·기록용 (엔진의 주문 시각은 바꾸지 않음) ──
+// SESS_RULES 는 src/autotrader/order_sessions.py 의 rules_for_web() 와 같아야 한다 (tests/test_order_sessions.py 가 맞춰 봄)
+const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC", "MOC": "MOC", "LIMIT": "지정가", "MARKET": "시장가", "LOO": "LOO", "MOO": "MOO", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"]};
+// 장 시간 (뉴욕 시간, 서머타임과 상관없이 같음 — market_calendar.market_phase 와 같은 기준). [시, 분, 날짜 차이]
+const SESS_NY = { day: [[20, 0, -1], [3, 50, 0]], pre: [[4, 0, 0], [9, 30, 0]], regular: [[9, 30, 0], [16, 0, 0]], after: [[16, 0, 0], [19, 50, 0]] };
+const sessFamily = (g) => (g && g.sessions_family) || ({ vr: "vr", dynamic: "dynamic", ph01: "ph01", privacy: "privacy" }[g && g.kind] || "infinite");
+const sessDefault = (fam) => JSON.parse(JSON.stringify(SESS_RULES.defaults[fam] || {}));
+const sessOf = (g) => (g && g.sessions && Object.keys(g.sessions).length) ? g.sessions : sessDefault(sessFamily(g));
+function sessClean(sel) {
+  const out = {};
+  for (const s of SESS_RULES.sessions) { const t = ((sel || {})[s] || []).filter((x) => SESS_RULES.allowed[s].includes(x));
+    if (t.length) out[s] = SESS_RULES.order_types.filter((x) => t.includes(x)); }
+  return out;
+}
+function sessText(sel) {
+  const c = sessClean(sel), k = Object.keys(c);
+  return k.length ? k.map((s) => SESS_RULES.session_ko[s] + " " + c[s].map((t) => SESS_RULES.order_ko[t]).join("·")).join(" · ") : "주문 없음";
+}
+function sessWarn(sel, fam) {
+  const c = sessClean(sel), out = [];
+  if (SESS_RULES.watch.includes(fam) || Object.values(c).some((a) => a.includes("MARKET"))) {
+    out.push(`실시간 감시 — 노트북이 ${SESS_RULES.sessions.filter((s) => c[s]).map((s) => SESS_RULES.session_ko[s]).join("·") || "정규장"} 동안 켜져 있어야 합니다`);
+    if (c.day) out.push("데이장은 메리츠 실시간 시세가 없습니다 (현재가가 전날 종가 그대로)");
+  }
+  return out;
+}
+function sessCheck(sel, fam) {
+  const keys = SESS_RULES.sessions.filter((s) => (sel || {})[s]);
+  if (!keys.length) return fam === "privacy" ? "" : "운용 장을 하나 이상 고르세요";
+  const empty = keys.find((s) => !sessClean({ [s]: sel[s] })[s]);
+  return empty ? `${SESS_RULES.session_ko[empty]}: 주문 방법을 하나 이상 고르거나 장 체크를 끄세요` : "";
+}
+function nyOffset(d = new Date()) {         // 뉴욕 시간 - UTC (시간): 여름 -4, 겨울 -5
+  try {
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(d);
+    const g = (t) => Number(p.find((x) => x.type === t).value);
+    return Math.round((Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute")) - d.getTime()) / 3600000);
+  } catch (e) { return -5; }
+}
+const hhmm = (h, m) => `${String(((h % 24) + 24) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+function sessKst(s, summer) {               // 한국 시간 (겨울 +14시간, 여름 +13시간)
+  const add = summer ? 13 : 14, [[h0, m0], [h1, m1]] = SESS_NY[s];
+  return `${hhmm(h0 + add, m0)}~${hhmm(h1 + add, m1)}`;
+}
+const sessNyText = (s) => { const [[h0, m0, d0], [h1, m1]] = SESS_NY[s]; return `${d0 ? "전날 " : ""}${hhmm(h0, m0)}~${hhmm(h1, m1)}`; };
+function sessNow(now = new Date()) {        // 노트북 스냅숏이 없을 때 브라우저에서 같은 규칙으로 (휴장일은 모름)
+  const off = nyOffset(now), t = now.getTime() + off * 3600000, ny = new Date(t), W = [];
+  for (let k = -1; k < 9; k++) {
+    const d = Date.UTC(ny.getUTCFullYear(), ny.getUTCMonth(), ny.getUTCDate() + k), dw = new Date(d).getUTCDay();
+    if (dw === 0 || dw === 6) continue;
+    for (const s of SESS_RULES.sessions) { const [[h0, m0, d0], [h1, m1]] = SESS_NY[s];
+      W.push([d + d0 * 864e5 + (h0 * 60 + m0) * 60000, d + (h1 * 60 + m1) * 60000, s]); }
+  }
+  W.sort((a, b) => a[0] - b[0]);
+  const cur = W.find((w) => w[0] <= t && t < w[1]), nxt = W.find((w) => w[0] > t);
+  const kst = (x) => new Date(x - off * 3600000 + 9 * 3600000).toISOString().slice(0, 16) + "+09:00";
+  const out = { code: cur ? cur[2] : "closed", label: cur ? SESS_RULES.session_ko[cur[2]] : "쉬는 시간", until: cur ? kst(cur[1]) : null, guess: true };
+  if (nxt) Object.assign(out, { next_code: nxt[2], next_label: SESS_RULES.session_ko[nxt[2]], next_at: kst(nxt[0]) });
+  return out;
+}
+// 전략 추가·수정 제안에서 쓰는 '운용 장' 고르기 칸. pf = add | ch, S.sessSel[pf] = { fam, sel }
+function sessEditor(pf) {
+  const st = S.sessSel[pf], sel = st.sel, summer = nyOffset() === -4, warn = sessWarn(sel, st.fam), err = sessCheck(sel, st.fam);
+  return `<fieldset class="sess-box"><legend>운용 장 · 주문 방법 <span class="small muted">(표시·기록용 — 지금은 주문 시각을 바꾸지 않습니다)</span></legend>
+    ${SESS_RULES.sessions.map((s) => { const on = !!sel[s];
+      return `<div class="sess-row"><label class="inl"><input type="checkbox" data-sess="${pf}|${s}" ${on ? "checked" : ""}> <b>${SESS_RULES.session_ko[s]}</b>
+        <span class="small muted">한국 ${sessKst(s, summer)}</span></label>
+        <div class="row">${SESS_RULES.allowed[s].map((t) => `<label class="inl sess-ot ${on ? "" : "muted"}"><input type="checkbox" data-sessot="${pf}|${s}|${t}" ${(sel[s] || []).includes(t) ? "checked" : ""} ${on ? "" : "disabled"}> ${SESS_RULES.order_ko[t]}</label>`).join("")}
+          ${s !== "regular" ? `<span class="small muted">시장가·LOC·MOC 등은 정규장에서만</span>` : ""}</div></div>`; }).join("")}
+    <div class="row small"><span>고른 것: <b>${esc(sessText(sel))}</b></span><span class="grow"></span>
+      <button type="button" class="btn ghost small" data-sessdef="${pf}">종류 기본값으로</button><button type="button" class="btn ghost small" data-tab="sessions">장 시간 보기</button></div>
+    ${warn.map((w) => `<div class="small warn-t">⚠ ${esc(w)}</div>`).join("")}${err ? `<div class="small" style="color:var(--bad)">${esc(err)}</div>` : ""}</fieldset>`;
+}
+function sessLine(g) {
+  const sel = sessOf(g), dflt = g.sessions_default !== undefined ? !!g.sessions_default : !(g.sessions && Object.keys(g.sessions).length), warn = g.sessions_warn || sessWarn(sel, sessFamily(g));
+  return `<div class="row small"><span class="muted">운용 장 · 주문 방법</span><span>${esc(g.sessions_text || sessText(sel))}</span>
+    ${dflt ? `<span class="chip" title="저장된 값이 없어 전략 종류의 기본값을 보여 줍니다">기본값</span>` : ""}
+    <button type="button" class="linkbtn" data-propose="${esc(g.id)}" data-sessprop="1">수정 제안</button></div>
+    ${warn.map((w) => `<div class="small warn-t">⚠ ${esc(w)}</div>`).join("")}`;
+}
+const ORDER_INFO = [
+  ["LIMIT", "데이장·프리장·정규장·애프터장", "무한매수 목표가 매도(정규장·애프터장), 관리자 확인 주문"],
+  ["MARKET", "정규장", "동적 분할매수·PH01 낙폭 단계 (지금은 가투에서만)"],
+  ["LOC", "정규장 마감 체결 (프리장부터 미리 넣기)", "무한매수 매수·매도"],
+  ["MOC", "정규장 마감 체결 (프리장부터 미리 넣기)", "무한매수 리버스 첫날 매도"],
+  ["LOO", "정규장 시작 체결", "아직 안 씀"], ["MOO", "정규장 시작 체결", "아직 안 씀"],
+  ["VWAP", "정규장", "아직 안 씀"], ["TWAP", "정규장", "아직 안 씀"],
+  ["RESERVE", "정규장 (기간 동안 남은 수량 유지)", "VR 사다리 (지정가·기간잔량)"],
+];
+function viewSessions(s) {
+  const m = (s && s.market) || sessNow(), summer = nyOffset() === -4, hm = (iso) => iso ? iso.slice(11, 16) : "";
+  const md = (iso) => iso ? iso.slice(5, 10).replace("-", "/") + " " : "";
+  const strat = s ? allStrategies(s, true) : [];
+  return `<div class="card"><div class="row between"><h2>지금 장</h2><span class="small muted">${summer ? "여름 (서머타임)" : "겨울"} 시간 · 한국 시간</span></div>
+      <div class="row"><span class="chip phase-${esc(m.code)}">${esc(m.label)}${m.until ? " ~" + hm(m.until) : ""}</span>
+        ${m.next_label ? `<span class="small muted">다음 ${esc(m.next_label)} ${md(m.next_at)}${hm(m.next_at)} 열림</span>` : ""}</div>
+      ${m.guess ? `<div class="small muted">노트북이 연결되기 전이라 브라우저에서 계산했습니다 (미국 휴장일은 빠짐).</div>` : ""}</div>
+    <div class="card"><h2>장 시간</h2><div class="scroll"><table><thead><tr><th>장</th><th class="${summer ? "" : "on"}">한국 겨울</th><th class="${summer ? "on" : ""}">한국 여름</th><th>미국 동부</th></tr></thead><tbody>
+      ${SESS_RULES.sessions.map((k) => `<tr class="${m.code === k ? "on" : ""}"><td>${SESS_RULES.session_ko[k]}${m.code === k ? " · 지금" : ""}</td>
+        <td class="${summer ? "" : "on"}">${sessKst(k, false)}</td><td class="${summer ? "on" : ""}">${sessKst(k, true)}</td><td class="muted">${sessNyText(k)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="small muted">데이장(주간거래)은 다음 날이 미국 거래일일 때만 열립니다. 조기 마감일은 정규장 13:00(미국 동부)까지.</div></div>
+    <div class="card"><h2>주문 방법</h2><div class="scroll"><table><thead><tr><th>주문 방법</th><th>쓸 수 있는 장</th><th>이 시스템에서 쓰는 곳</th></tr></thead><tbody>
+      ${ORDER_INFO.map(([t, w, u]) => `<tr><td><b>${SESS_RULES.order_ko[t]}</b></td><td>${w}</td><td class="small muted">${u}</td></tr>`).join("")}</tbody></table></div></div>
+    <div class="card"><h2>규칙</h2><ul class="small" style="margin:0;padding-left:18px">
+      <li>정규장 주문은 <b>데이장 개장</b> 때, 데이장 주문은 <b>프리장 개장</b> 때 풀립니다 (다시 넣어야 함).</li>
+      <li>가격 범위: 기준가에서 30% 넘게 벗어난 주문은 메리츠가 거부합니다 — 이 시스템은 28% 에서 '거부 예상'으로 미리 알립니다.</li>
+      <li>데이장 동안 메리츠 현재가는 실시간이 아닙니다 (전날 종가 그대로) — 실시간 감시 전략은 정규장에서.</li>
+      <li>서머타임(3월 둘째 일요일~11월 첫째 일요일)에는 한국 시간이 1시간 빨라집니다.</li>
+      <li>전략의 '운용 장'은 지금은 표시·기록용입니다 — 주문 시각을 바꾸려면 따로 합의합니다 (ADR 0053·0037).</li></ul></div>
+    ${strat.length ? `<div class="card"><h2>전략별 운용 장</h2>${strat.map((g) => `<div class="strat"><b>${esc(g.id)} <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.mock_only ? " · 가투 전용" : ""}</span></b>${sessLine(g)}</div>`).join("")}</div>` : ""}`;
 }
 // ── 주문표 달력: 실행일(미국 장 날짜)을 고르면 그날 주문표·모의 체결 ──
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -1876,10 +1999,20 @@ function bind() {
   document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
     const g = allStrategiesFlat().find((x) => x.id === b.dataset.propose);
     S.editSid = b.dataset.propose; S.chParams = false; S.cycleNew = !!b.dataset.cyclenew;
+    S.chSess = !!b.dataset.sessprop; S.sessSel.ch = { sid: b.dataset.propose, fam: sessFamily(g), sel: JSON.parse(JSON.stringify(sessOf(g))) };
+    if (S.tab !== "mystrat") S.tab = "mystrat";          // 장·주문 방법 화면에서 누르면 내 전략의 제안 칸으로
     if (g && g.params) S.dynForm = { rules: (g.params.rules || []).map(([a, w]) => [+a, +w]), stops: (g.params.stops || []).map(([a, w]) => [+a, +w]),
       tp: +(g.params.tp_pct || 5), tpSell: +(g.params.tp_sell_pct || 50) };
     render(); });
   document.querySelectorAll("[data-propose-cancel]").forEach((b) => b.onclick = () => { S.editSid = null; render(); });
+  const chs = document.getElementById("ch-sess");
+  if (chs) chs.onchange = () => { S.chSess = chs.checked; render(); };
+  // 운용 장 고르기 (ADR 0053): 장 체크 → 그 종류 기본 주문 방법, 주문 방법 체크 → 그 장에서 쓸 수 있는 것만
+  document.querySelectorAll("[data-sess]").forEach((el) => el.onchange = () => { const [pf, s] = el.dataset.sess.split("|"), st = S.sessSel[pf];
+    if (!st) return; if (el.checked) st.sel[s] = ((SESS_RULES.defaults[st.fam] || {})[s] || ["LIMIT"]).slice(); else delete st.sel[s]; render(); });
+  document.querySelectorAll("[data-sessot]").forEach((el) => el.onchange = () => { const [pf, s, t] = el.dataset.sessot.split("|"), st = S.sessSel[pf];
+    if (!st || !SESS_RULES.allowed[s].includes(t)) return; const a = st.sel[s] || []; st.sel[s] = el.checked ? (a.includes(t) ? a : a.concat([t])) : a.filter((x) => x !== t); render(); });
+  document.querySelectorAll("[data-sessdef]").forEach((b) => b.onclick = () => { const st = S.sessSel[b.dataset.sessdef]; if (st) { st.sel = sessDefault(st.fam); render(); } });
   const chp = document.getElementById("ch-params");
   if (chp) chp.onchange = () => { S.chParams = chp.checked; render(); };
   const fch = document.getElementById("f-change");
@@ -1892,11 +2025,17 @@ function bind() {
       change.params = { rules: ser(f.rules), stops: ser(f.stops), tp: String(f.tp), tp_sell: String(f.tpSell),
         checks: document.getElementById("ch-checks").value, until: document.getElementById("ch-until").value };
       parts.push(`매수 ${change.params.rules} · 손절 ${change.params.stops || "없음"} · 익절 +${f.tp}%→${f.tpSell}%`); }
+    if (S.chSess && S.sessSel.ch && S.sessSel.ch.sid === sid) {
+      const st = S.sessSel.ch, err = sessCheck(st.sel, st.fam);
+      if (err) { S.msg = { bad: true, text: err }; render(); return; }
+      const nw = sessClean(st.sel);
+      if (JSON.stringify(nw) !== JSON.stringify(sessClean(sessOf(g)))) { change.sessions = nw; parts.push(`운용 장 → ${sessText(nw)}`); }
+    }
     if (!parts.length) { S.msg = { bad: true, text: "바꿀 내용이 없습니다" }; render(); return; }
     const r = await sb.rpc("propose_change", { p_owner: owner(), p_strategy: sid, p_change: change, p_summary: parts.join(" / "),
       p_note: document.getElementById("ch-note").value.trim() });
     S.msg = r.error ? { bad: true, text: "제안 실패: " + ko(r.error.message) } : { text: "제안했습니다. 당사자 모두 '수정 합의'에서 동의하면 계좌 주인이 적용합니다." };
-    if (!r.error) { S.editSid = null; S.tab = "consensus"; }
+    if (!r.error) { S.editSid = null; S.chSess = false; S.tab = "consensus"; }
     await refresh(); };
   document.querySelectorAll("[data-agree],[data-disagree]").forEach((b) => b.onclick = async () => {
     const agree = !!b.dataset.agree, id = Number(b.dataset.agree || b.dataset.disagree);
@@ -1943,6 +2082,9 @@ function bind() {
       Object.assign(p, { rules: ser(f.rules), stops: ser(f.stops), tp: String(f.tp), tp_sell: String(f.tpSell) });
       if (!f.stops.length) p.stops = "";
     }
+    const ss = S.sessSel.add, serr = ss ? sessCheck(ss.sel, ss.fam) : "";       // 운용 장 (ADR 0053)
+    if (serr) { S.msg = { bad: true, text: serr }; render(); return; }
+    if (ss) p.sessions = sessClean(ss.sel);
     send("add_strategy", p); };
   const fg = document.getElementById("f-grant");
   if (fg) fg.onsubmit = async (e) => { e.preventDefault();
