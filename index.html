@@ -466,7 +466,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-09";
+const APP_VERSION = "2026-11-09b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1519,7 +1519,7 @@ function addStrategy(s) {
 }
 // ── 운용 장 · 주문 방법 (ADR 0053, 작업 ⑬) — 전략 칸 sessions 는 표시·기록용 (엔진의 주문 시각은 바꾸지 않음) ──
 // SESS_RULES 는 src/autotrader/order_sessions.py 의 rules_for_web() 와 같아야 한다 (tests/test_order_sessions.py 가 맞춰 봄)
-const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC", "MOC": "MOC", "LIMIT": "지정가", "MARKET": "시장가", "LOO": "LOO", "MOO": "MOO", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"]};
+const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC", "MOC": "MOC", "LIMIT": "지정가", "MARKET": "시장가", "LOO": "LOO", "MOO": "MOO", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"]};
 // 장 시간 (뉴욕 시간, 서머타임과 상관없이 같음 — market_calendar.market_phase 와 같은 기준). [시, 분, 날짜 차이]
 const SESS_NY = { day: [[20, 0, -1], [3, 50, 0]], pre: [[4, 0, 0], [9, 30, 0]], regular: [[9, 30, 0], [16, 0, 0]], after: [[16, 0, 0], [19, 50, 0]] };
 const sessFamily = (g) => (g && g.sessions_family) || ({ vr: "vr", dynamic: "dynamic", ph01: "ph01", privacy: "privacy" }[g && g.kind] || "infinite");
@@ -1598,8 +1598,8 @@ function sessLine(g) {
     ${warn.map((w) => `<div class="small warn-t">⚠ ${esc(w)}</div>`).join("")}`;
 }
 const ORDER_INFO = [
-  ["LIMIT", "데이장·프리장·정규장·애프터장", "무한매수 목표가 매도(정규장·애프터장), 관리자 확인 주문"],
-  ["MARKET", "정규장", "동적 분할매수·PH01 낙폭 단계 (지금은 가투에서만)"],
+  ["LIMIT", "데이장·프리장·정규장·애프터장", "무한매수 목표가 매도(정규장·애프터장), 동적 분할매수 하락 단계 매수(데이장·프리장 개장 때 미리 걸기), 관리자 확인 주문"],
+  ["MARKET", "정규장", "동적 분할매수 익절·손절(평단 기준 실시간), PH01 낙폭 단계 (지금은 가투에서만)"],
   ["LOC", "정규장 마감 체결 (프리장부터 미리 넣기)", "무한매수 매수·매도"],
   ["MOC", "정규장 마감 체결 (프리장부터 미리 넣기)", "무한매수 리버스 첫날 매도"],
   ["LOO", "정규장 시작 체결", "아직 안 씀"], ["MOO", "정규장 시작 체결", "아직 안 씀"],
