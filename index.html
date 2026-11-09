@@ -420,13 +420,20 @@ async function lockBytes(data, name, pass) {
   const out = new Uint8Array(32 + ct.length); out.set(enc.encode("ATP1"), 0); out.set(salt, 4); out.set(iv, 20); out.set(ct, 32);
   return new Blob([out], { type: "application/octet-stream" });
 }
+// 사진 종류 3가지 (11/09 작업 ⑪): 기록 → 사진 올리기 한 곳에서 고른다. 판독 뒤 사진은 노트북에서도 지우고 숫자만 남김 (작업 ⑩)
+const UP_KINDS = [["sheet", "무한매수 주문표", "시스템 계산과 비교 — 같으면 알림만, 다르면 원인과 함께 '관리자 확인 주문'에 올라옵니다"],
+  ["vr", "VR 주문표", "'다음 V 계산'·'매수·매도 계획' 사진 — V·Pool·최소·최대·사다리를 시스템 VR 주기와 비교합니다 (값은 바꾸지 않음)"],
+  ["privacy", "프라이버시", "관리자 노트북이 판독해 규칙 학습·다음 거래일 예상 (가투 → 프라이버시에서 보기)"]];
 function uploadCard(purpose) {
-  // 용도는 화면이 정한다 (11/07): 주문 → 사진 올리기 = 주문표, 전략 → 프라이버시 = 프라이버시 연구
   if (purpose) S.upPurpose = purpose;
+  if (!UP_KINDS.some(([k]) => k === S.upPurpose)) S.upPurpose = "sheet";
   let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
-  const priv = S.upPurpose === "privacy";
-  return `<details class="card" ${S.upOpen ? "open" : ""} id="up-card"><summary class="row between"><h2 style="display:inline">📷 ${priv ? "프라이버시 사진 올리기" : "주문표 사진 올리기"}</h2>
+  const kd = UP_KINDS.find(([k]) => k === S.upPurpose);
+  return `<details class="card" ${S.upOpen ? "open" : ""} id="up-card"><summary class="row between"><h2 style="display:inline">📷 ${esc(kd[1])} 사진 올리기</h2>
       <span class="small muted">텔레그램 대신 여기서 — 잠가서 보내고 노트북이 받는 즉시 클라우드에서 지움</span></summary>
+    <div class="seg" role="tablist" aria-label="사진 종류" style="margin:8px 0">${UP_KINDS.map(([k, t]) =>
+      `<button type="button" role="tab" data-uppurpose="${k}" class="${S.upPurpose === k ? "on" : ""}" aria-selected="${S.upPurpose === k}">${esc(t)}</button>`).join("")}</div>
+    <div class="small muted">${esc(kd[2])}</div>
     <form id="f-up" style="display:flex;flex-direction:column;gap:10px">
       <label>사진 (여러 장 가능)<input type="file" id="up-files" accept="image/jpeg,image/png,image/webp" multiple required></label>
       <label>업로드 암호 <span class="small muted">(${owner() === S.user.id ? "내 노트북 칸" : "<b>" + esc(((S.ops || []).find((o) => o.owner_id === owner()) || {}).display_name || "") + "</b> 계좌 주인 칸"}의 UPLOAD_PASSPHRASE — 계좌마다 다름)</span>
@@ -440,7 +447,7 @@ function uploadCard(purpose) {
 async function uploadPhotos(files, pass, remember) {
   try { if (remember) localStorage.setItem("upPass:" + owner(), pass); else localStorage.removeItem("upPass:" + owner()); } catch (e) {}
   S.busy = true; S.upBad = false; S.upOpen = true;
-  const purpose = S.upPurpose === "privacy" ? "privacy" : "sheet";
+  const purpose = ["privacy", "vr"].includes(S.upPurpose) ? S.upPurpose : "sheet";
   let ok = 0;
   for (const [i, f] of [...files].entries()) {
     if (f.size > 14 * 1024 * 1024) { S.upNote = `${f.name}: 14MB 가 넘어 건너뜀`; continue; }
@@ -456,7 +463,7 @@ async function uploadPhotos(files, pass, remember) {
   }
   S.busy = false;
   if (!S.upBad) S.clearForm = ["up-files"];
-  if (!S.upBad) S.upNote = `${ok}장 보냄 — 노트북이 20초 안에 받아 ${purpose === "privacy" ? "연구 폴더에 저장" : "판독"}합니다. 아래 '최근 보낸 명령'에서 결과 확인.`;
+  if (!S.upBad) S.upNote = `${ok}장 보냄 — 노트북이 20초 안에 받아 ${purpose === "privacy" ? "연구 폴더에 저장" : "판독"}합니다 (결과는 텔레그램·기록 → 주문표 달력). 아래 '최근 보낸 명령'에서 결과 확인.`;
   await refresh(); setTimeout(refresh, 25000);
 }
 async function loadFamily() {
@@ -466,7 +473,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-09b";
+const APP_VERSION = "2026-11-09c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -522,9 +529,9 @@ function layout() {
 // 메뉴 여섯 개 (2026-11-01 개편, 11/07 모의 추가): PC 왼쪽 메뉴 = 폰 아래 탭. 각 메뉴 안의 화면은 위쪽 버튼으로 고른다.
 const GROUPS = [
   ["home", "자산", [["home", "자산"]]],
-  ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"], ["upload", "사진 올리기"]]],
+  ["order", "주문", [["confirm", "관리자 확인 주문"], ["auto", "자동 주문"]]],
   ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["sessions", "장·주문 방법"]]],   // 장·주문 방법: 11/09 작업 ⑬
-  ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["board", "알림"]]],   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
+  ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["upload", "사진 올리기"], ["board", "알림"]]],   // 사진 올리기: 11/09 작업 ⑪ (주문과 별개)   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
   // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
   ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["privacy", "프라이버시"]]],
@@ -554,12 +561,12 @@ function currentView() {
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
     case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
-    case "upload": S.upOpen = true; v = uploadCard("sheet") + `<div class="small muted">주문표 사진은 시스템 계산과 비교합니다 — 같으면 알림만, 다르면 원인과 함께 '주문표 승인'에 올라옵니다. 프라이버시 사진은 전략 → 프라이버시에서 올리세요.</div>`; break;
+    case "upload": S.upOpen = true; v = uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>`; break;
     case "mystrat": v = need(myStrategies); break;
     case "research": S.addMock = true; v = need(addStrategy); break;
     case "addstrat": S.addMock = false; v = need(addStrategy); break;
     case "consensus": v = viewConsensus(); break;
-    case "privacy": S.upOpen = true; v = need(privacyCard) + privacyLog() + uploadCard("privacy"); break;
+    case "privacy": v = need(privacyCard) + privacyLog(); break;   // 올리기는 기록 → 사진 올리기 (작업 ⑪)
     case "calendar": v = viewCalendar(); break;
     case "trades": S.tradeKind = "real"; v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
@@ -1387,7 +1394,7 @@ function telegramCard(s) {
 function privacyCard(s) {
   const pv = s.privacy || {}, on = !!pv.on;
   return `<div class="card"><h2>프라이버시 투자법 <span class="chip">모의 예측</span></h2>
-    <div class="small muted">프라이버시 주문표 사진을 아래 '프라이버시 사진 올리기'로 올리면 관리자 노트북이 판독해
+    <div class="small muted">프라이버시 주문표 사진을 <button type="button" class="linkbtn" data-uppurpose="privacy">기록 → 사진 올리기(프라이버시)</button>로 올리면 관리자 노트북이 판독해
       <b>분석 보고서</b>(판독값·규칙 대조)와 <b>다음 거래일 주문표 예상</b>을 텔레그램으로 보내 드립니다.
       규칙은 사진 50장마다 다시 맞춥니다. 아직 주문은 내지 않습니다.</div>
     ${pv.admin ? `<div class="small">관리자는 늘 받습니다.</div>` : `<div class="row between">
@@ -1789,7 +1796,21 @@ function viewCalendar() {
     <div class="small muted">주문표 날짜 = 미국 장 날짜(실행일), 한국 시간으로는 그날 밤~다음 날 새벽. 🚀 배포 · 🗳 결정 · 📌 점검 = 개발 완료 계획(한국 날짜, 그날 아침 자동 실행).</div>
     ${PL ? planSummary(PL, today) : ""}
     <div class="cal" style="margin-top:8px">${DOW.map((w) => `<span class="dow">${w}</span>`).join("")}${cells.join("")}</div></section>`;
-  return out + planDay(sel, pdays[sel]) + calDay(sel, days[sel]);
+  return out + planDay(sel, pdays[sel]) + calDay(sel, days[sel]) + readLogCard(sel);
+}
+// 사진 판독 기록 (작업 ⑪): 사진은 지우고 판독 숫자·시스템 비교·선택만 (노트북 state/photo_reads)
+const READ_ST = { same: ["계산과 같음 ✓", "ok"], diff: ["다름", "warn"], draft: ["판독 (승인 대기)", ""], read: ["판독", ""] };
+function readLogCard(sel) {
+  const log = ((S.snap && S.snap.detail) || {}).read_log || [];
+  if (!log.length) return `<div class="card"><h2>사진 판독 기록</h2><div class="empty">아직 없습니다. 기록 → 사진 올리기나 텔레그램으로 주문표 사진을 보내면 판독 숫자가 여기 쌓입니다 (사진은 판독 뒤 지움).</div></div>`;
+  const rows = [...log.filter((r) => r.day === sel), ...log.filter((r) => r.day !== sel)].slice(0, 30);
+  return `<div class="card"><h2>사진 판독 기록</h2><div class="small muted">사진은 판독 뒤 지우고 숫자만 남깁니다. 고른 날(${esc(sel || "")}) 것이 먼저 보입니다.</div>
+    ${rows.map((r) => { const st = READ_ST[r.status] || [r.status || "", ""];
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row between"><span><b>${esc(r.day || "")}</b> · ${esc({ sheet: "무한매수", vr: "VR" }[r.kind] || r.kind)} · ${esc(r.sid || "?")}</span>
+        <span class="res ${st[1]}">${esc(st[0])}${r.choice ? " · " + (r.choice === "photo" ? "사진 값으로 바꿈" : "계산 유지") : ""}</span></div>
+        <div class="small">${Object.entries(r.nums || {}).map(([k, v]) => `${esc(k)} <b class="num">${esc(String(v))}</b>`).join(" · ")}</div>
+        ${(r.diff || []).map((d) => `<div class="small warn-t">✗ ${esc(String(d[0]))}: 시스템 ${esc(String(d[1]))} / 사진 ${esc(String(d[2]))}</div>`).join("")}
+        ${(r.problems || []).map((p) => `<div class="small muted">⚠ ${esc(String(p))}</div>`).join("")}</div>`; }).join("")}</div>`;
 }
 const PST = { todo: ["예정", ""], done: ["완료", "ok"], waiting: ["결정 대기", "warn"], moved: ["미룸", "bad"], running: ["진행 중", "warn"] };
 function planSummary(PL, today) {
@@ -1942,7 +1963,8 @@ function bind() {
   document.querySelectorAll("[data-tradesid]").forEach((b) => b.onclick = () => { S.tradeSid = b.dataset.tradesid; render(); });
   document.querySelectorAll("[data-tradekind]").forEach((b) => b.onclick = () => { S.tradeKind = b.dataset.tradekind; render(); });
   document.querySelectorAll("[data-topen]").forEach((b) => b.onclick = () => { S.tradeOpen[b.dataset.topen] = !S.tradeOpen[b.dataset.topen]; render(); });
-  document.querySelectorAll("[data-uppurpose]").forEach((b) => b.onclick = () => { S.upPurpose = b.dataset.uppurpose; S.upOpen = true; render(); });
+  document.querySelectorAll("[data-uppurpose]").forEach((b) => b.onclick = () => { S.upPurpose = b.dataset.uppurpose; S.upOpen = true;
+    if (S.tab !== "upload") { S.tab = "upload"; (S.lastSub = S.lastSub || {}).record = "upload"; } render(); });
   const fup = document.getElementById("f-up"); if (fup) fup.onsubmit = (e) => { e.preventDefault();
     const files = document.getElementById("up-files").files; if (!files.length) return;
     uploadPhotos(files, document.getElementById("up-pass").value, document.getElementById("up-remember").checked); };
