@@ -479,7 +479,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-10a";
+const APP_VERSION = "2026-11-10b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -732,6 +732,8 @@ function viewOrders() {
   return out + (g.kind === "vr" ? vrOrders(s, d, g, acc) : realOrders(s, d, g, acc));
 }
 const KIND_KO = { LOC: "LOC", LIMIT: "지정가", MARKET: "시장가", MOC: "MOC", LIMIT_VWAP: "VWAP", VR: "지정가·기간잔량" };
+const PRICELESS_KINDS = ["MOC", "MOO", "MARKET"];        // 노트북 app.PRICELESS 와 같음 — 가격 자리는 '종가'
+const pxText = (p) => p && p !== "종가" ? money(p) : "종가";
 function ordersMissing(r, acc) {
   if (!r) return `<div class="card"><div class="empty">${acc && acc.api ? "노트북이 아직 메리츠 보유를 조회하지 않았습니다 (봇 재시작 뒤 몇 분)." : "이 계좌는 API 키가 없어 메리츠 보유로 계산할 수 없습니다."}</div></div>`;
   if (r.error) return `<div class="card"><div class="empty">메리츠 보유 조회 실패 (${esc(r.error)}) — 노트북에서 autotrader doctor 로 확인</div></div>`;
@@ -792,8 +794,9 @@ function realOrders(s, d, g, acc) {
       <span class="small muted">${esc(ACC_NAME[cur] || cur)} · 미국 ${esc(r.trade_date)} 장</span></div>`;
   if (!row.approved) return out + `<div class="empty">아직 ${esc(r.trade_date)} 주문표가 없습니다 (아침 6시 계산 뒤 생깁니다)</div></section>`;
   out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}메리츠 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
-      ${row.lines.map((l) => `<div class="oline">${confirmOn(acc) && l.price ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc([row.sid, l.side, l.kind, l.price, l.qty].join("|"))}" ${cfChecked([row.sid, l.side, l.kind, l.price, l.qty].join("|"), !l.later && !l.near && !l.catchup && !l.collar) && !l.collar ? "checked" : ""} ${l.collar ? "disabled" : ""} aria-label="이 줄 넣기">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
-        <b class="num">${l.price ? money(l.price) : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`).join("")}
+      ${row.lines.map((l) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
+        return `<div class="oline">${confirmOn(acc) && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !l.later && !l.near && !l.catchup && !l.collar) && !l.collar ? "checked" : ""} ${l.collar ? "disabled" : ""} aria-label="이 줄 넣기">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
+        <b class="num">${l.price ? money(l.price) : l.kind === "MOC" ? "종가" : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`; }).join("")}
       ${row.usd_share != null ? `<div class="small" style="margin-top:6px">이 전략 달러 예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
       ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}
@@ -816,14 +819,15 @@ function confirmPanel(cur, r, g) {
   if (!P) return `<div class="card"><div class="row between"><h2>관리자 확인 주문</h2><span class="small muted">체크한 줄만 노트북이 메리츠에 넣습니다</span></div>
     <div class="small muted">기본 체크 = 지금 걸 주 매수·매도. 하락 대비·보충 줄은 필요할 때 체크, 거부 예상 줄은 넣을 수 없습니다.</div>
     ${locNo ? `<div class="small warn-t">⏰ ${esc(locNo)}</div>` : ""}
+    ${S.cfNote && S.cfNote.acc === cur ? `<div class="small" style="color:var(--bad)" role="alert">${esc(S.cfNote.text)}</div>` : ""}
     <div class="row"><button class="btn primary" data-confirm-review="${esc(cur)}">고른 줄 확인하기</button>${g && g.symbol === "SOXL" ? `<button class="btn" data-confirm-test="${esc(cur)}" ${locNo ? "disabled" : ""} title="${esc(locNo)}">시험 주문 (SOXL 1주, 현재가 −25% LOC)</button>` : ""}</div></div>`;
-  const buy = (P.lines || []).filter((x) => x.side === "BUY").reduce((a, x) => a + Number(x.price) * x.qty, 0);
+  const buy = (P.lines || []).filter((x) => x.side === "BUY").reduce((a, x) => a + (Number(x.price) || Number(((S.snap.summary.quotes || {})[g && g.symbol] || {}).price || 0)) * x.qty, 0);
   const cash = r.cash != null ? Number(r.cash) : null;
   const timeNo = [...new Set((P.test ? ["LOC"] : (P.lines || []).map((x) => x.kind)))].map((k) => acceptNote(k)).filter(Boolean)[0] || "";
   return `<div class="card warn-note"><h2>정말 넣을까요? — 메리츠에 주문합니다</h2>
     ${timeNo ? `<div class="small warn-t">⏰ ${esc(timeNo)} — 지금 보내면 노트북이 메리츠에 보내지 않고 돌려줍니다</div>` : ""}
     ${P.test ? `<div>시험 주문: <b>SOXL LOC 매수 1주</b> @ 현재가 −25% (노트북이 그 순간 시세로 계산)</div>`
-      : `${P.lines.map((x) => `<div class="small"><span class="${sideCls(x.side)}">${sideKo(x.side)}</span> ${esc(x.sid)} ${esc(KIND_KO[x.kind] || x.kind)} <b class="num">${money(x.price)} × ${x.qty}</b></div>`).join("")}
+      : `${P.lines.map((x) => `<div class="small"><span class="${sideCls(x.side)}">${sideKo(x.side)}</span> ${esc(x.sid)} ${esc(KIND_KO[x.kind] || x.kind)} <b class="num">${pxText(x.price)} × ${x.qty}</b></div>`).join("")}
          <div class="small">매수 합계 <b class="num">$${money(buy)}</b>${cash !== null ? ` · 주문가능 <b class="num">$${money(cash)}</b>${buy > cash ? ' <span class="chip bad">모자람 — 노트북이 넣지 않습니다</span>' : ""}` : ""}</div>`}
     <label>업로드 암호 (관리자만 아는 두 번째 열쇠)<input type="password" id="cf-pass" value="${esc(saved)}" autocomplete="off"></label>
     <div class="row"><button class="btn" data-confirm-cancel="1">취소</button><button class="btn danger" data-confirm-go="${esc(cur)}" ${timeNo ? "disabled" : ""}>넣기</button></div>
@@ -841,6 +845,10 @@ function staleNote() {
   if (!S.snap) return "";
   const min = Math.round((Date.now() - new Date(S.snap.taken_at).getTime()) / 60000);
   const waiting = S.cmds.filter((c) => c.status === "pending").length;
+  // 작업 ㉑: 엔진 담당 기기가 달라 노트북이 이 칸을 돌리지 않는 중 — 시간 대신 이유를 보여 줌 (넘겨받기는 관리자가 노트북에서)
+  const hb = S.snap.summary && S.snap.summary.host_block;
+  if (hb) return `<div class="msg bad">⛔ 엔진 담당 기기가 다릅니다 — 담당 '${esc(hb.host || "?")}', 지금 노트북 '${esc(hb.this || "?")}'. 그래서 이 칸의 현황 갱신·가투·주문 계산이 멈춰 있습니다 (마지막 정상 갱신은 이 알림 전).
+    관리자가 옛 기기가 꺼진 것을 확인한 뒤 노트북에서 <span class="mono">autotrader ${hb.profile ? "--profile " + esc(hb.profile) + " " : ""}host --take-over</span> 를 실행하면 풀립니다.</div>`;
   if (min < 30 && !(waiting && min >= 2)) return "";
   const ago = min >= 120 ? Math.round(min / 60) + "시간" : min + "분";
   return `<div class="msg warn-note">노트북 마지막 갱신 ${ago} 전 — 꺼져 있거나 잠자기 중일 수 있습니다.${waiting ? ` 웹에서 보낸 명령 ${waiting}건은 노트북이 켜지면 반영됩니다.` : ""}</div>`;
@@ -1086,7 +1094,10 @@ function viewAuto() {
         ③ 계좌 주인이 결정 → 관리자가 노트북 .env 에서 켬 (웹에서는 켤 수 없음)</div>
       <div class="small muted" style="margin-top:6px">예전 조건 '5거래일 메리츠 = 가투'는 11/07 사용자 결정으로 없앴습니다 (모의는 분석용).</div></div>`;
 }
+// 작업 ㉒: PH01 은 '무한매수 N분할 주문표'가 아니라 'PH01' (전략 칸 display_kind·운용 장 가족·종류로 알아봄)
+const isPh01 = (g) => !!g && (String(g.display_kind || "").toUpperCase() === "PH01" || g.sessions_family === "ph01" || g.kind === "ph01");
 function stratName(g, plan) {
+  if (isPh01(g)) return "PH01";
   if (g.kind === "sheet") return `무한매수 ${plan && plan.splits ? Number(plan.splits) + "분할" : ""} 주문표`;
   if (g.kind === "vr") return `VR${g.multiplier > 1 ? " " + g.multiplier + "배수" : ""}`;
   if (g.kind === "infinite_buy_v4") return "무한매수 V4.0";
@@ -1201,7 +1212,7 @@ function ladder(p, close) {
       <text x="206" y="${(ty + 4).toFixed(1)}" font-size="12" fill="var(--ink)">${esc(label)}</text>`; }).join("");
   return `<svg viewBox="0 0 420 ${H}" class="chart" role="img" aria-label="목표가, ★지점, 평단, 종가, 매수 가격 위치">${rows}</svg>`;
 }
-const kindKo = (k) => ({ sheet: "주문표", vr: "VR", v4: "V4.0", infinite: "무한매수", dynamic: "동적 분할매수", infinite_buy_v4: "V4.0" }[k] || k || "");
+const kindKo = (k) => ({ sheet: "주문표", vr: "VR", v4: "V4.0", infinite: "무한매수", dynamic: "동적 분할매수", infinite_buy_v4: "V4.0", ph01: "PH01" }[k] || k || "");
 function linesTable(lines) {
   return `<div class="scroll"><table><tbody>${lines.map((o) => `<tr><td class="${sideCls(o.side)}">${sideKo(o.side)}</td>
     <td class="small muted">${esc(o.kind)}</td><td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td><td class="small muted">${esc(o.strategy_id || "")}</td></tr>`).join("")}</tbody></table></div>`;
@@ -1893,7 +1904,8 @@ function calSheetCard(td, x) {
   const starPx = x.star ? Number(x.star) : (x.mode !== "reverse" && N && x.avg && x.target_pct ? Number(x.avg) * (1 + Number(x.target_pct) * (1 - 2 * T / N) / 100) : null);
   const facts = [["T", x.T ?? "-"], ["1회매수", x.unit != null ? "$" + money(x.unit) : "-"], ["종가 (" + esc(String(x.sheet_date || "").slice(5).replace("-", "/")) + ")", money(x.close)],
     ["별지점", starPx ? money(starPx) : "-"], ["분할 · 목표", `${x.splits ?? "-"} · ${x.target_pct != null ? x.target_pct + "%" : "-"}`], ["주문표", x.source === "calc" ? "계산" : x.source === "ocr" ? "사진" : esc(x.source || "-")]];
-  return `<section class="card"><div class="row between"><h2><span class="sym num">${esc(x.symbol)}</span> 무한매수 · ${esc(ACC_NAME[x.account] || x.account)}</h2>
+  const gx = allStrategies((S.snap || {}).summary || {}).find((y) => y.id === x.sid);
+  return `<section class="card"><div class="row between"><h2><span class="sym num">${esc(x.symbol)}</span> ${isPh01(gx) ? "PH01" : "무한매수"} · ${esc(ACC_NAME[x.account] || x.account)}</h2>
       <span class="chip ${stCls}">${esc(st)}</span></div>
     ${stNote ? `<div class="small muted">${esc(stNote)}</div>` : ""}
     <div class="kv"><div><span class="small muted">보유</span><b>${x.holding ?? "-"}주</b></div><div><span class="small muted">평단</span><b>${x.avg != null ? money(x.avg) : "-"}</b></div>
@@ -2160,8 +2172,8 @@ function bind() {
   document.querySelectorAll("[data-stopno]").forEach((b) => b.onclick = () => { S.stopAsk = null; render(); });
   document.querySelectorAll("[data-confirm-review]").forEach((b) => b.onclick = () => { const acc = b.dataset.confirmReview;
     const lines = [...document.querySelectorAll(`.cline[data-acc="${acc}"]:checked`)].map((c) => { const [sid, side, kind, price, qty] = c.dataset.l.split("|"); return { sid, side, kind, price, qty: Number(qty) }; });
-    if (!lines.length) { S.msg = { bad: true, text: "넣을 줄을 하나 이상 체크하세요" }; render(); return; }
-    S.confirmPlan = { acc, lines }; render(); });
+    if (!lines.length) { S.cfNote = { acc, text: "고른 줄이 없습니다 — 넣을 줄 왼쪽 칸을 하나 이상 체크하세요" }; render(); return; }
+    S.cfNote = null; S.confirmPlan = { acc, lines }; render(); });
   document.querySelectorAll(".cline").forEach((c) => c.onchange = () => { S.cfSel = S.cfSel || {}; S.cfSel[c.dataset.l] = c.checked; });
   document.querySelectorAll("details[data-calopen]").forEach((el) => el.ontoggle = () => { (S.calOpen = S.calOpen || {})[el.dataset.calopen] = el.open; });
   document.querySelectorAll("[data-confirm-test]").forEach((b) => b.onclick = () => { S.confirmPlan = { acc: b.dataset.confirmTest, test: true, lines: [] }; render(); });
