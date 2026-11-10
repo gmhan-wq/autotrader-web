@@ -121,6 +121,12 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
 .seg button { border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); padding: 8px 12px; border-radius: 9px; cursor: pointer; min-height: 38px }
 .seg button.on { background: var(--glass-strong); color: var(--ink); font-weight: 700 }
 .krw { font-size: 12px; color: var(--muted) }
+.oline3 { display: grid; grid-template-columns: 40px 1fr auto auto; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line) }   /* 작업 ⑳ 달력 주문 줄 */
+.tbar { position: relative; height: 18px; border-radius: 9px; background: var(--soft); margin: 8px 0 2px; overflow: hidden }
+.tbar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: .35 } .tbar span { position: relative; padding-left: 10px; line-height: 18px }
+.cal-fill { margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: var(--soft) }
+.cal-more { margin-top: 8px } .cal-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center }
+.kv div .small { font-weight: 400 }
 .oline.off { opacity: .5 } .oline.off b { text-decoration: line-through }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px }
 .kpi { gap: 4px } .kpi b { font-size: clamp(16px, 1.55vw, 21px); font-weight: 600; white-space: nowrap }   /* 제보 #5: −$3,019.83 이 기호에서 줄바꿈되지 않게 */ .kpi b.warnc { color: var(--warn) }
@@ -421,7 +427,7 @@ async function lockBytes(data, name, pass) {
   return new Blob([out], { type: "application/octet-stream" });
 }
 // 사진 종류 3가지 (11/09 작업 ⑪): 기록 → 사진 올리기 한 곳에서 고른다. 판독 뒤 사진은 노트북에서도 지우고 숫자만 남김 (작업 ⑩)
-const UP_KINDS = [["sheet", "무한매수 주문표", "시스템 계산과 비교 — 같으면 알림만, 다르면 원인과 함께 '관리자 확인 주문'에 올라옵니다"],
+const UP_KINDS = [["sheet", "무한매수 주문표", "시스템 계산과 비교 — 같으면 알림만, 다르면 원인과 함께 이 화면 위 '확인할 사진'에 올라옵니다"],
   ["vr", "VR 주문표", "'다음 V 계산'·'매수·매도 계획' 사진 — V·Pool·최소·최대·사다리를 시스템 VR 주기와 비교합니다 (값은 바꾸지 않음)"],
   ["privacy", "프라이버시", "관리자 노트북이 판독해 규칙 학습·다음 거래일 예상 (가투 → 프라이버시에서 보기)"]];
 function uploadCard(purpose) {
@@ -473,7 +479,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-09c";
+const APP_VERSION = "2026-11-10a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -549,7 +555,7 @@ function subNav() {
   const g = groupOf(S.tab), pages = pagesOf(g);
   if (pages.length < 2 || S.detail || layout() === "pc") return "";       // PC 는 왼쪽 메뉴에 같은 목록이 있다
   return `<div class="seg subnav" role="tablist" aria-label="${esc(g[1])}">${pages.map(([k, l]) =>
-    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "confirm" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "consensus" && myVoteNeeded().length + readyToApply().length ? `<span class="badge">${myVoteNeeded().length + readyToApply().length}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
+    `<button role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}">${esc(l)}${k === "upload" && draftCount() ? `<span class="badge">${draftCount()}</span>` : ""}${k === "consensus" && myVoteNeeded().length + readyToApply().length ? `<span class="badge">${myVoteNeeded().length + readyToApply().length}</span>` : ""}${k === "admin" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</div>`;
 }
 function currentView() {
   const s = S.snap ? S.snap.summary : null;
@@ -557,11 +563,12 @@ function currentView() {
   let v;
   switch (S.tab) {
     case "home": v = viewHome(S.snap, true); break;
-    case "confirm": v = (draftCount() ? `<div class="msg">📷 주문표 사진이 시스템 계산과 다릅니다 — 원인을 보고 [승인](사진 값으로 바꾸기) 또는 [버리기](계산 유지)를 고르세요.</div>` + viewApprove() : "") + viewOrders(); break;
+    case "confirm": v = viewOrders() + cmdList("order"); break;          // 작업 ⑮: 주문 메뉴는 주문만 (사진 초안은 기록 → 사진 올리기)
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
     case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
-    case "upload": S.upOpen = true; v = uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>`; break;
+    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 시스템 계산과 다릅니다. 원인을 보고 [승인](사진 값으로 바꾸기) 또는 [버리기](계산 유지)를 고르세요. 지난 날짜 것은 노트북이 '계산 유지'로 자동 정리합니다.</div>` + viewApprove() : "")
+      + uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>` + cmdList("photo"); break;
     case "mystrat": v = need(myStrategies); break;
     case "research": S.addMock = true; v = need(addStrategy); break;
     case "addstrat": S.addMock = false; v = need(addStrategy); break;
@@ -682,7 +689,7 @@ function renderInner() {
       <header class="pc-top card">
         <b class="brand">자동매매 콘솔</b><span class="muted small">${esc(S.name)}</span>${engine}
         <nav class="pc-nav" aria-label="주 메뉴"><div class="pc-nav-row">${GROUPS.map((g) => { const on = grp === g[0] && !S.detail;
-            const badge = g[0] === "order" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
+            const badge = g[0] === "record" && drafts ? `<span class="badge">${drafts}</span>` : g[0] === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : "";
             return `<button class="nav-i nav-g" data-tab="${g[0]}" aria-current="${on}">${esc(g[1])}${badge}</button>`; }).join("")}</div></nav>
         <span class="grow"></span>${actSwitch()}${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button>
         ${(() => { const g = GROUPS.find((x) => x[0] === grp), pages = g ? pagesOf(g) : [];
@@ -703,12 +710,12 @@ function renderInner() {
           <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
           : `<h1>${S.detail ? "전략" : esc(groupOf(S.tab)[1])}</h1>`}
       </header>
-      ${actBand}${drafts && S.tab !== "confirm" && S.tab !== "home" ? `<button class="banner" data-tab="confirm">주문표 사진 확인 필요 ${drafts}건 <span aria-hidden="true">›</span></button>` : ""}
+      ${actBand}${drafts && S.tab !== "upload" && S.tab !== "home" ? `<button class="banner" data-tab="upload">확인할 주문표 사진 ${drafts}건 (기록 → 사진 올리기) <span aria-hidden="true">›</span></button>` : ""}
       ${notes}
       <div id="view">${currentView()}</div>
       ${grp === "settings" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
 
-      <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${grp === k && !S.detail}">${l}${k === "order" && drafts ? `<span class="badge">${drafts}</span>` : ""}${k === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</nav>`;
+      <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${grp === k && !S.detail}">${l}${k === "record" && drafts ? `<span class="badge">${drafts}</span>` : ""}${k === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</nav>`;
   }
   bind();
 }
@@ -749,7 +756,7 @@ function vrOrders(s, d, g, acc) {
   let out = `<div class="msg">VR 은 2주 단위 <b>지정가 · 기간잔량 예약주문</b>입니다. 주기가 바뀌면 아래 주문표 줄을 한 번 예약하면 주기 끝까지 매일 다시 걸립니다. 이미 체결된 단계는 빠집니다.</div>`;
   out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g))} 주문표</h2>
       <span class="small muted">${esc(name)}${vr.week != null ? ` · ${esc(vr.week)}주차` : ""}${vr.start ? ` · 주기 ${esc(vr.start)} ~ ${esc(vrCycleEnd(vr.start))}` : ""}</span></div>
-    <div class="small">메리츠 보유 <b class="num">${g.qty}주</b>${g.avg ? ` · 평단 <b class="num">${money(g.avg)}</b>` : ""} · 달러 예수금 <b class="num">${usd !== null ? "$" + money(usd) : "-"}</b>
+    <div class="small">메리츠 보유 <b class="num">${Number(g.qty) + Number(g.excluded_qty || 0)}주</b>${Number(g.excluded_qty || 0) ? ` <span class="muted">(VR ${g.qty} + 따로 ${g.excluded_qty} — VR 계산은 ${g.qty}주 기준)</span>` : ""}${g.avg ? ` · 평단 <b class="num">${money(g.avg)}</b>` : ""} · 달러 예수금 <b class="num">${usd !== null ? "$" + money(usd) : "-"}</b>
       · 주문표 V <b class="num">${vr.V != null ? "$" + money(vr.V) : "-"}</b> · Pool <b class="num">${vr.pool != null ? "$" + money(vr.pool) : "-"}</b>
       · 최소 ${vr.min != null ? money(vr.min) : "-"} · 최대 ${vr.max != null ? money(vr.max) : "-"}</div>
     ${ladder.length ? ladder.map((l) => { const done = filled.has(l.tag), key = [g.id, l.side, "VR", l.price, l.qty].join("|");
@@ -805,17 +812,21 @@ function confirmPanel(cur, r, g) {
   if (!confirmOn(acc) || !r || !r.strategies) return "";
   const P = S.confirmPlan && S.confirmPlan.acc === cur ? S.confirmPlan : null;
   let saved = ""; try { saved = localStorage.getItem("upPass:" + owner()) || ""; } catch (e) {}
+  const locNo = acceptNote("LOC");
   if (!P) return `<div class="card"><div class="row between"><h2>관리자 확인 주문</h2><span class="small muted">체크한 줄만 노트북이 메리츠에 넣습니다</span></div>
     <div class="small muted">기본 체크 = 지금 걸 주 매수·매도. 하락 대비·보충 줄은 필요할 때 체크, 거부 예상 줄은 넣을 수 없습니다.</div>
-    <div class="row"><button class="btn primary" data-confirm-review="${esc(cur)}">고른 줄 확인하기</button>${g && g.symbol === "SOXL" ? `<button class="btn" data-confirm-test="${esc(cur)}">시험 주문 (SOXL 1주, 현재가 −25% LOC)</button>` : ""}</div></div>`;
+    ${locNo ? `<div class="small warn-t">⏰ ${esc(locNo)}</div>` : ""}
+    <div class="row"><button class="btn primary" data-confirm-review="${esc(cur)}">고른 줄 확인하기</button>${g && g.symbol === "SOXL" ? `<button class="btn" data-confirm-test="${esc(cur)}" ${locNo ? "disabled" : ""} title="${esc(locNo)}">시험 주문 (SOXL 1주, 현재가 −25% LOC)</button>` : ""}</div></div>`;
   const buy = (P.lines || []).filter((x) => x.side === "BUY").reduce((a, x) => a + Number(x.price) * x.qty, 0);
   const cash = r.cash != null ? Number(r.cash) : null;
+  const timeNo = [...new Set((P.test ? ["LOC"] : (P.lines || []).map((x) => x.kind)))].map((k) => acceptNote(k)).filter(Boolean)[0] || "";
   return `<div class="card warn-note"><h2>정말 넣을까요? — 메리츠에 주문합니다</h2>
+    ${timeNo ? `<div class="small warn-t">⏰ ${esc(timeNo)} — 지금 보내면 노트북이 메리츠에 보내지 않고 돌려줍니다</div>` : ""}
     ${P.test ? `<div>시험 주문: <b>SOXL LOC 매수 1주</b> @ 현재가 −25% (노트북이 그 순간 시세로 계산)</div>`
       : `${P.lines.map((x) => `<div class="small"><span class="${sideCls(x.side)}">${sideKo(x.side)}</span> ${esc(x.sid)} ${esc(KIND_KO[x.kind] || x.kind)} <b class="num">${money(x.price)} × ${x.qty}</b></div>`).join("")}
          <div class="small">매수 합계 <b class="num">$${money(buy)}</b>${cash !== null ? ` · 주문가능 <b class="num">$${money(cash)}</b>${buy > cash ? ' <span class="chip bad">모자람 — 노트북이 넣지 않습니다</span>' : ""}` : ""}</div>`}
     <label>업로드 암호 (관리자만 아는 두 번째 열쇠)<input type="password" id="cf-pass" value="${esc(saved)}" autocomplete="off"></label>
-    <div class="row"><button class="btn" data-confirm-cancel="1">취소</button><button class="btn danger" data-confirm-go="${esc(cur)}">넣기</button></div>
+    <div class="row"><button class="btn" data-confirm-cancel="1">취소</button><button class="btn danger" data-confirm-go="${esc(cur)}" ${timeNo ? "disabled" : ""}>넣기</button></div>
     <div class="small muted">노트북이 지금 시세·보유로 다시 계산한 줄과 같을 때만, 10분 안에, 한 번만 넣습니다. 결과는 '최근 보낸 명령'과 텔레그램으로 옵니다.</div></div>`;
 }
 async function sendOrders(P, pass) {
@@ -917,7 +928,7 @@ function bindArrange() {
 function todayCard(s, d, strat) {
   const items = [];
   const drafts = Object.keys(s.drafts || {}).length;
-  if (drafts) items.push(["confirm", `주문표 사진이 계산과 다름 ${drafts}건 — 확인`, "warn"]);
+  if (drafts) items.push(["upload", `주문표 사진이 계산과 다름 ${drafts}건 — 기록 → 사진 올리기에서 확인`, "warn"]);
   for (const [acc, r] of Object.entries(d.real_orders || {})) {
     if (!r || r.error) continue;
     const name = ACC_NAME[acc] || acc;
@@ -1198,8 +1209,7 @@ function linesTable(lines) {
 
 function viewApprove() {
   const drafts = S.snap ? Object.entries(S.snap.summary.drafts || {}) : [];
-  let out = `<div class="row"><span class="small muted">주문표 사진은 텔레그램 봇이나</span><button class="btn" data-tab="upload">📷 사진 올리기</button></div>`;
-  if (!drafts.length) out += `<div class="card"><div class="empty">승인할 주문표가 없습니다. 위 '사진 올리기'나 텔레그램 봇으로 주문표 사진을 보내면 판독 후 여기에 나옵니다.</div></div>`;
+  let out = "";
   for (const [sid, dr] of drafts) {
     const c = S.confirm && S.confirm.sid === sid ? S.confirm.kind : null;
     out += `<div class="card">
@@ -1221,13 +1231,18 @@ function viewApprove() {
           <button class="btn danger" data-ask="discard" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>버리기</button></div>`}
     </div>`;
   }
-  return out + cmdList();
+  return out;
 }
 const CMD_KO = { approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침",
                  add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경", place_orders: "관리자 확인 주문", upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록", set_telegram: "텔레그램 연결", create_profile: "노트북 칸 만들기"};
-function cmdList() {
-  if (!S.cmds.length) return "";
-  return `<div class="card"><h2>최근 보낸 명령</h2>${S.cmds.map((c) => { const p = c.payload || {};
+// 작업 ⑮: '최근 보낸 명령'을 화면마다 나눠 보여 줌 — 주문 화면 = 주문, 사진 올리기 = 사진, 설정 = 키·토큰·계좌, 전략 = 전략 추가·변경
+const CMD_CAT = { place_orders: "order", upload_photo: "photo", approve: "photo", discard: "photo", toggle_line: "photo",
+  set_api_key: "settings", set_telegram: "settings", create_profile: "settings", add_account: "settings", refresh: "settings",
+  add_strategy: "strategy", set_strategy: "strategy" };
+function cmdList(cat) {
+  const list = S.cmds.filter((c) => !cat || (CMD_CAT[c.command] || "settings") === cat);
+  if (!list.length) return "";
+  return `<div class="card"><h2>최근 보낸 명령</h2>${list.map((c) => { const p = c.payload || {};
     return `<div class="cmd small"><div class="row between"><span>${esc(CMD_KO[c.command] || c.command)} ${esc(p.sid || p.id || "")}${p.n ? " " + p.n + "번" : ""}</span>
     <span class="chip ${c.status === "done" ? "ok" : c.status === "failed" ? "bad" : "warn"}">${c.status === "pending" ? "대기" : c.status === "done" ? "완료" : "실패"}</span></div>
     ${c.result ? `<div class="muted">${esc(c.result)}</div>` : ""}</div>`; }).join("")}</div>`;
@@ -1429,7 +1444,7 @@ function accountsView(s) {
         <label style="flex:2;min-width:150px">이름<input type="text" id="a-name" placeholder="예: ISA 계좌"></label>
         <button class="btn">계좌 추가</button></form>
     </div>
-` + cmdList();
+` + cmdList("settings");
 }
 function myStrategies(s) {
   const accs = Object.entries(s.accounts || {});
@@ -1449,7 +1464,7 @@ function myStrategies(s) {
         : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
-    <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList();
+    <b>절대 규칙</b>: 진행 중인 전략의 값·규칙 수정, 다시 켜기, 계좌 옮기기는 계좌 주인·관리자·공동 운영자 <b>모두 합의</b>해야 합니다. 이상이 보이면 누구나 <b>비상 정지</b>만 바로 할 수 있습니다.</div>` : "") + cmdList("strategy");
 }
 // 무한매수 싸이클 관문 (사용자 11/03): 전량 매도로 싸이클이 끝나면 규칙을 정할 때까지 새 매수 멈춤
 function cycleBanner(s, g) {
@@ -1522,11 +1537,11 @@ function addStrategy(s) {
         <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
-    </div>` + cmdList();
+    </div>` + cmdList("strategy");
 }
 // ── 운용 장 · 주문 방법 (ADR 0053, 작업 ⑬) — 전략 칸 sessions 는 표시·기록용 (엔진의 주문 시각은 바꾸지 않음) ──
 // SESS_RULES 는 src/autotrader/order_sessions.py 의 rules_for_web() 와 같아야 한다 (tests/test_order_sessions.py 가 맞춰 봄)
-const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC", "MOC": "MOC", "LIMIT": "지정가", "MARKET": "시장가", "LOO": "LOO", "MOO": "MOO", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"]};
+const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC", "MOC": "MOC", "LIMIT": "지정가", "MARKET": "시장가", "LOO": "LOO", "MOO": "MOO", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"], "accept": {"LOC": ["pre", "regular"], "MOC": ["pre", "regular"], "LIMIT": ["day", "pre", "regular", "after"]}};
 // 장 시간 (뉴욕 시간, 서머타임과 상관없이 같음 — market_calendar.market_phase 와 같은 기준). [시, 분, 날짜 차이]
 const SESS_NY = { day: [[20, 0, -1], [3, 50, 0]], pre: [[4, 0, 0], [9, 30, 0]], regular: [[9, 30, 0], [16, 0, 0]], after: [[16, 0, 0], [19, 50, 0]] };
 const sessFamily = (g) => (g && g.sessions_family) || ({ vr: "vr", dynamic: "dynamic", ph01: "ph01", privacy: "privacy" }[g && g.kind] || "infinite");
@@ -1569,7 +1584,7 @@ function sessKst(s, summer) {               // 한국 시간 (겨울 +14시간, 
   return `${hhmm(h0 + add, m0)}~${hhmm(h1 + add, m1)}`;
 }
 const sessNyText = (s) => { const [[h0, m0, d0], [h1, m1]] = SESS_NY[s]; return `${d0 ? "전날 " : ""}${hhmm(h0, m0)}~${hhmm(h1, m1)}`; };
-function sessNow(now = new Date()) {        // 노트북 스냅숏이 없을 때 브라우저에서 같은 규칙으로 (휴장일은 모름)
+function sessWindows(now = new Date()) {    // [시작, 끝, 장] (뉴욕 시각을 UTC 숫자로) — 휴장일은 모름
   const off = nyOffset(now), t = now.getTime() + off * 3600000, ny = new Date(t), W = [];
   for (let k = -1; k < 9; k++) {
     const d = Date.UTC(ny.getUTCFullYear(), ny.getUTCMonth(), ny.getUTCDate() + k), dw = new Date(d).getUTCDay();
@@ -1578,11 +1593,24 @@ function sessNow(now = new Date()) {        // 노트북 스냅숏이 없을 때
       W.push([d + d0 * 864e5 + (h0 * 60 + m0) * 60000, d + (h1 * 60 + m1) * 60000, s]); }
   }
   W.sort((a, b) => a[0] - b[0]);
-  const cur = W.find((w) => w[0] <= t && t < w[1]), nxt = W.find((w) => w[0] > t);
   const kst = (x) => new Date(x - off * 3600000 + 9 * 3600000).toISOString().slice(0, 16) + "+09:00";
+  return { W, t, kst };
+}
+function sessNow(now = new Date()) {        // 노트북 스냅숏이 없을 때 브라우저에서 같은 규칙으로 (휴장일은 모름)
+  const { W, t, kst } = sessWindows(now);
+  const cur = W.find((w) => w[0] <= t && t < w[1]), nxt = W.find((w) => w[0] > t);
   const out = { code: cur ? cur[2] : "closed", label: cur ? SESS_RULES.session_ko[cur[2]] : "쉬는 시간", until: cur ? kst(cur[1]) : null, guess: true };
   if (nxt) Object.assign(out, { next_code: nxt[2], next_label: SESS_RULES.session_ko[nxt[2]], next_at: kst(nxt[0]) });
   return out;
+}
+// 작업 ⑯: 지금 메리츠가 이 주문 방법을 받지 않으면 안내 문구 (노트북 order_sessions.accept_block 과 같은 표, 휴장일은 노트북이 한 번 더 봄)
+function acceptNote(kind, now = new Date()) {
+  const ok = (SESS_RULES.accept || {})[kind];
+  if (!ok) return "";
+  const { W, t, kst } = sessWindows(now), cur = W.find((w) => w[0] <= t && t < w[1]);
+  if (cur && ok.includes(cur[2])) return "";
+  const nx = W.find((w) => w[0] > t && ok.includes(w[2])), at = nx ? kst(nx[0]) : "";
+  return `${SESS_RULES.order_ko[kind]} 는 프리장(18:00, 서머 17:00)부터 정규장 마감 전까지만 받습니다 — 지금 ${cur ? SESS_RULES.session_ko[cur[2]] : "쉬는 시간"}${at ? ` · 다음 가능 ${at.slice(5, 7)}/${at.slice(8, 10)} ${at.slice(11, 16)}` : ""}`;
 }
 // 전략 추가·수정 제안에서 쓰는 '운용 장' 고르기 칸. pf = add | ch, S.sessSel[pf] = { fam, sel }
 function sessEditor(pf) {
@@ -1607,8 +1635,8 @@ function sessLine(g) {
 const ORDER_INFO = [
   ["LIMIT", "데이장·프리장·정규장·애프터장", "무한매수 목표가 매도(정규장·애프터장), 동적 분할매수 하락 단계 매수(데이장·프리장 개장 때 미리 걸기), 관리자 확인 주문"],
   ["MARKET", "정규장", "동적 분할매수 익절·손절(평단 기준 실시간), PH01 낙폭 단계 (지금은 가투에서만)"],
-  ["LOC", "정규장 마감 체결 (프리장부터 미리 넣기)", "무한매수 매수·매도"],
-  ["MOC", "정규장 마감 체결 (프리장부터 미리 넣기)", "무한매수 리버스 첫날 매도"],
+  ["LOC", "정규장 마감 체결 (프리장 개장부터 넣기 — 애프터장·데이장엔 안 받음)", "무한매수 매수·매도"],
+  ["MOC", "정규장 마감 체결 (프리장 개장부터 넣기 — 애프터장·데이장엔 안 받음)", "무한매수 리버스 첫날 매도"],
   ["LOO", "정규장 시작 체결", "아직 안 씀"], ["MOO", "정규장 시작 체결", "아직 안 씀"],
   ["VWAP", "정규장", "아직 안 씀"], ["TWAP", "정규장", "아직 안 씀"],
   ["RESERVE", "정규장 (기간 동안 남은 수량 유지)", "VR 사다리 (지정가·기간잔량)"],
@@ -1629,6 +1657,8 @@ function viewSessions(s) {
       ${ORDER_INFO.map(([t, w, u]) => `<tr><td><b>${SESS_RULES.order_ko[t]}</b></td><td>${w}</td><td class="small muted">${u}</td></tr>`).join("")}</tbody></table></div></div>
     <div class="card"><h2>규칙</h2><ul class="small" style="margin:0;padding-left:18px">
       <li>정규장 주문은 <b>데이장 개장</b> 때, 데이장 주문은 <b>프리장 개장</b> 때 풀립니다 (다시 넣어야 함).</li>
+      <li><b>LOC·MOC 는 프리장 개장(18:00, 서머 17:00)부터 정규장 마감 전까지만</b> 받습니다 — 애프터장·데이장에 보내면 메리츠가 거절합니다(11/10 확인: 4159·4035). 노트북은 그 시간에는 보내지 않고 다음 가능 시각을 알려 줍니다.</li>
+      <li>VR 예약주문(기간잔량)을 받는 시간은 아직 확인 중 — 거절되면 메리츠 문구를 그대로 보여 줍니다.</li>
       <li>가격 범위: 기준가에서 30% 넘게 벗어난 주문은 메리츠가 거부합니다 — 이 시스템은 28% 에서 '거부 예상'으로 미리 알립니다.</li>
       <li>데이장 동안 메리츠 현재가는 실시간이 아닙니다 (전날 종가 그대로) — 실시간 감시 전략은 정규장에서.</li>
       <li>서머타임(3월 둘째 일요일~11월 첫째 일요일)에는 한국 시간이 1시간 빨라집니다.</li>
@@ -1807,7 +1837,7 @@ function readLogCard(sel) {
   return `<div class="card"><h2>사진 판독 기록</h2><div class="small muted">사진은 판독 뒤 지우고 숫자만 남깁니다. 고른 날(${esc(sel || "")}) 것이 먼저 보입니다.</div>
     ${rows.map((r) => { const st = READ_ST[r.status] || [r.status || "", ""];
       return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row between"><span><b>${esc(r.day || "")}</b> · ${esc({ sheet: "무한매수", vr: "VR" }[r.kind] || r.kind)} · ${esc(r.sid || "?")}</span>
-        <span class="res ${st[1]}">${esc(st[0])}${r.choice ? " · " + (r.choice === "photo" ? "사진 값으로 바꿈" : "계산 유지") : ""}</span></div>
+        <span class="res ${st[1]}">${esc(st[0])}${r.choice ? " · " + (r.choice === "photo" ? "사진 값으로 바꿈" : r.choice === "calc_auto" ? "계산 유지(지난 날짜 자동)" : "계산 유지") : ""}</span></div>
         <div class="small">${Object.entries(r.nums || {}).map(([k, v]) => `${esc(k)} <b class="num">${esc(String(v))}</b>`).join(" · ")}</div>
         ${(r.diff || []).map((d) => `<div class="small warn-t">✗ ${esc(String(d[0]))}: 시스템 ${esc(String(d[1]))} / 사진 ${esc(String(d[2]))}</div>`).join("")}
         ${(r.problems || []).map((p) => `<div class="small muted">⚠ ${esc(String(p))}</div>`).join("")}</div>`; }).join("")}</div>`;
@@ -1828,26 +1858,84 @@ function planDay(day, list) {
     return `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row between"><span>${x.kind === "deploy" ? "🚀 배포" : x.kind === "decide" ? "🗳 결정" : x.kind === "work" ? "🛠 작업" : "📌 점검"} ${esc(x.title)}</span><span class="chip ${st[1]}">${st[0]}</span></div>
       ${x.result ? `<div class="small muted">${esc(x.result)}</div>` : ""}</div>`; }).join("")}</section>`;
 }
-function calDay(td, v) {
-  if (!v) return "";
-  const [y, m, d] = td.split("-").map(Number), w = DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  let out = `<h2 style="margin:6px 2px">${m}/${d}(${w}) 미국 장</h2>`;
-  for (const x of v.sheets) {
-    const on = x.lines.filter((l) => l[4]), off = x.lines.filter((l) => !l[4]);
-    const row = (l) => `<tr class="${l[4] ? "" : "offrow"}"><td class="${sideCls(l[0])}">${sideKo(l[0])}</td><td class="small muted">${esc(KIND_KO[l[1]] || l[1])}</td>
-      <td class="n">${money(l[2])}</td><td class="n">${l[3]}주</td><td>${l[5] ? `<span class="chip ok">모의 체결 ${l[5]}주${l[6] ? " @" + money(l[6]) : ""}</span>` : ""}</td></tr>`;
-    const facts = [["종가 (" + esc(String(x.sheet_date || "").slice(5).replace("-", "/")) + ")", money(x.close)], ["평단", money(x.avg)], ["보유", (x.holding ?? "-") + "주"],
-      ["잔금", "$" + money(x.cash)], ["T", x.T ?? "-"], ["1회매수", money(x.unit)]];
-    out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(x.symbol)}</span> ${esc(x.sid)}</h2>
-        <span class="small muted">${esc(ACC_NAME[x.account] || x.account)}${x.multiplier > 1 ? " · ×" + x.multiplier : ""}</span></div>
-      <div class="kv">${facts.map(([l, val]) => `<div><span class="small muted">${l}</span><b>${val}</b></div>`).join("")}</div>
-      <div class="scroll"><table><thead><tr><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th><th>결과</th></tr></thead>
-        <tbody>${on.map(row).join("")}${x.catchup ? `<tr><td class="buy">매수</td><td class="small muted">보충</td><td class="n">${money(x.catchup[1])}</td><td class="n">${x.catchup[0]}주</td><td><span class="chip ok">모의 체결</span></td></tr>` : ""}</tbody></table></div>
-      ${off.length ? `<details><summary class="small muted">꺼 둔 아래 사다리 ${off.length}줄${off.some((l) => l[5]) ? " (일부 모의 체결)" : ""}</summary>
-        <div class="scroll"><table><tbody>${off.map(row).join("")}</tbody></table></div></details>` : ""}</section>`;
+// 작업 ⑳ (11/10 사용자): 날짜 화면은 사용자가 확인할 핵심만 — 머리 한 줄 · 보유/평단/잔금 · 그날 낼 주문 · 메리츠 체결.
+// 나머지 값(T·1회매수·종가·별지점·꺼 둔 사다리·내부 이름)은 '자세히' 안에 그대로. 표시만 바꿈 (스냅숏·계산·저장 형식 그대로).
+// 가투(모의) 체결은 이 화면에서 빼고 가투 메뉴에서만 (11/07 결정).
+function calStatus(x) {
+  const N = Number(x.splits || 0), T = Number(x.T || 0);
+  if (x.mode === "reverse") {
+    const end = x.avg && x.target_pct ? Number(x.avg) * (1 - Number(x.target_pct) / 100) : null;
+    return [`리버스 ${Number(x.rdays || 0) + 1}일째`, "warn", end ? `종료 기준: 종가 > ${money(end)}` : ""];
   }
-  // 실제 vs 모의 비교는 11/07 사용자 결정으로 없앰 (모의는 모의 메뉴에서 분석용으로만)
-  return out;
+  if (N && T > N - 1) return ["소진", "bad", ""];
+  return ["평소", "ok", ""];
+}
+function calRealFill(sid, td) {             // 메리츠 실제 체결 (매매 표와 같은 기록) — 있을 때만
+  const rows = ((((S.snap || {}).detail || {}).trades || {})[sid] || {}).real || [];
+  const r = rows.find((x) => x[0] === td);
+  if (!r) return "";
+  const part = (q, a, side) => Number(q) ? `<span class="${sideCls(side)}">${sideKo(side)}</span> <b class="num">${q}주 @${money(Number(a) / Number(q))}</b>` : "";
+  const t = [part(r[4], r[5], "SELL"), part(r[2], r[3], "BUY")].filter(Boolean);
+  return t.length ? `<div class="cal-fill small">메리츠 체결 · ${t.join(" · ")}</div>` : "";
+}
+const calLine = (side, kind, price, qty, extra = "") => `<div class="oline3"><span class="${sideCls(side)}">${sideKo(side)}</span>
+  <span><b class="num">${kind === "MOC" ? "종가" : money(price)}</b> <span class="small muted">${esc(kind === "LIMIT" ? "지정가" : kind || "")}</span></span><b class="num">${qty}주</b>${extra}</div>`;
+function calSheetCard(td, x) {
+  const on = x.lines.filter((l) => l[4]), off = x.lines.filter((l) => !l[4]);
+  const sells = on.filter((l) => l[0] !== "BUY"), buys = on.filter((l) => l[0] === "BUY");
+  // 큰 하락 대비 1주 줄: 첫 매수 줄 아래로 이어지는 같은 수량(1주 × 배수) 매수 줄 3줄 이상 → 한 줄로 접기
+  const one = Number(x.multiplier || 1);
+  let k = buys.length;
+  while (k > 1 && Number(buys[k - 1][3]) === one) k--;
+  const main = buys.length - k >= 3 ? buys.slice(0, k) : buys, ladder = buys.length - k >= 3 ? buys.slice(k) : [];
+  const [st, stCls, stNote] = calStatus(x), N = Number(x.splits || 0), T = Number(x.T || 0);
+  const key = `${td}|${x.sid}`, open = (S.calOpen || {})[key];
+  const starPx = x.star ? Number(x.star) : (x.mode !== "reverse" && N && x.avg && x.target_pct ? Number(x.avg) * (1 + Number(x.target_pct) * (1 - 2 * T / N) / 100) : null);
+  const facts = [["T", x.T ?? "-"], ["1회매수", x.unit != null ? "$" + money(x.unit) : "-"], ["종가 (" + esc(String(x.sheet_date || "").slice(5).replace("-", "/")) + ")", money(x.close)],
+    ["별지점", starPx ? money(starPx) : "-"], ["분할 · 목표", `${x.splits ?? "-"} · ${x.target_pct != null ? x.target_pct + "%" : "-"}`], ["주문표", x.source === "calc" ? "계산" : x.source === "ocr" ? "사진" : esc(x.source || "-")]];
+  return `<section class="card"><div class="row between"><h2><span class="sym num">${esc(x.symbol)}</span> 무한매수 · ${esc(ACC_NAME[x.account] || x.account)}</h2>
+      <span class="chip ${stCls}">${esc(st)}</span></div>
+    ${stNote ? `<div class="small muted">${esc(stNote)}</div>` : ""}
+    <div class="kv"><div><span class="small muted">보유</span><b>${x.holding ?? "-"}주</b></div><div><span class="small muted">평단</span><b>${x.avg != null ? money(x.avg) : "-"}</b></div>
+      <div><span class="small muted">잔금</span><b>${x.cash != null ? "$" + money(x.cash) : "-"}</b></div></div>
+    ${N && x.mode !== "reverse" ? `<div class="tbar" title="${esc(String(x.T))} / ${N}"><i style="width:${Math.min(100, Math.max(0, T / N * 100)).toFixed(1)}%"></i><span class="small muted">${Math.min(N, Math.ceil(T))}/${N}회</span></div>` : ""}
+    <div class="cal-ord">${sells.map((l) => calLine(l[0], l[1], l[2], l[3])).join("")}${main.map((l) => calLine(l[0], l[1], l[2], l[3])).join("")}
+      ${ladder.length ? `<details><summary class="small">큰 하락 대비 매수 ${ladder.length}줄 (${money(ladder[0][2])} ~ ${money(ladder[ladder.length - 1][2])}, 각 ${one}주)</summary>${ladder.map((l) => calLine(l[0], l[1], l[2], l[3])).join("")}</details>` : ""}
+      ${!on.length ? `<div class="empty">이날 낼 주문 없음</div>` : ""}</div>
+    ${calRealFill(x.sid, td)}
+    <details class="cal-more" ${open ? "open" : ""} data-calopen="${esc(key)}"><summary class="small muted">자세히</summary>
+      <div class="kv">${facts.map(([l, val]) => `<div><span class="small muted">${l}</span><b>${val}</b></div>`).join("")}</div>
+      <div class="small muted">내부 이름 <span class="mono">${esc(x.sid)}</span>${x.multiplier > 1 ? ` · ${x.multiplier}배수` : ""}${x.mode === "reverse" ? ` · 리버스 ${Number(x.rdays || 0) + 1}일째` : ""}</div>
+      ${x.catchup ? `<div class="small">보충 매수 ${x.catchup[0]}주 @${money(x.catchup[1])} — 전에 못 산 수량을 따로 사는 줄 (가투 계산, 가투 메뉴에서 자세히)</div>` : ""}
+      ${off.length ? `<div class="small muted" style="margin-top:6px">꺼 둔 아래 사다리 ${off.length}줄</div>${off.map((l) => calLine(l[0], l[1], l[2], l[3])).join("")}` : ""}
+    </details></section>`;
+}
+function calVrCard(td, g, vr) {
+  const filled = new Set(vr.filled_tags || []), ex = Number(g.excluded_qty || 0);
+  const mk = (side, rows) => rows.map(([p, q], i) => ({ side, p, q, n: i + 1, done: filled.has(`vr_${side === "BUY" ? "buy" : "sell"}_${i + 1}`) }));
+  const sells = mk("SELL", vr.sell || []), buys = mk("BUY", vr.buy || []);
+  const near = [...sells.filter((x) => !x.done).slice(0, 3).reverse(), ...buys.filter((x) => !x.done).slice(0, 3)];
+  const done = [...sells, ...buys].filter((x) => x.done);
+  const ln = (l) => calLine(l.side, "", l.p, l.q, l.done ? '<span class="chip ok">체결됨</span>' : "");
+  const key = `${td}|${g.id}`, open = (S.calOpen || {})[key];
+  return `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> VR · ${esc(ACC_NAME[g.account] || g.account)}</h2>
+      <span class="chip">${esc(vr.week)}주차 · ${esc(String(vr.start).slice(5).replace("-", "/"))}~${esc(vrCycleEnd(vr.start).slice(5).replace("-", "/"))}</span></div>
+    <div class="kv"><div><span class="small muted">보유</span><b>${Number(g.qty) + ex}주</b>${ex ? `<span class="small muted">VR ${g.qty} + 따로 ${ex}</span>` : ""}</div>
+      <div><span class="small muted">Pool</span><b>${vr.pool != null ? "$" + money(vr.pool) : "-"}</b></div>
+      <div><span class="small muted">V</span><b>${vr.V != null ? money(vr.V) : "-"}</b><span class="small muted">${vr.min != null ? money(vr.min) : "-"} ~ ${vr.max != null ? money(vr.max) : "-"}</span></div></div>
+    <div class="cal-ord">${near.map(ln).join("") || `<div class="empty">남은 단계 없음</div>`}</div>
+    ${done.length ? `<div class="cal-fill small">이번 주기 체결 · ${done.map((l) => `<span class="${sideCls(l.side)}">${sideKo(l.side)}</span> ${l.n}단계 <b class="num">${money(l.p)}×${l.q}</b>`).join(" · ")}</div>` : ""}
+    <details class="cal-more" ${open ? "open" : ""} data-calopen="${esc(key)}"><summary class="small muted">자세히 (사다리 전체 ${sells.length + buys.length}줄)</summary>
+      <div class="small muted">내부 이름 <span class="mono">${esc(g.id)}</span>${Number(g.multiplier) > 1 ? ` · ${g.multiplier}배수` : ""} · 주문은 지정가·기간잔량 예약 · 체결 표시는 지금까지 기준</div>
+      ${[...sells].reverse().map(ln).join("")}${buys.map(ln).join("")}</details></section>`;
+}
+function calDay(td, v) {
+  const s = S.snap ? S.snap.summary : {};
+  const vrs = allStrategies(s).filter((g) => g.kind === "vr" && (s.vr || {})[g.id] && s.vr[g.id].start <= td && td <= vrCycleEnd(s.vr[g.id].start));
+  if (!v && !vrs.length) return "";
+  const [y, m, d] = td.split("-").map(Number), w = DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `<h2 style="margin:6px 2px">${m}/${d}(${w}) 미국 장</h2>` + (v ? v.sheets : []).map((x) => calSheetCard(td, x)).join("")
+    + vrs.map((g) => calVrCard(td, g, s.vr[g.id])).join("");
 }
 
 function viewBoard() {
@@ -2075,6 +2163,7 @@ function bind() {
     if (!lines.length) { S.msg = { bad: true, text: "넣을 줄을 하나 이상 체크하세요" }; render(); return; }
     S.confirmPlan = { acc, lines }; render(); });
   document.querySelectorAll(".cline").forEach((c) => c.onchange = () => { S.cfSel = S.cfSel || {}; S.cfSel[c.dataset.l] = c.checked; });
+  document.querySelectorAll("details[data-calopen]").forEach((el) => el.ontoggle = () => { (S.calOpen = S.calOpen || {})[el.dataset.calopen] = el.open; });
   document.querySelectorAll("[data-confirm-test]").forEach((b) => b.onclick = () => { S.confirmPlan = { acc: b.dataset.confirmTest, test: true, lines: [] }; render(); });
   document.querySelectorAll("[data-confirm-cancel]").forEach((b) => b.onclick = () => { S.confirmPlan = null; render(); });
   document.querySelectorAll("[data-confirm-go]").forEach((b) => b.onclick = () => sendOrders(S.confirmPlan, (document.getElementById("cf-pass") || {}).value));
