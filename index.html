@@ -481,7 +481,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14d";
+const APP_VERSION = "2026-11-14e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1950,6 +1950,16 @@ function bookTable(g, e, book, lastWeek, recent) {
     }
   }
   const total = bCells(bAgg(book), "<b>합계</b>", "t-total");
+  // 작업 ㉚ ④: 메리츠가 쓴 1주당 원가 (= 메리츠 매수금액 ÷ 매도 수량) — 27번째 칸, 옛 노트북이면 없음
+  const sells = book.filter((r) => Number(r[9]) && r.length > 26);
+  const costBox = sells.length ? `<details style="margin-top:8px"><summary class="small muted">자세히 — 매도 1주당 원가 (${e.cost_basis === "meritz" ? "메리츠 잔고 기준" : "장부 평단 기준"})</summary>
+      <div class="scroll"><table><thead><tr><th>날짜</th><th class="n">매도개수</th><th class="n">매도가</th><th class="n">1주당 원가</th><th class="n">메리츠 매수금액</th><th class="n">수익</th></tr></thead><tbody>
+      ${sells.map((r) => `<tr><td class="num">${esc(r[0])}</td><td class="n">${Number(r[9]).toLocaleString()}</td><td class="n">$${money(Number(r[25]) / Number(r[9]))}</td>
+        <td class="n">${r[26] === null || r[26] === undefined ? "-" : "$" + esc(Number(r[26]).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 }))}</td>
+        <td class="n">${r[26] === null || r[26] === undefined ? "-" : "$" + money(Number(r[26]) * Number(r[9]))}</td><td class="n">${r[17] === null || r[17] === undefined ? "-" : money(r[17])}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="small muted" style="margin-top:6px;line-height:1.6">메리츠 '해외주식 매매손익'과 같은 계산 — 수익 = (매도가 − 매도 직전 메리츠 매입평균가) × 매도수량.
+        메리츠 앱 매매손익 화면의 매수금액 ÷ 매도 수량과 같은지 보면 됩니다.</div></details>` : "";
   const fees = book.filter((r) => Number(r[22]));
   const feeSum = fees.reduce((t, r) => t + Number(r[22]), 0);
   return `<div class="scroll ttable"><table><thead><tr>${BCOLS.map((c, i) => `<th class="${i > 2 ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
@@ -1962,7 +1972,8 @@ function bookTable(g, e, book, lastWeek, recent) {
       <div class="small muted" style="margin-top:6px;line-height:1.6">모드 = 그날 장 끝 뒤 주문표(전반전·후반전·소진·리버스) · 원금 = 전략을 추가할 때 정한 투자금(없으면 -) ·
         평단 = 누적 매수액 ÷ 누적개수 · 매수액 = 매수 체결금액, 매도한 날은 −(매도수량 × 직전 평단) · 누적 매수액 = 남은 매입 원가 ·
         T·★%가격·1회 매수시도액·잔금 = 그날 시스템 값 · 수익 = 매도한 날만 (매도가 − 직전 평단) × 매도수량 · 누적수익 = 수익 합 − 수수료 합 ·
-        보유수익률 = 종가 ÷ 평단 − 1 · 실현수익 = 수익 합 · 실현수익률 = 실현수익 ÷ 원금. 묶은 줄은 기간 합계(개수·매수액·수익)와 기간 끝 값.</div></details>`;
+        보유수익률 = 종가 ÷ 평단 − 1 · 실현수익 = 수익 합 · 실현수익률 = 실현수익 ÷ 원금. 묶은 줄은 기간 합계(개수·매수액·수익)와 기간 끝 값.
+        평단·직전 평단 = 메리츠 매입평균가(이동평균, 매도해도 그대로) — 메리츠 잔고에서 체결 기록으로 따라감 (작업 ㉚).</div></details>${costBox}`;
 }
 // VR 매매 표 (사용자 11/04, 엑셀 양식): 2주 주기마다 한 줄 — 마지막 종가·G·평가금·V·최소·최대·거래액·Pool·투자원금·계좌총액·수익률·개수·원금·평단
 const VRCOLS = ["주차", "마지막 종가", "G", "평가금 E", "V", "최소", "최대", "거래액", "시작 Pool", "마지막 Pool", "투자원금", "계좌총액", "수익률", "수익금", "개수", "매수원금", "평단"];
