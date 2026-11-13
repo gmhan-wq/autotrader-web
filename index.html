@@ -481,7 +481,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14c";
+const APP_VERSION = "2026-11-14d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -886,7 +886,6 @@ function viewHome(snap, mine) {
   if (S.detail && mine) return viewStrategy(s, d, S.detail);
   const t = s.totals || {}, strat = allStrategies(s);
   const tonight = Object.values(d.tonight || {}).flat();
-  const draftN = Object.keys(s.drafts || {}).length;
   const signed = (x) => x === null || x === undefined ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + "$" + money(Math.abs(Number(x)));
   const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
   const kpis = [
@@ -895,8 +894,7 @@ function viewHome(snap, mine) {
     ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 기준" : "평단 있는 보유 기준", pnlCls(t.eval_pnl)],
     ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
     ...(s.broker ? [["달러 예수금 (메리츠)", "$" + money(s.broker.usd), "계좌별 달러 예수금 합계", ""]] : []),
-    ["오늘 밤 주문", realCount(d) !== null ? realCount(d) + "건" : tonight.length + "건", realCount(d) !== null ? "메리츠에 넣을 주문" : "가상(모의) 주문 기준", ""],
-    ["승인 대기", draftN + "건", draftN ? "승인 탭에서 확인" : "없음", draftN ? "warnc" : ""],
+    tonightKpi(d, tonight),
   ];
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
@@ -1024,6 +1022,22 @@ function phoneBlocks(s, d, B) {
   const ns = (d.notices || []).slice(0, 3);
   if (ns.length) B.push(["notices", "최근 알림", `<div class="card"><div class="row between"><h2>최근 알림</h2><button class="btn ghost" data-tab="board">전체 보기</button></div>
     ${ns.map((n) => `<div class="small">${esc(n.text)}</div>`).join("")}</div>`]);
+}
+// 작업 ㉘-A: '오늘 밤 주문' 카드 — 노트북이 보낸 tonight_status(㉔ E 기준 줄 vs 메리츠 주문내역)를 그대로 보여 준다.
+// 넣음 N / 남음 M, 남음 0 이면 완료, 메리츠 조회 실패면 확인 안 됨. 옛 노트북(tonight_status 없음)은 옛 건수.
+function tonightKpi(d, tonight) {
+  const t = d.tonight_status;
+  if (!t || !t.total) {
+    const rc = realCount(d);
+    return ["오늘 밤 주문", rc !== null ? rc + "건" : tonight.length + "건", rc !== null ? "메리츠에 넣을 주문" : "가상(모의) 주문 기준", ""];
+  }
+  const T = t.total, n = (x) => Number(x || 0).toLocaleString("en-US");
+  const per = Object.values(t.accounts || {}).flatMap((a) => a.strategies || []).filter((x) => x.state !== "none").map((x) =>
+    `${x.name || x.sid} ${x.state === "unknown" ? "확인 안 됨" : x.state === "done" ? "완료" : "남음 " + n(x.left)}`).join(" · ");
+  if (T.state === "unknown" && T.placed == null) return ["오늘 밤 주문", "확인 안 됨", "메리츠 주문내역 조회 실패 — 잠시 뒤 다시", "warnc"];
+  if (T.state === "none") return ["오늘 밤 주문", "없음", "오늘 밤 넣을 주문이 없습니다", ""];
+  if (T.state === "done") return ["오늘 밤 주문", "완료", `${n(T.placed)}줄 모두 메리츠에 들어감${per ? " · " + per : ""}`, ""];
+  return ["오늘 밤 주문", `넣음 ${n(T.placed)} / 남음 ${n(T.left)}`, (per || "메리츠에 넣을 주문") + (T.unknown ? " · 일부 확인 안 됨" : ""), T.left ? "warnc" : ""];
 }
 function realCount(d) {
   const r = d.real_orders; if (!r || !Object.keys(r).length) return null;
