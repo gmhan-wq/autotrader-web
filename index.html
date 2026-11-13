@@ -481,7 +481,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-13c";
+const APP_VERSION = "2026-11-14c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -539,7 +539,7 @@ const GROUPS = [
   ["home", "자산", [["home", "자산"]]],
   ["order", "주문", [["confirm", "manual"], ["auto", "auto"]]],
   ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["sessions", "장·주문 방법"]]],   // 장·주문 방법: 11/09 작업 ⑬
-  ["record", "기록", [["trades", "매매 표"], ["calendar", "주문표 달력"], ["upload", "사진 올리기"], ["board", "알림"]]],   // 사진 올리기: 11/09 작업 ⑪ (주문과 별개)   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
+  ["record", "기록", [["trades", "매매 표"], ["orderlog", "주문 이력"], ["calendar", "주문표 달력"], ["upload", "사진 올리기"], ["board", "알림"]]],   // 주문 이력: 11/14 작업 ⑱ (ADR 0056 ⑥)   // 사진 올리기: 11/09 작업 ⑪ (주문과 별개)   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
   // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
   ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["privacy", "프라이버시"]]],
@@ -569,7 +569,7 @@ function currentView() {
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
     case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
-    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 시스템 계산과 다릅니다. 원인을 보고 [승인](사진 값으로 바꾸기) 또는 [버리기](계산 유지)를 고르세요. 지난 날짜 것은 노트북이 '계산 유지'로 자동 정리합니다.</div>` + viewApprove() : "")
+    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 시스템 계산과 다릅니다. 사진은 검증만 하고 주문은 바꾸지 않습니다 (ADR 0055). 차이를 보고 [확인함]을 누르세요. 지난 날짜 것은 노트북이 자동 정리합니다.</div>` + viewApprove() : "") + viewFailedPhotos()
       + uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>` + cmdList("photo"); break;
     case "mystrat": v = need(myStrategies); break;
     case "research": S.addMock = true; v = need(addStrategy); break;
@@ -577,6 +577,7 @@ function currentView() {
     case "consensus": v = viewConsensus(); break;
     case "privacy": v = need(privacyCard) + privacyLog(); break;   // 올리기는 기록 → 사진 올리기 (작업 ⑪)
     case "calendar": v = viewCalendar(); break;
+    case "orderlog": v = need(viewOrderLog); break;
     case "trades": S.tradeKind = "real"; v = need(viewTrades); break;
     case "constitution": v = need(viewConstitution); break;
     case "sessions": v = viewSessions(s); break;              // 노트북 연결 전에도 (브라우저 계산)
@@ -814,8 +815,8 @@ function realOrders(s, d, g, acc) {
   if (!row.approved) return out + `<div class="empty">아직 ${esc(r.trade_date)} 주문표가 없습니다 (아침 6시 계산 뒤 생깁니다)</div></section>`;
   out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}메리츠 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
       ${(() => { const oneLine = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
-        return `<div class="oline">${confirmOn(acc) && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar) && !l.collar ? "checked" : ""} ${l.collar ? "disabled" : ""} aria-label="이 줄 주문">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
-        <b class="num">${l.price ? money(l.price) : l.kind === "MOC" ? "종가" : "시장가"} × ${l.qty}</b>${l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`; };
+        return `<div class="oline">${confirmOn(acc) && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done) && !l.collar && !l.auto_done ? "checked" : ""} ${l.collar || l.auto_done ? "disabled" : ""} aria-label="이 줄 주문">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
+        <b class="num">${l.price ? money(l.price) : l.kind === "MOC" ? "종가" : "시장가"} × ${l.qty}</b>${l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
         return show.map((l) => oneLine(l, false)).join("") + foldBox("ord:" + row.sid, hide, hide.map((l) => oneLine(l, true)).join("")); })()}
       ${row.usd_share != null ? `<div class="small" style="margin-top:6px">이 전략 달러 예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
@@ -1127,9 +1128,17 @@ function autoWindowCards() {
         <div class="muted" style="margin-top:4px">고를 수 있는 장 = 이 전략의 운용 장·주문 방법에서 메리츠가 그 주문을 받는 장 (예: LOC·MOC 는 프리장·정규장).
           좁히기(기간 줄이기·장 빼기)는 바로, 넓히기(기간 늘리기·새로 시작·장 더하기)는 계좌 주인과 관리자 둘 다 확인해야 적용됩니다.</div>
         <div class="row" style="margin-top:6px;gap:6px"><button class="btn primary" data-aw-save="${esc(g.id)}">저장</button><button class="btn" data-aw-cancel="${esc(g.id)}">취소</button></div></div>` : "";
+    // 작업 ㉗ (ADR 0059): auto on/off — OFF 는 주인·관리자 바로, ON 은 둘 다 확인. 노트북 잠금이 꺼져 있으면 ON 이어도 안 나감
+    const on = !!g.auto_on, op = g.auto_on_pending;
+    const sw = `<div class="row" style="margin-top:6px;gap:6px;align-items:center"><b>auto</b>
+        <span class="chip ${on ? "ok" : ""}">${on ? "ON" : "OFF"}</span>
+        ${on ? `<button class="btn" data-ao-off="${esc(g.id)}">OFF</button>`
+             : w ? `<button class="btn" data-ao-on="${esc(g.id)}">${op ? "ON 확인" : "ON 요청"}</button>` : `<span class="small muted">기간·장을 먼저 정해야 켤 수 있습니다</span>`}
+        ${on && !s.auto_live ? `<span class="chip warn">노트북 잠금 꺼짐 — 주문 안 나감</span>` : ""}</div>
+      ${op ? `<div class="small" style="margin-top:4px">⏳ ON 요청 ${esc(op.asked_by || "")} · 계좌 주인 ${op.owner ? "✅ " + esc(op.owner.by) : "기다림"} · 관리자 ${op.admin ? "✅ " + esc(op.admin.by) : "기다림"}</div>` : ""}`;
     return `<div class="card"><div class="row between"><b>${esc(stratName(g))} · ${esc(g.symbol || "")} · ${esc(ACC_NAME[aid] || aid)}</b>
         <span class="chip ${w ? "ok" : ""}">${w ? "auto 범위 있음" : "manual 만"}</span></div>
-      <div class="small">${esc(g.auto_window_text || "auto 대상 아님")}</div>${pendTxt}
+      <div class="small">${esc(g.auto_window_text || "auto 대상 아님")}</div>${sw}${pendTxt}
       ${ed ? form : `<div class="row" style="margin-top:6px;gap:6px"><button class="btn" data-aw-edit="${esc(g.id)}">기간·장 바꾸기</button>${w ? `<button class="btn" data-aw-off="${esc(g.id)}">auto 끝내기</button>` : ""}</div>`}</div>`;
   }).join("");
 }
@@ -1138,6 +1147,8 @@ function bindAutoWindow() {
   document.querySelectorAll("[data-aw-edit]").forEach((b) => b.onclick = () => { const g = byId(b.dataset.awEdit) || {};
     const w = g.auto_window; S.awEdit = S.awEdit || {};
     S.awEdit[b.dataset.awEdit] = w ? { start: w.start, end: w.end || "", sessions: [...w.sessions] } : { start: new Date().toISOString().slice(0, 10), end: "", sessions: [] }; render(); });
+  document.querySelectorAll("[data-ao-on]").forEach((b) => b.onclick = () => send("set_strategy", { id: b.dataset.aoOn, auto_on: true }));
+  document.querySelectorAll("[data-ao-off]").forEach((b) => b.onclick = () => send("set_strategy", { id: b.dataset.aoOff, auto_on: false }));
   document.querySelectorAll("[data-aw-cancel]").forEach((b) => b.onclick = () => { delete (S.awEdit || {})[b.dataset.awCancel]; render(); });
   document.querySelectorAll("[id^='aw-noend-']").forEach((c) => c.onchange = () => { const e = document.getElementById("aw-end-" + c.id.slice(9)); if (e) { e.disabled = c.checked; if (c.checked) e.value = ""; } });
   document.querySelectorAll("[data-aw-save]").forEach((b) => b.onclick = () => { const sid = b.dataset.awSave;
@@ -1162,7 +1173,7 @@ function viewAuto() {
     <div class="card"><h2>auto 가 켜지면</h2>
       <div class="small">· 위에서 정한 기간·장 안에서만 노트북이 오늘 밤 주문(계산 주문표·VR)을 메리츠에 직접 넣습니다.<br>
         · 마감 전 '근처' 하락 대비 줄도 조건이 되면 넣고, 체결·거부는 지금처럼 알립니다.<br>
-        · 끄기(비상 정지)는 누구나 바로, 다시 켜기는 합의로 (ADR 0037).</div></div>
+        · 전략별 auto OFF 는 계좌 주인 또는 관리자가 바로, ON 은 둘 다 확인 (ADR 0059). 노트북 잠금이 꺼져 있으면 ON 이어도 주문이 나가지 않습니다.</div></div>
     <div class="card"><h2>켜는 조건 <span class="chip ok">채택 · 11/07</span></h2>
       <div class="small">① manual '시험 주문'(SOXL 1주 −25% LOC)이 메리츠에 정상 접수<br>
         ② manual 로 매수일·매도일 각 한 번 이상 정상 체결<br>
@@ -1323,6 +1334,7 @@ function linesTable(lines) {
     <td class="small muted">${esc(o.kind)}</td><td class="n">${money(o.price)}</td><td class="n">${o.qty}주</td><td class="small muted">${esc(o.strategy_id || "")}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
+// 작업 ⑰ (ADR 0055): 사진은 검증만 — [승인](사진 값으로 바꾸기)·줄 체크·[버리기] 없앰, 차이 표시 + [확인함] 하나.
 function viewApprove() {
   const drafts = S.snap ? Object.entries(S.snap.summary.drafts || {}) : [];
   let out = "";
@@ -1330,26 +1342,52 @@ function viewApprove() {
     const c = S.confirm && S.confirm.sid === sid ? S.confirm.kind : null;
     out += `<div class="card">
       ${S.cmds.some((c) => c.status === "pending" && (c.payload || {}).sid === sid) ? `<div class="msg warn-note">보낸 명령을 노트북이 반영하는 중입니다 (20초 안팎, 노트북이 켜져 있어야 함)</div>` : ""}
-      <div class="row between"><h2>${esc(dr.symbol || "")} <span class="muted small">${esc(sid)}</span></h2>
-        <span class="chip ${dr.trusted ? "ok" : "warn"}">${dr.trusted ? "검증 통과" : "확인 필요"}</span></div>
-      <div class="small muted">종가날짜 ${esc(dr.sheet_date)} → 미국 ${esc(dr.trade_date)} 장에 주문${dr.multiplier > 1 ? ` · ${dr.multiplier}배수` : ""}</div>
-      <div class="kv"><div><span class="small muted">보유</span><b>${dr.holding ?? "-"}주</b></div>
-        <div><span class="small muted">평단</span><b>${money(dr.avg)}</b></div><div><span class="small muted">잔금 $</span><b>${money(dr.cash)}</b></div></div>
-      <div>${dr.lines.map((l) => `<label class="line ${l.on ? "" : "off"}" style="flex-direction:row">
-        <input type="checkbox" id="ln-${esc(sid)}-${l.n}" data-sid="${esc(sid)}" data-n="${l.n}" data-td="${esc(dr.trade_date)}" ${l.on ? "checked" : ""} ${S.busy ? "disabled" : ""}>
-        <span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(l.kind)}</span>
-        <span class="px num">${money(l.price)}</span><span class="num">${l.qty}주</span></label>`).join("")}</div>
-      ${dr.problems && dr.problems.length ? `<details><summary class="small">확인할 점 ${dr.problems.length}개</summary><ul class="small">${dr.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></details>` : ""}
-      ${c ? `<div class="confirm"><span>${c === "approve" ? "체크한 줄로 승인할까요?" : "이 주문표를 버릴까요?"}</span>
-          <button class="btn ${c === "approve" ? "primary" : "danger"}" data-do="${c}" data-sid="${esc(sid)}" data-td="${esc(dr.trade_date)}">${c === "approve" ? "승인" : "버리기"}</button>
+      <div class="row between"><h2>${esc(dr.symbol || "")} <span class="muted small">${esc(sidName(sid))}</span></h2>
+        <span class="chip warn">${dr.has_calc ? "계산과 다름" : "확인 필요"}</span></div>
+      <div class="small muted">종가날짜 ${esc(dr.sheet_date)} → 미국 ${esc(dr.trade_date)} 장 · 사진은 검증만 합니다 — 주문표·주문은 바뀌지 않습니다</div>
+      <div class="kv"><div><span class="small muted">사진 보유</span><b>${dr.holding ?? "-"}주</b></div>
+        <div><span class="small muted">사진 평단</span><b>${money(dr.avg)}</b></div><div><span class="small muted">사진 잔금 $</span><b>${money(dr.cash)}</b></div></div>
+      ${(dr.diff || []).map((d) => `<div class="small warn-t">✗ ${esc(String(d[0]))}${d[1] !== "" ? `: 계산 ${esc(String(d[1]))} / 사진 ${esc(String(d[2]))}` : ""}</div>`).join("")}
+      ${!dr.has_calc ? `<div class="small muted">이 날 계산 주문표가 없어 비교하지 못했습니다 (사진으로 주문표를 만들지 않음).</div>` : ""}
+      ${(dr.causes || []).length ? `<details><summary class="small">원인 후보 ${dr.causes.length}개</summary><ol class="small">${dr.causes.map((p) => `<li>${esc(p)}</li>`).join("")}</ol></details>` : ""}
+      ${dr.problems && dr.problems.length ? `<details><summary class="small">판독 확인할 점 ${dr.problems.length}개</summary><ul class="small">${dr.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></details>` : ""}
+      ${c ? `<div class="confirm"><span>차이를 봤다고 기록할까요? (주문은 그대로)</span>
+          <button class="btn primary" data-do="discard" data-sid="${esc(sid)}" data-td="${esc(dr.trade_date)}">확인함</button>
           <button class="btn" data-cancel="1">취소</button></div>`
-        : `<div class="row"><button class="btn primary" data-ask="approve" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>승인</button>
-          <button class="btn danger" data-ask="discard" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>버리기</button></div>`}
+        : `<div class="row"><button class="btn primary" data-ask="ack" data-sid="${esc(sid)}" ${S.busy ? "disabled" : ""}>확인함</button></div>`}
     </div>`;
   }
   return out;
 }
-const CMD_KO = { approve: "승인", toggle_line: "줄 체크", discard: "버리기", refresh: "새로 고침",
+// 주문 이력 (작업 ⑱, ADR 0056 ⑥): 생성·접수·거부·막음·체결·정정·취소 — 메리츠 앱 직접 주문 포함. 지우지 않는 기록.
+const OH_EV = { created: ["주문 보냄", ""], accepted: ["접수", "ok"], rejected: ["거부", "bad"], unknown: ["접수 여부 모름", "warn"],
+  blocked: ["안전장치가 막음", "warn"], seen: ["메리츠 주문", ""], partial: ["부분 체결", "ok"], filled: ["체결", "ok"],
+  cancel_or_modify: ["정정·취소", "warn"], setting: ["설정 변경", ""] };
+const OH_ROUTE = { manual: "manual", test: "시험 주문", vr_reserve: "VR 예약", auto: "auto", meritz_app: "메리츠 앱 직접", unknown: "?" };
+function viewOrderLog() {
+  const all = ((S.snap && S.snap.detail) || {}).order_log || [];
+  const f = S.ohFilter || (S.ohFilter = { day: "", acc: "", sid: "" });
+  const days = [...new Set(all.map((r) => String(r.at || "").slice(0, 10)))].sort().reverse();
+  const accs = [...new Set(all.map((r) => r.account).filter(Boolean))].sort();
+  const sids = [...new Set(all.map((r) => r.sid).filter(Boolean))].sort();
+  const rows = all.filter((r) => (!f.day || String(r.at || "").startsWith(f.day)) && (!f.acc || r.account === f.acc) && (!f.sid || r.sid === f.sid));
+  const sel = (id, cur, opts, label) => `<select data-ohf="${id}"><option value="">${label} 전체</option>${opts.map((o) => `<option ${o === cur ? "selected" : ""} value="${esc(o)}">${esc(id === "sid" ? sidName(o) : o)}</option>`).join("")}</select>`;
+  return `<div class="card"><h2>주문 이력</h2><div class="small muted">앱이 보낸 주문(manual·VR 예약·시험)과 메리츠 앱에서 직접 넣은 주문의 생성·접수·거부·체결·정정·취소, 안전장치가 막은 요청까지 지우지 않고 남깁니다. 메리츠 주문내역은 노트북이 장 중 5분마다 가져옵니다.</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin:8px 0">${sel("day", f.day, days, "날짜")}${sel("acc", f.acc, accs, "계좌")}${sel("sid", f.sid, sids, "전략")}</div>
+    ${rows.length ? rows.slice(0, 150).map((r) => { const ev = OH_EV[r.event] || [r.event, ""];
+      return `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row between"><span class="small">${esc(String(r.at || "").slice(5, 16).replace("T", " "))} · ${esc(r.account || "")} · ${esc(OH_ROUTE[r.route] || r.route || "")}${r.sid ? " · " + esc(sidName(r.sid)) : ""}</span><span class="res ${ev[1]}">${esc(ev[0])}</span></div>
+        ${r.symbol ? `<div class="small"><b>${esc(r.symbol)}</b> <span class="${sideCls(r.side)}">${sideKo(r.side)}</span> ${esc(KIND_KO[r.kind] || r.kind || "")} ${r.price != null && r.price !== "종가" ? money(r.price) : "종가"} × ${esc(String(r.qty ?? ""))}${r.filled_qty ? ` · 체결 ${esc(String(r.filled_qty))}주${r.fill_price ? " @ " + money(r.fill_price) : ""}` : ""}${r.meritz_no ? ` · 주문번호 ${esc(String(r.meritz_no))}` : ""}</div>` : ""}
+        ${r.note ? `<div class="small muted">${esc(String(r.note))}</div>` : ""}</div>`; }).join("") : `<div class="empty">아직 기록이 없습니다 (주말 update 뒤 다음 장부터 쌓입니다).</div>`}</div>`;
+}
+// 판독 실패 사진 (작업 ㉕-H): 관리자가 [확인함] 할 때까지 노트북에만 보관 — 여기는 이름·이유만 (사진은 올리지 않음)
+function viewFailedPhotos() {
+  const list = ((S.snap && S.snap.detail) || {}).failed_reads || [];
+  if (!list.length) return "";
+  return `<div class="card"><h2>판독 실패 사진 ${list.length}장</h2><div class="small muted">노트북에만 보관 중입니다. 다시 찍어 보낸 뒤 [확인함]을 누르면 노트북이 그 사진을 지웁니다.</div>
+    ${list.map((r) => `<div class="row between" style="padding:6px 0;border-top:1px solid var(--line)"><span class="small"><b>${esc({ sheet: "무한매수", vr: "VR", privacy: "프라이버시" }[r.kind] || r.kind || "")}</b> · ${esc((r.at || "").slice(5, 16).replace("T", " "))} · ${esc(r.why || "")}</span>
+      <button class="btn" data-ackfail="${esc(r.name)}" ${S.busy ? "disabled" : ""}>확인함</button></div>`).join("")}</div>`;
+}
+const CMD_KO = { approve: "승인(없앰)", toggle_line: "줄 체크(없앰)", discard: "확인함", refresh: "새로 고침",
                  add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경", place_orders: "manual", upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록", set_telegram: "텔레그램 연결", create_profile: "노트북 칸 만들기"};
 // 작업 ⑮: '최근 보낸 명령'을 화면마다 나눠 보여 줌 — 주문 화면 = 주문, 사진 올리기 = 사진, 설정 = 키·토큰·계좌, 전략 = 전략 추가·변경
 const CMD_CAT = { place_orders: "order", upload_photo: "photo", approve: "photo", discard: "photo", toggle_line: "photo",
@@ -2012,7 +2050,7 @@ function viewCalendar() {
   return out + planDay(sel, pdays[sel]) + calDay(sel, days[sel]) + readLogCard(sel);
 }
 // 사진 판독 기록 (작업 ⑪): 사진은 지우고 판독 숫자·시스템 비교·선택만 (노트북 state/photo_reads)
-const READ_ST = { same: ["계산과 같음 ✓", "ok"], diff: ["다름", "warn"], draft: ["판독 (승인 대기)", ""], read: ["판독", ""] };
+const READ_ST = { same: ["계산과 같음 ✓", "ok"], diff: ["다름 ⚠", "warn"], draft: ["판독 (확인 대기)", ""], read: ["판독", ""], fail: ["판독 실패", "bad"] };
 function readLogCard(sel) {
   const log = ((S.snap && S.snap.detail) || {}).read_log || [];
   if (!log.length) return `<div class="card"><h2>사진 판독 기록</h2><div class="empty">아직 없습니다. 기록 → 사진 올리기나 텔레그램으로 주문표 사진을 보내면 판독 숫자가 여기 쌓입니다 (사진은 판독 뒤 지움).</div></div>`;
@@ -2020,7 +2058,7 @@ function readLogCard(sel) {
   return `<div class="card"><h2>사진 판독 기록</h2><div class="small muted">사진은 판독 뒤 지우고 숫자만 남깁니다. 고른 날(${esc(sel || "")}) 것이 먼저 보입니다.</div>
     ${rows.map((r) => { const st = READ_ST[r.status] || [r.status || "", ""];
       return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row between"><span><b>${esc(r.day || "")}</b> · ${esc({ sheet: "무한매수", vr: "VR" }[r.kind] || r.kind)} · ${esc(r.sid || "?")}</span>
-        <span class="res ${st[1]}">${esc(st[0])}${r.choice ? " · " + (r.choice === "photo" ? "사진 값으로 바꿈" : r.choice === "calc_auto" ? "계산 유지(지난 날짜 자동)" : "계산 유지") : ""}</span></div>
+        <span class="res ${st[1]}">${esc(st[0])}${r.choice ? " · " + (r.choice === "photo" ? "사진 값으로 바꿈(옛 기록)" : r.choice === "calc_auto" ? "지난 날짜 자동 정리" : r.choice === "ack" ? `확인함${r.ack_by ? " (" + esc(r.ack_by) + ")" : ""}` : "계산 유지") : ""}</span></div>
         <div class="small">${Object.entries(r.nums || {}).map(([k, v]) => `${esc(k)} <b class="num">${esc(String(v))}</b>`).join(" · ")}</div>
         ${(r.diff || []).map((d) => `<div class="small warn-t">✗ ${esc(String(d[0]))}: 시스템 ${esc(String(d[1]))} / 사진 ${esc(String(d[2]))}</div>`).join("")}
         ${(r.problems || []).map((p) => `<div class="small muted">⚠ ${esc(String(p))}</div>`).join("")}</div>`; }).join("")}</div>`;
@@ -2283,6 +2321,8 @@ function bind() {
   document.querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => { S.confirm = null; render(); });
   document.querySelectorAll("[data-do]").forEach((b) => b.onclick = () => { S.confirm = null;
     send(b.dataset.do, { sid: b.dataset.sid, trade_date: b.dataset.td }); });
+  document.querySelectorAll("[data-ohf]").forEach((x) => x.onchange = () => { S.ohFilter[x.dataset.ohf] = x.value; render(); });
+  document.querySelectorAll("[data-ackfail]").forEach((b) => b.onclick = () => send("discard", { failed: b.dataset.ackfail }));
   document.querySelectorAll("[data-view]").forEach((b) => b.onclick = async () => {
     S.viewing = b.dataset.view; const r = await sb.rpc("view_snapshot", { p_owner: S.viewing });
     S.viewSnap = r.error ? null : clean(r.data); if (r.error) S.msg = { bad: true, text: r.error.message }; render(); });
