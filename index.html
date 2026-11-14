@@ -483,7 +483,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14k";
+const APP_VERSION = "2026-11-14l";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -781,7 +781,7 @@ function vrOrders(s, d, g, acc) {
   out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g))} 주문표</h2>
       <span class="small muted">${esc(name)}${vr.week != null ? ` · ${esc(vr.week)}주차` : ""}${vr.start ? ` · 주기 ${esc(vr.start)} ~ ${esc(vrCycleEnd(vr.start))}` : ""}</span></div>
     <div class="small">${(((s.quotes || {})[g.symbol] || {}).price) ? `현재가 <b class="num">${money(s.quotes[g.symbol].price)}</b> · ` : ""}메리츠 보유 <b class="num">${Number(g.qty) + Number(g.excluded_qty || 0)}주</b>${Number(g.excluded_qty || 0) ? ` <span class="muted">(VR ${g.qty} + 따로 ${g.excluded_qty} — VR 계산은 ${g.qty}주 기준)</span>` : ""}${g.avg ? ` · 평단 <b class="num">${money(g.avg)}</b>` : ""} · 달러 예수금 <b class="num">${usd !== null ? "$" + money(usd) : "-"}</b>
-      · 주문표 V <b class="num">${vr.V != null ? "$" + money(vr.V) : "-"}</b> · Pool <b class="num">${vr.pool != null ? "$" + money(vr.pool) : "-"}</b>
+      · 주문표 V <b class="num">${vr.V != null ? "$" + money(vr.V) : "-"}</b> · ${vrCashHtml(g, vr)}
       · 최소 ${vr.min != null ? money(vr.min) : "-"} · 최대 ${vr.max != null ? money(vr.max) : "-"}</div>
     ${ladder.length ? ladder.map((l) => { const done = filled.has(l.tag), key = [g.id, l.side, "VR", l.price, l.qty].join("|");
       return `<div class="oline">${on ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(key)}" ${!done && cfChecked(key, true) ? "checked" : ""} ${done ? "disabled" : ""} aria-label="이 줄 주문">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${l.n}단계</span>
@@ -1015,7 +1015,7 @@ function phoneBlocks(s, d, B) {
       ${rows.length ? rows.map((g) => { const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id], px = (s.closes || {})[g.symbol];
         const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
         const planQ = plan && plan.holding != null ? Number(plan.holding) * Number(plan.multiplier || 1) : null, gap = planQ != null ? planQ - Number(g.qty || 0) : 0;
-        const sub = `메리츠 ${g.qty}주${g.avg ? " · 평단 " + money(g.avg) : ""}${plan ? " · 주문표 " + planQ + "주 · T " + plan.T : vr ? " · 주문표 V " + money(vr.V) + " · Pool " + money(vr.pool) : ""}${gap > 0 ? " · 보충 " + gap + "주" : ""}`;
+        const sub = `메리츠 ${g.qty}주${g.avg ? " · 평단 " + money(g.avg) : ""}${plan ? " · 주문표 " + planQ + "주 · T " + plan.T : vr ? " · 주문표 V " + money(vr.V) + " · " + vrCashText(g, vr) : ""}${gap > 0 ? " · 보충 " + gap + "주" : ""}`;
         return `<button class="lrow" data-detail="${esc(g.id)}"><span class="sym num">${esc(g.symbol)}</span>
           <span class="lmain"><b>${esc(stratName(g, plan))}</b><span class="small muted num">${esc(sub)}</span></span>
           <span class="lval num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "$" + money(g.cash) : (pnl >= 0 ? "+" : "−") + money(Math.abs(pnl))}</span></button>`; }).join("")
@@ -1055,13 +1055,14 @@ function strategyCard(s, g) {
   const m = ((s.shadow || {})[g.account] || {})[g.id];
   const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
   const metric = plan ? ["T · 단계", `${plan.T} / ${plan.splits} · ${plan.phase || "-"}`] :
-                 vr ? ["V · Pool", `${money(vr.V)} · ${money(vr.pool)}`] : ["상태", g.active ? "켜짐" : "꺼짐"];
+                 vr ? ["V", money(vr.V)] : ["상태", g.active ? "켜짐" : "꺼짐"];
   const gw = g.gap_watch || {};   // ADR 0051: 주문표보다 적게 보유가 이어지면 알림 → 3거래일째 주문 멈춤
   const status = !g.active ? ["꺼짐", ""] : gw.paused ? [`주문 멈춤 (${gw.days}거래일째 ${gw.gap}주 모자람)`, "bad"]
     : gw.days ? [`보충 필요 ${gw.days}거래일째`, "warn"] : plan && plan.source === "calc" ? ["계산 주문표", "ok"] : ["켜짐", "ok"];
   return `<button class="card scard" data-detail="${esc(g.id)}" aria-label="${esc(g.id)} 자세히">
     <div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div>
     ${ledgers3(g, plan, vr, m)}
+    ${vr ? `<span class="small vrcash">${vrCashHtml(g, vr)}</span>` : ""}
     <div class="kv2">
       <span class="muted">${metric[0]}</span><span class="num">${esc(metric[1])}</span>
       <span class="muted">평가손익 (메리츠)</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
@@ -1074,6 +1075,31 @@ function merUsd(g) {
   const s = S.snap ? S.snap.summary : {}, a = ((s.broker || {}).accounts || {})[g.account];
   const n = (((s.accounts || {})[g.account] || {}).strategies || []).length;
   return a && !a.ledger && a.usd != null && n === 1 ? a.usd : g.cash;
+}
+// 작업 ㊳ (R-17): VR Pool 두 값 — 주기 시작 Pool(주기 동안 고정) · 남은 현금(= 시작 Pool − 이번 주기 매수 + 매도) · 메리츠 예수금. 표시만.
+function vrCash(g, vr) {
+  const cv = (vr && vr.cash_view) || {};
+  const start = cv.pool_start != null ? cv.pool_start : vr ? vr.pool : null;
+  const left = cv.cash_left != null ? cv.cash_left : g.cash;
+  let usd = cv.usd != null ? cv.usd : null;
+  if (usd == null) {                       // 노트북이 안 붙였으면 VR 만 있는 API 계좌의 메리츠 예수금으로
+    const s = S.snap ? S.snap.summary : {}, a = ((s.broker || {}).accounts || {})[g.account];
+    const gs = ((s.accounts || {})[g.account] || {}).strategies || [];
+    if (a && !a.ledger && a.usd != null && gs.length === 1 && gs[0].kind === "vr") usd = a.usd;
+  }
+  const diff = usd != null && left != null ? Number(usd) - Number(left) : null;
+  return { start, left, usd, diff, warn: diff !== null && Math.abs(diff) > 1 };
+}
+function vrCashText(g, vr) {
+  const c = vrCash(g, vr);
+  return [c.start != null ? `주기 시작 Pool $${money(c.start)}` : "", c.left != null ? `남은 현금 $${money(c.left)}` : ""].filter(Boolean).join(" · ")
+    + (c.usd != null ? ` (메리츠 예수금 $${money(c.usd)})` : "") + (c.warn ? ` ⚠ 차이 ${c.diff > 0 ? "+" : "−"}$${money(Math.abs(c.diff))}` : "");
+}
+function vrCashHtml(g, vr) {
+  const c = vrCash(g, vr);
+  return `${c.start != null ? `주기 시작 Pool <b class="num">$${money(c.start)}</b>` : ""}${c.start != null && c.left != null ? " · " : ""}${c.left != null ? `남은 현금 <b class="num">$${money(c.left)}</b>` : ""}`
+    + (c.usd != null ? ` <span class="muted">(메리츠 예수금 <span class="num">$${money(c.usd)}</span>)</span>` : "")
+    + (c.warn ? ` <span class="chip warn" title="남은 현금과 메리츠 예수금이 $1 넘게 다름 — 이자·환전·수수료·놓친 체결 확인">⚠ 차이 ${c.diff > 0 ? "+" : "−"}$${money(Math.abs(c.diff))}</span>` : "");
 }
 function ledgers3(g, plan, vr, m) {
   // 버튼(카드) 안이라 표 대신 칸 나눔 (span)
@@ -1345,7 +1371,8 @@ function viewStrategy(s, d, sid) {
       <div class="card"><h2>가격 사다리</h2>${ladder(plan, px)}</div></div>`;
   } else if (vr) {
     const facts = [["V", money(vr.V), `${vr.week}주차 · ${esc(vr.start)}부터 2주`], ["최소값", money(vr.min), "V × 0.85 — 아래에서 매수"], ["최대값", money(vr.max), "V × 1.15 — 위에서 매도"],
-      ["Pool", "$" + money(vr.pool), "매수에 쓸 현금"], ["보유", g.qty + "주", px ? `종가 ${money(px)} · 평가 $${money(g.qty * Number(px))}` : ""]];
+      ["주기 시작 Pool", "$" + money(vrCash(g, vr).start), "V·매수점 계산에 쓴 값 (주기 동안 고정)"],
+      ["남은 현금", "$" + money(vrCash(g, vr).left), (() => { const c = vrCash(g, vr); return "시작 Pool − 이번 주기 매수 + 매도" + (c.usd != null ? ` · 메리츠 예수금 $${money(c.usd)}` + (c.warn ? ` ⚠ 차이 ${c.diff > 0 ? "+" : "−"}$${money(Math.abs(c.diff))}` : "") : ""); })()], ["보유", g.qty + "주", px ? `종가 ${money(px)} · 평가 $${money(g.qty * Number(px))}` : ""]];
     out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
     out += vrConfCard(g, s);                       // 작업 ㊲: 종류·한도·배수·다음 주기 바뀜 (보기만)
     const lv = (arr, kind) => arr.map(([p, q], i) => ({ p, q, kind, tag: `vr_${kind}_${i + 1}` }));
@@ -2175,7 +2202,7 @@ function bookTable(g, e, book, lastWeek, recent) {
 }
 // VR 매매 표 (사용자 11/04, 엑셀 양식): 2주 주기마다 한 줄 — 마지막 종가·G·평가금·V·최소·최대·거래액·Pool·투자원금·계좌총액·수익률·개수·원금·평단
 const VRCOLS = ["주차", "마지막 종가", "G", "평가금 E", "V", "최소", "최대", "거래액", "시작 Pool", "마지막 Pool", "투자원금", "계좌총액", "수익률", "수익금", "개수", "매수원금", "평단"];
-function vrTable(g, rows) {
+function vrTable(g, rows, kind = "real") {
   if (!rows.length) return `<div class="empty">VR 주기 기록이 아직 없습니다.</div>`;
   const n = (x) => x === null || x === undefined || x === "" ? null : Number(x);
   const m = (x) => n(x) === null ? "-" : money(x);
@@ -2189,7 +2216,8 @@ function vrTable(g, rows) {
       <td class="n ${ret > 0 ? "buy" : ret < 0 ? "sell" : ""}">${ret === null ? "-" : (ret > 0 ? "+" : "") + ret.toFixed(2) + "%"}</td>
       <td class="n">${total === null || !prn ? "-" : (total - prn >= 0 ? "+" : "−") + money(Math.abs(total - prn))}</td>
       <td class="n"><b>${qty}</b></td><td class="n">${c ? money(c) : "-"}</td><td class="n">${c && qty ? money(c / qty) : "-"}</td></tr>`; }).join("");
-  return `<div class="small muted" style="margin:4px 0">${Number(g.multiplier) > 1 ? `${g.multiplier}배수 금액 · ` : ""}거래액 = 그 주기 매매 합계(매수 −, 매도 +), 마지막 Pool = 시작 Pool + 거래액, 계좌총액 = 평가금 + Pool.
+  const vrNow = kind === "real" ? ((S.snap ? S.snap.summary : {}).vr || {})[g.id] : null;   // 가투 표에는 실제 현금을 안 붙임
+  return `${vrNow ? `<div class="small vrcash" style="margin:4px 0">지금 주기: ${vrCashHtml(g, vrNow)}</div>` : ""}<div class="small muted" style="margin:4px 0">${Number(g.multiplier) > 1 ? `${g.multiplier}배수 금액 · ` : ""}거래액 = 그 주기 매매 합계(매수 −, 매도 +), 마지막 Pool = 시작 Pool + 거래액(진행 중 줄은 = 남은 현금), 계좌총액 = 평가금 + Pool.
     ${rows.some((r) => !r[11]) ? "투자원금을 아직 정하지 않아 수익률은 '-' 입니다." : ""}</div>
     <div class="scroll ttable"><table><thead><tr>${VRCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
@@ -2227,7 +2255,7 @@ function viewTrades(s) {
   return `<div class="seg" role="tablist" aria-label="전략" style="flex-wrap:wrap">${strat.map((x) => `<button role="tab" data-tradesid="${esc(x.id)}" class="${x.id === g.id ? "on" : ""}" aria-selected="${x.id === g.id}"><span class="num">${esc(x.symbol)}</span> ${esc(stratName(x, (s.plans || {})[x.id]))}</button>`).join("")}</div>
     <div class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2>
       <span class="chip">${kind === "mock" ? "가투" : "메리츠"}</span></div>
-      ${e.vr ? vrTable(g, (e.vr || {})[kind] || []) : ""}
+      ${e.vr ? vrTable(g, (e.vr || {})[kind] || [], kind) : ""}
       ${e.vr ? `<details style="margin-top:8px"><summary class="small muted">날짜별 체결 보기</summary>` : ""}
       ${book ? bookTable(g, e, book, lastWeek, recent) : rows.length ? `<div class="scroll ttable"><table><thead><tr>${TCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
         <tbody>${total}${body}</tbody></table></div>` : `<div class="empty">${kind === "real" ? "메리츠" : "가투"} 체결 기록이 아직 없습니다.</div>`}
@@ -2363,7 +2391,7 @@ function calVrCard(td, g, vr) {
   return `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> VR · ${esc(ACC_NAME[g.account] || g.account)}</h2>
       <span class="chip">${esc(vr.week)}주차 · ${esc(String(vr.start).slice(5).replace("-", "/"))}~${esc(vrCycleEnd(vr.start).slice(5).replace("-", "/"))}</span></div>
     <div class="kv"><div><span class="small muted">보유</span><b>${Number(g.qty) + ex}주</b>${ex ? `<span class="small muted">VR ${g.qty} + 따로 ${ex}</span>` : ""}</div>
-      <div><span class="small muted">Pool</span><b>${vr.pool != null ? "$" + money(vr.pool) : "-"}</b></div>
+      <div><span class="small muted">주기 시작 Pool</span><b>${vr.pool != null ? "$" + money(vr.pool) : "-"}</b><span class="small muted">남은 현금 $${money(vrCash(g, vr).left)}${vrCash(g, vr).warn ? " ⚠" : ""}</span></div>
       <div><span class="small muted">V</span><b>${vr.V != null ? money(vr.V) : "-"}</b><span class="small muted">${vr.min != null ? money(vr.min) : "-"} ~ ${vr.max != null ? money(vr.max) : "-"}</span></div></div>
     <div class="cal-ord">${near.map(ln).join("") || `<div class="empty">남은 단계 없음</div>`}</div>
     ${done.length ? `<div class="cal-fill small">이번 주기 체결 · ${done.map((l) => `<span class="${sideCls(l.side)}">${sideKo(l.side)}</span> ${l.n}단계 <b class="num">${money(l.p)}×${l.q}</b>`).join(" · ")}</div>` : ""}
