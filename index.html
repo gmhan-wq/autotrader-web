@@ -565,7 +565,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14m";
+const APP_VERSION = "2026-11-14n";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -653,7 +653,7 @@ function currentView() {
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
     case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
-    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 시스템 계산과 다릅니다. 사진은 검증만 하고 주문은 바꾸지 않습니다 (ADR 0055). 차이를 보고 [확인함]을 누르세요. 지난 날짜 것은 노트북이 자동 정리합니다.</div>` + viewApprove() : "") + viewFailedPhotos()
+    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 시스템 계산과 다릅니다. 사진은 검증만 하고 주문은 바꾸지 않습니다 (ADR 0055). 차이를 보고 [확인함]을 누르세요. 지난 날짜 것은 노트북이 자동 정리합니다.</div>` + viewApprove() : "") + viewFailedPhotos() + viewMethodChecks()
       + uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>` + cmdList("photo"); break;
     case "mystrat": v = need(myStrategies); break;
     case "research": S.addMock = true; v = need(addStrategy); break;
@@ -1666,6 +1666,22 @@ function viewFailedPhotos() {
   return `<div class="card"><h2>판독 실패 사진 ${list.length}장</h2><div class="small muted">노트북에만 보관 중입니다. 다시 찍어 보낸 뒤 [확인함]을 누르면 노트북이 그 사진을 지웁니다.</div>
     ${list.map((r) => `<div class="row between" style="padding:6px 0;border-top:1px solid var(--line)"><span class="small"><b>${esc({ sheet: "무한매수", vr: "VR", privacy: "프라이버시" }[r.kind] || r.kind || "")}</b> · ${esc((r.at || "").slice(5, 16).replace("T", " "))} · ${esc(r.why || "")}</span>
       <button class="btn" data-ackfail="${esc(r.name)}" ${S.busy ? "disabled" : ""}>확인함</button></div>`).join("")}</div>`;
+}
+// 방법 검증 (작업 ㊵ A): 사진 d 상태 → 지금 계산 코드 → 사진 d+1 과 줄마다 비교 — 장부·주문은 그대로, 비교 기록만
+const MC_ST = { same: ["✓ 같음", "ok"], diff: ["✗ 다름", "bad"], skip: ["비교 못 함", ""] };
+function viewMethodChecks() {
+  const list = ((S.snap && S.snap.detail) || {}).method_checks || [];
+  const intro = `<div class="small muted">같은 전략의 사진 d 숫자에서 출발해 지금 계산 코드로 다음 거래일 주문표를 만들고 사진 d+1 과 줄마다 맞춰 봅니다 (가격 ±0.01 · 수량 · 줄 수 · T·평단·잔금). VR 은 다음 V·매수/매도 계획 사진. 장부·주문표·가투는 바꾸지 않습니다.</div>`;
+  if (!list.length) return `<div class="card"><h2>방법 검증</h2>${intro}<div class="empty">아직 없습니다 — 이어진 두 거래일 사진이 판독되면 여기 쌓입니다 (노트북 명령 method-check 로 지난 사진도 다시 돌릴 수 있음).</div></div>`;
+  return `<div class="card"><h2>방법 검증</h2>${intro}
+    <div class="scroll"><table><thead><tr><th>날짜</th><th>전략</th><th>결과</th><th>다른 줄</th></tr></thead><tbody>
+    ${list.slice(0, 40).map((r) => { const st = MC_ST[r.status] || [r.status || "", ""];
+      const what = r.sub === "next_v" ? " 다음 V" : r.sub === "ladder" ? " 계획" : "";
+      const det = r.status === "skip" ? esc(r.why || "") : r.status === "same" ? `${esc(String(r.n || 0))}줄 모두 같음`
+        : (r.diffs || []).map((x) => `<div>${esc(String(x))}</div>`).join("") + (r.causes || []).map((x) => `<div class="muted">· ${esc(String(x))}</div>`).join("");
+      return `<tr><td class="num">${esc(String(r.day || "").slice(5).replace("-", "/"))}</td><td>${esc((r.name || r.sid || "") + what)}</td>
+        <td><span class="res ${st[1]}">${esc(st[0])}</span></td><td class="small">${det}</td></tr>`; }).join("")}
+    </tbody></table></div></div>`;
 }
 const CMD_KO = { approve: "승인(없앰)", toggle_line: "줄 체크(없앰)", discard: "확인함", refresh: "새로 고침",
                  add_account: "계좌 추가", add_strategy: "전략 추가", set_strategy: "전략 변경", place_orders: "manual", upload_photo: "사진 올리기", set_api_key: "메리츠 키 등록", set_telegram: "텔레그램 연결", create_profile: "노트북 칸 만들기"};
