@@ -434,7 +434,9 @@ const KO_ERR = [[/Invalid login credentials/i, "이메일 또는 비밀번호가
   [/User already registered/i, "이미 가입한 이메일입니다 — 로그인하세요"], [/Password should be at least/i, "비밀번호는 10자 이상으로 정해 주세요"],
   [/Password should contain/i, "비밀번호에 영문·숫자를 섞어 주세요"], [/weak|pwned|known to be/i, "너무 쉽거나 유출된 적 있는 비밀번호입니다. 다른 것으로 정해 주세요"],
   [/captcha/i, "'로봇이 아닙니다' 확인이 끝나지 않았거나 만료됐습니다. 다시 해 주세요"],
-  [/rate limit|too many/i, "요청이 너무 잦습니다. 잠시 뒤 다시 해 주세요"], [/row-level security|permission denied/i, "권한이 없습니다 (관리자 승인 전이거나 다른 사람의 자료)"],
+  [/rate limit|too many/i, "요청이 너무 잦습니다. 잠시 뒤 다시 해 주세요"], [/row-level security|permission denied/i, "권한이 없습니다 (관리자 승인 전·다른 사람의 자료이거나, 민감한 일인데 2단계 인증 전 — 설정 → 2단계 인증)"],
+  [/Invalid TOTP|invalid.*code|code.*(expired|invalid)/i, "인증 앱 6자리가 맞지 않습니다 (30초마다 바뀝니다 — 새 숫자로 다시)"],
+  [/AAL2 required|aal2/i, "2단계 인증을 마친 뒤에 할 수 있습니다 (로그아웃 → 다시 로그인하며 6자리 입력)"],
   [/Failed to fetch|NetworkError/i, "인터넷 연결을 확인해 주세요"]];
 const ko = (m) => { m = String(m || ""); for (const [re, t] of KO_ERR) if (re.test(m)) return t; return m; };
 const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -565,7 +567,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14n";
+const APP_VERSION = "2026-11-15a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -627,7 +629,7 @@ const GROUPS = [
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
   // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
   ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["privacy", "프라이버시"]]],
-  ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
+  ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["security", "2단계 인증"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
 const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm", fb_bug: "board", fb_idea: "board" };      // 예전 이름 → 새 화면
 function pagesOf(g) {
@@ -669,11 +671,103 @@ function currentView() {
 
     case "accounts": v = need(accountsView); break;
     case "telegram": v = need(telegramCard); break;
+    case "security": v = mfaCard(); break;                    // 웹 보안 ② 2단계 인증 (ADR 0035, 11/15)
     case "admin": v = viewAdmin(); break;
     default: v = viewFamily();
   }
   return subNav() + v;
 }
+// ── 웹 보안 ② 2단계 인증 (TOTP, ADR 0035 — 11/15) ──
+// 로그인 뒤 인증 앱을 등록한 사람은 6자리를 넣어야 들어온다(aal2). 민감한 일(메리츠 키·텔레그램 연결·회원 승인·노트북 칸·공동 운영 켜기)은
+// 데이터베이스가 aal2 세션만 받는다(setup_webapp.sql is_aal2) — 화면 검사는 안내용일 뿐.
+async function loadAal() {
+  try {
+    const r = await withTimeout(sb.auth.mfa.getAuthenticatorAssuranceLevel(), 8000, "2단계 인증 확인");
+    S.aal = (r.data && r.data.currentLevel) || "aal1"; S.aalNext = (r.data && r.data.nextLevel) || S.aal;
+    const f = await withTimeout(sb.auth.mfa.listFactors(), 8000, "2단계 인증 목록");
+    S.mfaFactors = ((f.data && f.data.totp) || []).filter((x) => x.status === "verified");
+    S.mfaUnverified = ((f.data && f.data.all) || []).filter((x) => x.status !== "verified");
+  } catch (e) { S.aal = S.aal || "aal1"; S.aalNext = S.aal; S.mfaFactors = S.mfaFactors || []; S.mfaUnverified = []; }
+}
+const SENSITIVE = "민감한 일(메리츠 키 등록·텔레그램 연결·회원 승인·노트북 칸 만들기·공동 운영 켜기)";
+function needAal2(what) {
+  if (S.aal === "aal2") return false;
+  S.msg = { bad: true, text: `${what || "이 일"}은 2단계 인증을 마친 뒤에 할 수 있습니다 — ` +
+    ((S.mfaFactors || []).length ? "로그아웃 → 다시 로그인하며 인증 앱 6자리를 넣어 주세요." : "설정 → 2단계 인증에서 인증 앱을 먼저 등록해 주세요.") };
+  render(); return true;
+}
+function renderMfaChallenge() {
+  const f = (S.mfaFactors || [])[0];
+  $app.innerHTML = `<div class="card login"><h1>2단계 인증</h1>
+    <div class="small muted">${esc(S.user.email)} · 휴대폰 인증 앱(Google Authenticator 등)에 나온 6자리 숫자를 넣어 주세요.</div>
+    ${S.msg ? `<div class="msg ${S.msg.bad ? "bad" : ""}">${esc(S.msg.text)}</div>` : ""}
+    <form id="f-mfa" style="display:flex;flex-direction:column;gap:10px">
+      <label>6자리 숫자<input type="text" id="m-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+      <div class="row"><button class="btn primary">확인</button><button class="btn" type="button" id="m-out">로그아웃</button></div>
+      <div class="small muted">휴대폰을 잃어버렸으면 관리자에게 알려 주세요 (관리자가 Supabase 에서 인증 앱 등록을 지울 수 있습니다).</div>
+    </form></div>`;
+  document.getElementById("m-code").focus();
+  document.getElementById("m-out").onclick = async () => { S.msg = null; await sb.auth.signOut(); };
+  document.getElementById("f-mfa").onsubmit = async (e) => { e.preventDefault();
+    if (!f) { S.msg = { bad: true, text: "등록된 인증 앱을 찾지 못했습니다 — 새로 고침 해 주세요" }; return renderMfaChallenge(); }
+    const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code: document.getElementById("m-code").value.trim() });
+    if (error) { S.msg = { bad: true, text: "확인 실패: " + ko(error.message) }; return renderMfaChallenge(); }
+    S.msg = null; S.mfaPassed = true;
+    const { data } = await sb.auth.getSession(); onSession(data.session); };
+}
+function mfaCard() {
+  const fs = S.mfaFactors || [], en = S.mfaEnroll;
+  const on = fs.length > 0;
+  let body;
+  if (en) {
+    body = `<div>① 휴대폰 인증 앱(Google Authenticator·Microsoft Authenticator 등)에서 <b>+ → QR 코드 스캔</b></div>
+      <div style="background:#fff;padding:8px;border-radius:8px;width:max-content"><img src="${esc(en.qr)}" alt="2단계 인증 등록 QR 코드" width="180" height="180"></div>
+      <div class="small muted">QR 을 못 찍으면 '설정 키 입력'에 이 글자를 넣으세요: <code style="word-break:break-all">${esc(en.secret)}</code></div>
+      <form id="f-mfa-en" style="display:flex;flex-direction:column;gap:8px">
+        <label>② 앱에 나온 6자리 숫자<input type="text" id="me-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+        <div class="row"><span class="grow"></span><button type="button" class="btn" id="me-cancel">취소</button><button class="btn primary" ${S.busy ? "disabled" : ""}>등록 마치기</button></div></form>`;
+  } else if (on) {
+    body = `<div>✅ 켜짐 — 인증 앱 ${fs.length}개 (${fs.map((f) => esc(f.friendly_name || "인증 앱")).join(", ")})</div>
+      <div class="small muted">지금 이 화면: ${S.aal === "aal2" ? "2단계 인증 마침 ✓ — 민감한 일을 할 수 있습니다" : "2단계 인증 전 — 로그아웃 뒤 다시 로그인하며 6자리를 넣으세요"}</div>
+      <div class="row"><span class="grow"></span>${fs.map((f) => `<button class="btn ghost" data-mfaoff="${esc(f.id)}">이 인증 앱 지우기</button>`).join("")}</div>
+      <div class="small muted">지우면 다음 로그인부터 6자리를 묻지 않고, 민감한 일은 다시 등록해야 할 수 있습니다. 지우기도 2단계 인증을 마친 화면에서만 됩니다.</div>`;
+  } else {
+    body = `<div>꺼짐 — 아직 인증 앱을 등록하지 않았습니다.</div>
+      <div class="small muted">켜면 로그인할 때 비밀번호 + 휴대폰 인증 앱의 6자리 숫자를 넣습니다. 비밀번호가 새도 다른 사람이 들어올 수 없습니다.</div>
+      <div class="row"><span class="grow"></span><button class="btn primary" id="b-mfa-en" ${S.busy ? "disabled" : ""}>인증 앱 등록하기</button></div>`;
+  }
+  return `<div class="card"><h2>2단계 인증 (인증 앱 6자리)</h2>${body}
+    <div class="small muted" style="margin-top:8px">${SENSITIVE}은 2단계 인증을 마친 화면에서만 됩니다 (데이터베이스가 막음, ADR 0035). 현황 보기·주문 화면은 그대로.</div></div>`;
+}
+function bindMfa() {
+  const b = document.getElementById("b-mfa-en");
+  if (b) b.onclick = async () => {
+    S.busy = true; render();
+    try {
+      for (const f of (S.mfaUnverified || [])) await sb.auth.mfa.unenroll({ factorId: f.id });   // 등록하다 만 것 정리
+      const r = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "인증 앱 " + new Date().toISOString().slice(0, 10) + " " + Math.random().toString(36).slice(2, 6) });
+      if (r.error) throw r.error;
+      S.mfaEnroll = { id: r.data.id, qr: r.data.totp.qr_code, secret: r.data.totp.secret }; S.msg = null;
+    } catch (e) { S.msg = { bad: true, text: "등록 시작 실패: " + ko(e.message || e) + " (Supabase → Authentication → Multi-Factor 에서 TOTP 가 켜져 있는지)" }; }
+    S.busy = false; render(); };
+  const c = document.getElementById("me-cancel");
+  if (c) c.onclick = async () => { const id = S.mfaEnroll && S.mfaEnroll.id; S.mfaEnroll = null;
+    if (id) await sb.auth.mfa.unenroll({ factorId: id }).catch(() => {}); await loadAal(); render(); };
+  const f = document.getElementById("f-mfa-en");
+  if (f) f.onsubmit = async (e) => { e.preventDefault(); S.busy = true; render();
+    const code = (document.getElementById("me-code") || {}).value || "";
+    const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: S.mfaEnroll.id, code: code.trim() });
+    S.busy = false;
+    if (error) { S.msg = { bad: true, text: "등록 실패: " + ko(error.message) }; return render(); }
+    S.mfaEnroll = null; await loadAal();
+    S.msg = { text: "2단계 인증을 켰습니다. 다음 로그인부터 인증 앱 6자리를 넣습니다. 지금 이 화면은 이미 2단계 인증을 마친 상태입니다." }; render(); };
+  document.querySelectorAll("[data-mfaoff]").forEach((x) => x.onclick = async () => {
+    if (!confirm("이 인증 앱을 지울까요? 다음 로그인부터 6자리를 묻지 않습니다.")) return;
+    const { error } = await sb.auth.mfa.unenroll({ factorId: x.dataset.mfaoff });
+    await loadAal();
+    S.msg = error ? { bad: true, text: "지우지 못했습니다: " + ko(error.message) } : { text: "인증 앱을 지웠습니다." }; render(); });
+}
+
 function renderRecovery() {
   $app.innerHTML = `<div class="card login"><h1>새 비밀번호 정하기</h1>
     <form id="f-rec" style="display:flex;flex-direction:column;gap:10px"><label>새 비밀번호 (${PW_MIN}자 이상)<input type="password" id="r-pw" minlength="${PW_MIN}" autocomplete="new-password" required></label>
@@ -1947,6 +2041,7 @@ function keyForm(aid) {
 }
 async function sendSecret(command, prefix, obj, pass, extra) {
   // 비밀(메리츠 키·텔레그램 토큰)을 업로드 암호로 잠가 내 폴더에 두고 노트북에 알린다. 노트북이 받아 .env 에 저장하고 지운다.
+  if (S.aal !== "aal2") throw new Error("2단계 인증을 마친 뒤에 할 수 있습니다 — " + ((S.mfaFactors || []).length ? "로그아웃 → 다시 로그인하며 인증 앱 6자리" : "설정 → 2단계 인증에서 인증 앱을 먼저 등록"));
   if (pass.length < 12) throw new Error("업로드 암호는 12자 이상이어야 합니다 (노트북 .env 도 같은 문장)");
   const blob = await lockBytes(new TextEncoder().encode(JSON.stringify(obj)), prefix + ".json", pass);
   const path = `${S.user.id}/${prefix}_${Date.now()}.bin`;
@@ -2686,6 +2781,7 @@ function renderLogin() {
 
 function bind() {
   bindArrange();
+  bindMfa();
   document.querySelectorAll("[data-eqkind]").forEach((b) => b.onclick = () => { S.eqKind = b.dataset.eqkind; render(); });
   document.querySelectorAll("[data-eqsel]").forEach((b) => b.onclick = () => {
     const kind = S.eqKind || "total", all = eqSeries((S.snap && S.snap.detail.equity) || [], kind).map(([k]) => k);
@@ -2697,10 +2793,12 @@ function bind() {
   const bl = document.getElementById("b-layout"); if (bl) bl.onclick = () => {
     try { localStorage.setItem("layout", layout() === "pc" ? "phone" : "pc"); } catch (e) {} render(); };
   const mkProfile = async (email) => {
+    if (S.aal !== "aal2") return "노트북 칸 만들기는 2단계 인증을 마친 뒤에 할 수 있습니다 (설정 → 2단계 인증)";
     const r = await sb.from("web_commands").insert({ command: "create_profile", payload: { email, by: S.name }, user_id: S.user.id, acted_by: S.user.id });
     return r.error ? "노트북 칸 요청 실패: " + ko(r.error.message) : "노트북 칸 만들기를 보냈습니다 — 20초 안에 만들어지고 업로드 암호는 관리자 텔레그램으로 옵니다.";
   };
   document.querySelectorAll("[data-mdec]").forEach((b) => b.onclick = async () => {
+    if (needAal2("회원 승인·관리자 지정")) return;
     const r = await sb.rpc("admin_decide", { p_user: b.dataset.mdec, p_status: b.dataset.st, p_role: b.dataset.role || null });
     let text = "바꿨습니다.";
     if (!r.error && b.dataset.mkprof) text = "승인했습니다. " + await mkProfile(b.dataset.mkprof);
@@ -2733,6 +2831,7 @@ function bind() {
     uploadPhotos(files, document.getElementById("up-pass").value, document.getElementById("up-remember").checked); };
   const upc = document.getElementById("up-card"); if (upc) upc.ontoggle = () => { S.upOpen = upc.open; };
   document.querySelectorAll("[data-operate]").forEach((b) => b.onclick = async () => {
+    if (b.dataset.on === "true" && needAal2("공동 운영 켜기")) return;     // 끄기는 누구나 바로 (비상 정지, ADR 0037)
     const r = await sb.rpc("set_operate", { p_grant: Number(b.dataset.operate), p_on: b.dataset.on === "true" });
     S.msg = r.error ? { bad: true, text: ko(r.error.message) } : { text: b.dataset.on === "true" ? "공동 운영을 켰습니다. 상대가 내 계좌를 승인·설정할 수 있습니다." : "공동 운영을 껐습니다." };
     await loadFamily(); render(); });
@@ -2937,6 +3036,9 @@ async function onSessionInner(session) {
     S.status = me.status || "approved";            // 회원 승인 기능 이전 데이터베이스면 승인으로 본다
     S.admin = me.role === "admin";
     if (S.status !== "approved") return renderPending();
+    S.stage = "2단계 인증";
+    await loadAal();
+    if (S.aalNext === "aal2" && S.aal !== "aal2") return renderMfaChallenge();   // 인증 앱을 등록한 사람은 6자리 먼저 (ADR 0035)
     await withTimeout(loadFlags(), 8000, "설정").catch(() => {});
     await withTimeout(loadOps(), 8000, "공동 운영").catch(() => {});
     S.stage = "현황";
