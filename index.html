@@ -481,7 +481,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14e";
+const APP_VERSION = "2026-11-14f";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -821,6 +821,7 @@ function realOrders(s, d, g, acc) {
         return show.map((l) => oneLine(l, false)).join("") + foldBox("ord:" + row.sid, hide, hide.map((l) => oneLine(l, true)).join("")); })()}
       ${row.usd_share != null ? `<div class="small" style="margin-top:6px">이 전략 달러 예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
       ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
+      ${row.band_status ? `<div class="small" style="margin-top:6px">📉 ${esc(row.band_status)}</div>` : ""}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}
       <div class="small muted" style="margin-top:6px">LOC 주문은 걸면 주문가능금액이 묶입니다 → 주 매수 줄만 지금 걸고(≤ 1회 매수금), 1주씩 하락 대비 줄은 현재가가 기준 안으로 오면 '마감 전 걸기', 아니면 '마감 전 확인'(급락하면 텔레그램 알림). LOC 는 종가로 체결.</div></section>`;
   if (r.cash != null && Number(r.short || 0) > 0)
@@ -1421,6 +1422,11 @@ function cmdList(cat) {
 }
 
 const KIND_FIELDS = {
+  // 작업 ㉛: 8Buy [새로 시작] · PH — 원금 ÷ 분할 = 1회 매수 시도금, T 0 에서 V4.0 계산 모드 첫 주문표
+  sheet_new: [["principal", "투자 원금 $ (USD — 이 전략의 한도, ADR 0049)", "text", ""], ["splits", "분할 횟수 (20 기본 · 40)", "number", "20"],
+       ["target", "수익률 % (V4.0: SOXL 20 · TQQQ 15)", "text", "20"]],
+  ph01: [["principal", "투자 원금 $ (USD — 이 전략의 한도, ADR 0049)", "text", ""], ["splits", "분할 횟수 (40 권장)", "number", "40"],
+       ["target", "수익률 % (지정가 매도 목표·리버스 종료 기준)", "text", "10"]],
   sheet: [["qty", "현재 보유 개수", "number", "0"], ["avg", "평단 $", "text", "0"], ["cash", "잔금 $ (주문표 잔금)", "text", ""], ["mult", "배수", "number", "1"]],
   vr: [["start", "이번 사이클 시작일", "date", ""], ["week", "주차", "number", ""], ["V", "V (주문표 1배수)", "text", ""], ["pool", "Pool $", "text", ""],
        ["qty", "보유 개수 (1배수)", "number", ""], ["mult", "배수", "number", "1"], ["contribution", "적립 추가금 $ (거치식 0)", "text", "0"]],
@@ -1431,6 +1437,69 @@ const KIND_FIELDS = {
        ["base_offset", "기준가: 개장 몇 분 뒤 (0 = 시가, 첫날은 전날 종가)", "number", "0"],
        ["checks", "확인 시각: 개장 뒤 분 (쉼표)", "text", "30, 60, 120, 180, 240, 300, 360"]],
 };
+// 작업 ㉛ A: 전략 추가 버튼 4개 — [내부 종류, 이름, 작은 설명]. 'V4.0 직접 계산'(v4)은 화면에서만 숨김 (기존 v4 전략은 그대로 돈다)
+const ADD_KINDS = [["sheet", "8Buy", "라오어 무한매수 (V4.0 계산)"], ["vr", "VR", "밸류 리밸런싱"],
+  ["ph01", "PH", "PH01 (V4.0 + 낙폭 단계 매수)"], ["dynamic", "DT", "동적 분할매수 (모의)"]];
+// ── PH01 매수 구간 + 매수 시도금 (작업 ⑥ 명세 · src/autotrader/strategies/ph01.py build/table 과 같은 계산) ──
+const PH_METHODS = [["plus", "+nB", "구간마다 누적 목표가 n×B 씩 늘어남 (n=0.5 → 1.5·2·2.5B)"],
+  ["times", "n배수 B", "구간마다 누적 목표가 n 배 (n=2 → 2·4·8B)"], ["direct", "직접 입력", "구간마다 누적 목표 B 를 직접 (앞보다 작으면 안 됨)"]];
+function phBands(dropsText, method, n, targetsText) {
+  const nums = (t) => String(t || "").split(/[,\s]+/).filter((x) => x !== "").map(Number);
+  const ds = nums(dropsText).sort((a, b) => a - b);
+  if (!ds.length) return { err: "하락%를 하나 이상 넣으세요 (예 5, 10, 15)" };
+  if (ds.some((x) => !(x > 0 && x < 100))) return { err: "하락%는 0 보다 크고 100 보다 작게" };
+  if (new Set(ds).size !== ds.length) return { err: "같은 하락%가 두 번 있습니다" };
+  let ms;
+  if (method === "plus") { const k = Number(n); if (!(k > 0)) return { err: "+nB 의 n 은 0 보다 크게" }; ms = ds.map((_, i) => 1 + k * (i + 1)); }
+  else if (method === "times") { const k = Number(n); if (!(k > 1)) return { err: "n배수 B 의 n 은 1 보다 크게" }; ms = ds.map((_, i) => Math.pow(k, i + 1)); }
+  else { ms = nums(targetsText); if (ms.length !== ds.length) return { err: "구간마다 누적 목표 B 를 하나씩 (하락% 개수와 같게)" }; }
+  if (ms.some((m) => !(m >= 1))) return { err: "누적 목표는 1B 이상" };
+  for (let i = 1; i < ms.length; i++) if (ms[i] < ms[i - 1]) return { err: `−${ds[i]}% 누적 ${ms[i]}B 가 앞 단계 ${ms[i - 1]}B 보다 작습니다` };
+  const r = (x) => Math.round(x * 1e6) / 1e6;
+  return { bands: ds.map((d, i) => [r(d), r(ms[i])]) };
+}
+function phForm() {
+  const g = (id) => (document.getElementById(id) || {}).value || "";
+  return phBands(g("ph-drops"), S.phMethod || "times", g("ph-n"), g("ph-targets"));
+}
+function phSection() {
+  const m = S.phMethod || "times";
+  return `<fieldset class="sess-box"><legend>매수 구간 + 매수 시도금 <span class="small muted">(전략을 추가할 때 한 번 정함 — 기준 = 전날 종가)</span></legend>
+    <label>매수 구간 — 전날 종가 대비 하락 % (쉼표, 예 5, 10, 15)<input type="text" id="ph-drops" value="5, 10, 15" inputmode="decimal"></label>
+    <div class="row">${PH_METHODS.map(([k, t, sub]) => `<button type="button" class="btn small ${m === k ? "primary" : ""}" data-phm="${k}" title="${esc(sub)}">${t}</button>`).join("")}</div>
+    <div class="small muted">${esc((PH_METHODS.find((x) => x[0] === m) || [])[2] || "")}</div>
+    ${m === "direct" ? `<label>구간마다 누적 목표 B (쉼표, 예 2, 4, 8)<input type="text" id="ph-targets" value="2, 4, 8" inputmode="decimal"></label>`
+      : `<label>n<input type="text" id="ph-n" value="${m === "plus" ? "0.5" : "2"}" inputmode="decimal"></label>`}
+    <div class="small muted">기본 1B(LOC)는 V4.0 그대로. 단계에 닿으면 (그 단계 누적 목표 − 1B − 그날 이미 산 추가분)만 시장가로 — 한 단계 하루 한 번, 리버스 중에는 안 삼. T += 그날 쓴 돈 ÷ B.</div></fieldset>`;
+}
+// 확인 표: 1회 매수 시도금(원금÷분할) + (PH) 구간 표·하루 최대 사용액·최악 소진 일수 — 입력할 때마다 다시 그림
+function newPreview() {
+  const box = document.getElementById("new-prev");
+  if (!box) return;
+  const num = (id) => Number(String((document.getElementById(id) || {}).value || "").replace(/,/g, ""));
+  const P = num("s-principal"), N = num("s-splits"), tg = num("s-target"), B = P > 0 && N > 0 ? P / N : 0;
+  let html = B ? `<div>1회 매수 시도금 B = 원금 ÷ 분할 = <b class="num">$${money(B)}</b> · 목표 ${tg || "-"}% · T 0 에서 시작 (첫날 = 첫 매수 LOC)</div>` : `<div class="muted">원금·분할을 넣으면 1회 매수 시도금이 보입니다</div>`;
+  if (document.getElementById("ph-drops")) {
+    const f = phForm();
+    if (f.err) html += `<div style="color:var(--bad)">${esc(f.err)}</div>`;
+    else {
+      let prev = 1;
+      html += `<table class="small"><tr><th>하락</th><th>누적 목표</th><th>이 구간에서 더</th><th>하루 최대</th><th>원금 대비</th></tr>
+        <tr><td>0% (기본)</td><td>1B</td><td>1B (LOC)</td><td class="num">${B ? "$" + money(B) : "-"}</td><td>${B ? (100 / N).toFixed(1) + "%" : "-"}</td></tr>`
+        + f.bands.map(([d, m]) => { const ex = m - prev; prev = m;
+          return `<tr><td>−${d}%</td><td>${m}B</td><td>${Math.round(ex * 1e4) / 1e4}B${B ? ` · $${money(ex * B)}` : ""}</td><td class="num">${B ? "$" + money(m * B) : "-"}</td><td>${B ? (m * B / P * 100).toFixed(1) + "%" : "-"}</td></tr>`; }).join("") + `</table>`;
+      const top = f.bands[f.bands.length - 1][1];
+      html += `<div>하루 최대 사용액 <b class="num">${B ? "$" + money(top * B) : "-"}</b> · 매일 가장 깊은 단계까지 사면 약 <b>${N ? (N / top).toFixed(1) : "-"}</b> 거래일에 원금 소진 (그 뒤 V4.0 리버스)</div>`;
+      if (top * B > P * 0.25) html += `<div style="color:var(--warn)">⚠ 하루 최대가 원금의 25% 를 넘습니다 — 헌법 제3조(생존 우선)에 맞는지 확인하세요</div>`;
+    }
+  }
+  box.innerHTML = html;
+}
+function bindNewPreview() {
+  document.querySelectorAll("[data-phm]").forEach((b) => b.onclick = () => { S.phMethod = b.dataset.phm; render(); });
+  ["s-principal", "s-splits", "s-target", "ph-drops", "ph-n", "ph-targets"].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener("input", newPreview); });
+  newPreview();
+}
 // ── 다이얼: 돌려서 값 정하기 (끌기·휠·화살표 키·±버튼) ──
 const DIAL = { start: 135, sweep: 270 };
 function arcPath(f, r = 38) {
@@ -1686,7 +1755,8 @@ function viewConsensus() {
 function addStrategy(s) {
   const accs = Object.entries(s.accounts || {});
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
-  const kind = S.newKind || "sheet", fam = sessFamily({ kind });
+  const kind = (S.newKind === "v4" ? "sheet" : S.newKind) || "sheet", fam = sessFamily({ kind });
+  const isNew = kind === "sheet" && S.buyMode === "new", fk = isNew ? "sheet_new" : kind;   // 작업 ㉛: 8Buy 이어서/새로 시작
   if (!S.sessSel.add || S.sessSel.add.fam !== fam) S.sessSel.add = { fam, sel: sessDefault(fam) };   // 종류가 바뀌면 그 종류 기본값
   return `
     <div class="card small" style="border-left:4px solid var(--accent)">📜 새 전략은 <b>투자헌법</b>에 맞아야 합니다 — 특히 제3조 생존 우선(퇴출될 위험 금지)·제4조 적극적 투자는 정해진 한도 안에서. <button class="btn ghost small" data-tab="constitution">투자헌법 보기</button></div>
@@ -1695,17 +1765,23 @@ function addStrategy(s) {
         ? "여기서 만든 전략은 <b>가투(가상 투자) 전용</b>입니다 — 메리츠 주문·자산 합계에 들어가지 않고 매일 가상으로만 돌며 '가투 현황'·'가투 매매 기록'에 쌓입니다. 메리츠에서 운영하려면 '수정 합의'로 정합니다."
         : "여기서 만든 전략은 <b>운영 전략</b>입니다 — 메리츠 주문·오늘 밤 주문·자산 합계에 들어갑니다. 새 아이디어를 먼저 시험하려면 '가투 → 투자 전략 연구'를 쓰세요. <b>원칙: VR 과 무한매수는 다른 계좌에서</b> 운용합니다 (계좌가 부족해 같이 쓰면 달러 예수금은 VR Pool 먼저)."}</div>
       <form id="f-str" style="display:flex;flex-direction:column;gap:10px">
-        <div class="row">${[["sheet", "무한매수 주문표 따라가기"], ["vr", "VR"], ["v4", "무한매수 V4.0 직접 계산"], ["dynamic", "동적 분할매수"]].map(([k, t]) =>
-          `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}">${t}</button>`).join("")}</div>
+        <div class="row">${ADD_KINDS.map(([k, t, sub]) =>
+          `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}" style="text-align:left;line-height:1.3"><b>${t}</b><br><span class="small" style="opacity:.8;font-weight:400">${sub}</span></button>`).join("")}</div>
+        ${kind === "sheet" ? `<div class="row small"><span class="muted">8Buy:</span>${[["cont", "이어서 하기", "보유·평단·잔금·배수"], ["new", "새로 시작", "원금·분할·목표%"]].map(([m, t, sub]) =>
+          `<button type="button" class="btn small ${(S.buyMode || "cont") === m ? "primary" : ""}" data-buymode="${m}">${t} <span style="opacity:.75">(${sub})</span></button>`).join("")}</div>` : ""}
         <div class="grid2">
-          <label>전략 id<input type="text" id="s-id" required pattern="[a-z][a-z0-9_]{0,23}" placeholder="예: ${kind === "vr" ? "tqqq_vr" : kind === "v4" ? "tqqq_v4" : kind === "dynamic" ? "soxl_dyn" : "soxl_mumae"}"></label>
+          <label>전략 id<input type="text" id="s-id" required pattern="[a-z][a-z0-9_]{0,23}" placeholder="예: ${kind === "vr" ? "tqqq_vr" : kind === "ph01" ? "ph01_soxl2" : kind === "dynamic" ? "soxl_dyn" : isNew ? "soxl_8buy2" : "soxl_mumae"}"></label>
           <label>종목<select id="s-symbol"><option>SOXL</option><option ${kind === "vr" ? "selected" : ""}>TQQQ</option></select></label>
           <label>계좌<select id="s-account">${accs.map(([aid, a]) => `<option value="${esc(aid)}">${esc(ACC_NAME[aid] || a.name)}</option>`).join("")}</select></label>
-          ${KIND_FIELDS[kind].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
+          ${kind === "ph01" ? `<label>화면 이름 (바꿀 수 있음)<input type="text" id="s-name" maxlength="40" placeholder="PH01 · 종목 · 계좌 (비우면 자동)"></label>` : ""}
+          ${KIND_FIELDS[fk].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
         ${kind === "dynamic" ? dynSection() : ""}
+        ${kind === "ph01" ? phSection() : ""}
+        ${isNew || kind === "ph01" ? `<div id="new-prev" class="small"></div>
+          <label class="inl small"><input type="checkbox" id="s-const" required> 투자헌법 제3조(생존 우선)·제4조(정해진 한도 = 이 원금)·제6조를 확인했습니다</label>` : ""}
         ${sessEditor("add")}
-        <div class="small muted">${kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 판단합니다. 첫날 기준가는 전날 종가, 둘째 날부터는 시가(개장 N분). 지금은 모의로만 체결합니다." : "새로 시작이면 원금만, 진행 중이면 보유·평단·잔금·T 를 넣습니다."}</div>
+        <div class="small muted">${isNew ? "무한매수 V4.0 계산 모드로 시작합니다 — 1회 매수 시도금 = 원금 ÷ 분할, T 0. 첫 주문표(첫 매수)는 노트북이 바로 만들고(직전 종가를 모르면 아침 계산 때), 사진 없이 매일 계산합니다. 무한매수는 원금을 다 갖고 시작 (ADR 0051)." : kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 판단합니다. 첫날 기준가는 전날 종가, 둘째 날부터는 시가(개장 N분). 지금은 모의로만 체결합니다." : kind === "ph01" ? "V4.0 뼈대(1B LOC·익절·리버스) + 낙폭 단계: 정규장에 현재가가 전날 종가 대비 단계에 닿으면 그 단계 누적 목표의 나머지만 시장가로 삽니다. 운영 전략은 auto 가 켜지고 노트북 잠금이 풀렸을 때만 주문, 아니면 텔레그램 알림만 (ADR 0060)." : ""}</div>
         <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
@@ -2353,6 +2429,8 @@ function bind() {
     S.viewSnap = r.error ? null : clean(r.data); if (r.error) S.msg = { bad: true, text: r.error.message }; render(); });
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
+  document.querySelectorAll("[data-buymode]").forEach((b) => b.onclick = () => { S.buyMode = b.dataset.buymode; render(); });
+  bindNewPreview();
   bindDials();
   document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
     const g = allStrategiesFlat().find((x) => x.id === b.dataset.propose);
@@ -2433,9 +2511,17 @@ function bind() {
   prefill();
   const fs = document.getElementById("f-str");
   if (fs) fs.onsubmit = (e) => { e.preventDefault();
-    const kind = S.newKind || "sheet", v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
+    const kind = (S.newKind === "v4" ? "sheet" : S.newKind) || "sheet", v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
+    const isNew = kind === "sheet" && S.buyMode === "new", fk = isNew ? "sheet_new" : kind;
     const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account"), mock_only: !!S.addMock };
-    for (const [k] of KIND_FIELDS[kind]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
+    for (const [k] of KIND_FIELDS[fk]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
+    if (kind === "sheet") p.start = isNew ? "new" : "cont";
+    if (kind === "ph01") {
+      const f = phForm();
+      if (f.err) { S.msg = { bad: true, text: "매수 구간: " + f.err }; render(); return; }
+      p.bands = f.bands.map(([a, m]) => `${a}:${m}`).join(",");
+      p.name = v("s-name") || `PH01 · ${p.symbol} · ${ACC_NAME[p.account] || p.account}`;
+    }
     if (kind === "dynamic") {
       const f = dynForm(), ser = (a) => [...a].sort((x, y) => x[0] - y[0]).map(([d, w]) => `${d}:${w}`).join(",");
       const dup = (a) => new Set(a.map((x) => x[0])).size !== a.length;
