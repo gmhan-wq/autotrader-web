@@ -483,7 +483,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14j";
+const APP_VERSION = "2026-11-14k";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1347,6 +1347,7 @@ function viewStrategy(s, d, sid) {
     const facts = [["V", money(vr.V), `${vr.week}주차 · ${esc(vr.start)}부터 2주`], ["최소값", money(vr.min), "V × 0.85 — 아래에서 매수"], ["최대값", money(vr.max), "V × 1.15 — 위에서 매도"],
       ["Pool", "$" + money(vr.pool), "매수에 쓸 현금"], ["보유", g.qty + "주", px ? `종가 ${money(px)} · 평가 $${money(g.qty * Number(px))}` : ""]];
     out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+    out += vrConfCard(g, s);                       // 작업 ㊲: 종류·한도·배수·다음 주기 바뀜 (보기만)
     const lv = (arr, kind) => arr.map(([p, q], i) => ({ p, q, kind, tag: `vr_${kind}_${i + 1}` }));
     const levels = [...lv(vr.sell || [], "sell").reverse(), ...lv(vr.buy || [], "buy")];
     out += `<div class="card"><div class="row between"><h2>예약주문 사다리</h2><span class="small muted">기간잔량 지정가 · 체결된 단계는 다시 걸지 않음</span></div>
@@ -1357,6 +1358,18 @@ function viewStrategy(s, d, sid) {
     out += `<div class="card"><div class="empty">이 전략은 아직 자세한 화면이 없습니다. 보유 ${g.qty}주 · 잔금 $${money(g.cash)}</div></div>`;
   }
   return out;
+}
+// 작업 ㊲ (ADR 0061): VR 설정 보기 — 바꾸기는 합의 뒤 노트북 명령(vr-mode·strategy-scale·vr-auto)으로만, 다음 주기 시작에 적용
+function vrConfCard(g, s) {
+  const c = g.vr_conf; if (!c) return "";
+  const ps = s.profit_share, nx = c.next_start ? String(c.next_start).slice(5).replace("-", "/") : "";
+  const rows = [["종류", c.describe]];
+  if (c.pending) rows.push([`다음 주기${nx ? " (" + nx + "~)" : ""}부터`, c.pending]);
+  rows.push(["자동 전환 (예수금 기준)", c.auto && c.auto.on ? `켜짐 — 메리츠 달러 예수금 ≥ $${money(c.auto.threshold)} 이면 적립식, 아니면 거치식` : "꺼짐"]);
+  if (Number(c.inflow_wait) > 0) rows.push(["들어온 돈 (다음 경계에 적립)", "$" + money(c.inflow_wait)]);
+  if (ps && ps.on) rows.push([`수익 ${Number(ps.pct)}% → ${esc(ps.to)}`, (ps.rows || []).map((r) => `${esc(r.account)} 옮길 돈 $${money(r.due)}`).join(" · ")]);
+  return `<div class="card"><div class="row between"><h2>VR 설정</h2><span class="small muted">보기만 · 바꾸기는 합의 뒤 명령으로, 다음 주기 시작에 (ADR 0037·0061)</span></div>
+    <table class="small"><tbody>${rows.map(([a, b]) => `<tr><td class="muted">${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function lineWhy(l, p) {
   const px = Number(l.price);
@@ -1472,12 +1485,13 @@ function cmdList(cat) {
 const KIND_FIELDS = {
   // 작업 ㉛: 8Buy [새로 시작] · PH — 원금 ÷ 분할 = 1회 매수 시도금, T 0 에서 V4.0 계산 모드 첫 주문표
   sheet_new: [["principal", "투자 원금 $ (USD — 이 전략의 한도, ADR 0049)", "text", ""], ["splits", "분할 횟수 (20 기본 · 40)", "number", "20"],
-       ["target", "수익률 % (V4.0: SOXL 20 · TQQQ 15)", "text", "20"]],
+       ["target", "수익률 % (V4.0: SOXL 20 · TQQQ 15)", "text", "20"], ["mult", "배수 (실제 잔금·주문 수량 = 원금 × 배수)", "number", "1"]],
   ph01: [["principal", "투자 원금 $ (USD — 이 전략의 한도, ADR 0049)", "text", ""], ["splits", "분할 횟수 (40 권장)", "number", "40"],
-       ["target", "수익률 % (지정가 매도 목표·리버스 종료 기준)", "text", "10"]],
+       ["target", "수익률 % (지정가 매도 목표·리버스 종료 기준)", "text", "10"], ["mult", "배수 (실제 잔금·주문 수량 = 원금 × 배수)", "number", "1"]],
   sheet: [["qty", "현재 보유 개수", "number", "0"], ["avg", "평단 $", "text", "0"], ["cash", "잔금 $ (주문표 잔금)", "text", ""], ["mult", "배수", "number", "1"]],
   vr: [["start", "이번 사이클 시작일", "date", ""], ["week", "주차", "number", ""], ["V", "V (주문표 1배수)", "text", ""], ["pool", "Pool $", "text", ""],
-       ["qty", "보유 개수 (1배수)", "number", ""], ["mult", "배수", "number", "1"], ["contribution", "적립 추가금 $ (거치식 0)", "text", "0"]],
+       ["qty", "보유 개수 (1배수)", "number", ""], ["mult", "배수 (개수·Pool·적립금 N배, 가격 그대로)", "number", "1"],
+       ["contribution", "적립금·인출금 $/주기 (1배수 기준)", "text", "100"], ["limit", "Pool 사용 한도 % (종류 기본값 — 고칠 수 있음)", "text", "75"]],
   v4: [["cash", "원금·잔금 $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
        ["T", "T (새로 시작 0)", "text", "0"], ["splits", "분할수", "number", "20"]],
   dynamic: [["cash", "투자금(예수금) $", "text", ""], ["qty", "보유 개수 (새로 시작 0)", "number", "0"], ["avg", "평단 $ (보유 있을 때)", "text", ""],
@@ -1485,6 +1499,24 @@ const KIND_FIELDS = {
        ["base_offset", "기준가: 개장 몇 분 뒤 (0 = 시가, 첫날은 전날 종가)", "number", "0"],
        ["checks", "확인 시각: 개장 뒤 분 (쉼표)", "text", "30, 60, 120, 180, 240, 300, 360"]],
 };
+// 작업 ㊲ A (ADR 0061): VR 종류 — 매뉴얼 2장. 공식·주기·주문 같고 Pool 에 넣고 빼는 것과 한도만 다름 (src/autotrader/vr_modes.py MODES 와 같은 값)
+const VR_MODES = [["accum", "적립식", "2주마다 적립금을 Pool 에 더함 · V 끝 항 + 적립금"], ["hold", "거치식", "적립·인출 없음 · V 끝 항 0"],
+  ["withdraw", "인출식", "2주마다 인출금을 Pool 에서 뺌 · V 끝 항 − 인출금"]];
+const VR_MODE_LIMIT = { accum: "75", hold: "50", withdraw: "25" };
+function vrModeSection() {
+  const m = S.vrMode || "accum";
+  return `<div class="small"><span class="muted">VR 종류:</span> ${VR_MODES.map(([k, t, sub]) =>
+    `<button type="button" class="btn small ${m === k ? "primary" : ""}" data-vrmode="${k}">${t} <span style="opacity:.75">(${sub})</span></button>`).join(" ")}
+    <div class="muted">한도는 가이드 값(적립 75% · 거치 50% · 인출 25%) — 고칠 수 있음. 진행 중 VR 의 종류 바꾸기는 합의 뒤 명령 vr-mode 로, 다음 주기 시작에 적용 (매뉴얼 2.3).</div></div>`;
+}
+function vrModeApply(m) {
+  S.vrMode = m;
+  document.querySelectorAll("[data-vrmode]").forEach((b) => b.classList.toggle("primary", b.dataset.vrmode === m));
+  const lim = document.getElementById("s-limit"), c = document.getElementById("s-contribution");
+  if (lim) lim.value = VR_MODE_LIMIT[m];
+  if (c) { c.disabled = m === "hold"; if (m === "hold") c.value = "0"; else if (c.value === "0") c.value = "100";
+    const lab = c.closest("label"); if (lab && lab.firstChild) lab.firstChild.textContent = m === "withdraw" ? "인출금 $/주기 (1배수 기준)" : m === "hold" ? "적립금 (거치식 — 없음)" : "적립금 $/주기 (1배수 기준)"; }
+}
 // 작업 ㉛ A: 전략 추가 버튼 4개 — [내부 종류, 이름, 작은 설명]. 'V4.0 직접 계산'(v4)은 화면에서만 숨김 (기존 v4 전략은 그대로 돈다)
 const ADD_KINDS = [["sheet", "8Buy", "라오어 무한매수 (V4.0 계산)"], ["vr", "VR", "밸류 리밸런싱"],
   ["ph01", "PH", "PH01 (V4.0 + 낙폭 단계 매수)"], ["dynamic", "DT", "동적 분할매수 (모의)"]];
@@ -1865,6 +1897,7 @@ function addStrategy(s) {
           ${kind === "ph01" ? `<label>화면 이름 (바꿀 수 있음)<input type="text" id="s-name" maxlength="40" placeholder="PH01 · 종목 · 계좌 (비우면 자동)"></label>` : ""}
           ${KIND_FIELDS[fk].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
+        ${kind === "vr" ? vrModeSection() : ""}
         ${kind === "dynamic" ? dynSection() : ""}
         ${kind === "ph01" ? phSection() : ""}
         ${isNew || kind === "ph01" ? `<div id="new-prev" class="small"></div>
@@ -2596,6 +2629,8 @@ function bind() {
     const n = r && r.positions ? r.positions[sym.value] : undefined;
     if (n !== undefined) { q.value = (S.newKind === "vr") ? Math.round(n / (Number((document.getElementById("s-mult") || {}).value) || 1)) : n;
       const h = document.getElementById("s-hint"); if (h) h.textContent = `메리츠 보유 ${n}주를 넣었습니다 (확인 후 고치세요)`; } };
+  document.querySelectorAll("[data-vrmode]").forEach((b) => b.onclick = () => vrModeApply(b.dataset.vrmode));
+  if (document.getElementById("s-limit")) vrModeApply(S.vrMode || "accum");
   ["s-symbol", "s-account", "s-mult"].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener("change", prefill); });
   prefill();
   const fs = document.getElementById("f-str");
@@ -2605,6 +2640,7 @@ function bind() {
     const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account"), mock_only: !!S.addMock };
     for (const [k] of KIND_FIELDS[fk]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
     if (kind === "sheet") p.start = isNew ? "new" : "cont";
+    if (kind === "vr") { p.vr_mode = S.vrMode || "accum"; if (p.vr_mode === "hold") p.contribution = "0"; }   // 작업 ㊲ A
     if (kind === "ph01") {
       const f = phForm();
       if (f.err) { S.msg = { bad: true, text: "매수 구간: " + f.err }; render(); return; }
