@@ -481,7 +481,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14f";
+const APP_VERSION = "2026-11-14h";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1289,6 +1289,9 @@ function viewStrategy(s, d, sid) {
       ["평단", money(plan.avg), `보유 ${plan.holding}주 (주문표)`], ["목표가", money(plan.target_price), `평단 × ${1 + Number(plan.target_pct) / 100}`],
       ["직전 종가", money(plan.close), `종가날짜 ${esc(plan.sheet_date)}`]];
     out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+    if (isPh01(g)) out += `<div class="card"><div class="row between"><h2>낙폭 단계</h2><span class="small muted">보기만 · 바꾸려면 세 사람 합의 뒤 ph01-bands (ADR 0037·0060)</span></div>
+      <table class="small"><thead><tr><th>구간 (전날 종가 대비 하락)</th><th>누적 B</th></tr></thead><tbody>${phRowsOf(g.bands).map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</tbody></table>
+      ${g.bands && g.bands.length ? "" : `<div class="small muted">설정 없음 — 낙폭 매수 안 함 (V4.0 줄만)</div>`}</div>`;
     out += `<div class="card"><div class="row between"><h2>회차 진행</h2><span class="small muted">T ${plan.T} / ${Number(plan.splits)} · 절반 넘으면 후반전, ${Number(plan.splits) - 1} 넘으면 소진(리버스모드)</span></div>${tBar(Number(plan.T), Number(plan.splits))}</div>`;
     out += `<div class="grid-2"><div class="card"><div class="row between"><h2>오늘 주문표</h2><span class="small muted">미국 ${esc(plan.trade_date)} 장 · 체크 해제 줄은 주문 안 함</span></div>
       <div class="scroll"><table><thead><tr><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th><th>근거</th></tr></thead><tbody>
@@ -1440,37 +1443,77 @@ const KIND_FIELDS = {
 // 작업 ㉛ A: 전략 추가 버튼 4개 — [내부 종류, 이름, 작은 설명]. 'V4.0 직접 계산'(v4)은 화면에서만 숨김 (기존 v4 전략은 그대로 돈다)
 const ADD_KINDS = [["sheet", "8Buy", "라오어 무한매수 (V4.0 계산)"], ["vr", "VR", "밸류 리밸런싱"],
   ["ph01", "PH", "PH01 (V4.0 + 낙폭 단계 매수)"], ["dynamic", "DT", "동적 분할매수 (모의)"]];
-// ── PH01 매수 구간 + 매수 시도금 (작업 ⑥ 명세 · src/autotrader/strategies/ph01.py build/table 과 같은 계산) ──
-const PH_METHODS = [["plus", "+nB", "구간마다 누적 목표가 n×B 씩 늘어남 (n=0.5 → 1.5·2·2.5B)"],
-  ["times", "n배수 B", "구간마다 누적 목표가 n 배 (n=2 → 2·4·8B)"], ["direct", "직접 입력", "구간마다 누적 목표 B 를 직접 (앞보다 작으면 안 됨)"]];
-function phBands(dropsText, method, n, targetsText) {
-  const nums = (t) => String(t || "").split(/[,\s]+/).filter((x) => x !== "").map(Number);
-  const ds = nums(dropsText).sort((a, b) => a - b);
-  if (!ds.length) return { err: "하락%를 하나 이상 넣으세요 (예 5, 10, 15)" };
-  if (ds.some((x) => !(x > 0 && x < 100))) return { err: "하락%는 0 보다 크고 100 보다 작게" };
-  if (new Set(ds).size !== ds.length) return { err: "같은 하락%가 두 번 있습니다" };
-  let ms;
-  if (method === "plus") { const k = Number(n); if (!(k > 0)) return { err: "+nB 의 n 은 0 보다 크게" }; ms = ds.map((_, i) => 1 + k * (i + 1)); }
-  else if (method === "times") { const k = Number(n); if (!(k > 1)) return { err: "n배수 B 의 n 은 1 보다 크게" }; ms = ds.map((_, i) => Math.pow(k, i + 1)); }
-  else { ms = nums(targetsText); if (ms.length !== ds.length) return { err: "구간마다 누적 목표 B 를 하나씩 (하락% 개수와 같게)" }; }
-  if (ms.some((m) => !(m >= 1))) return { err: "누적 목표는 1B 이상" };
-  for (let i = 1; i < ms.length; i++) if (ms[i] < ms[i - 1]) return { err: `−${ds[i]}% 누적 ${ms[i]}B 가 앞 단계 ${ms[i - 1]}B 보다 작습니다` };
+// ── PH01 매수 구간 표 (작업 ㉜ — 사용자 예시 표 모양 · src/autotrader/strategies/ph01.py from_table·PRESETS 와 같은 계산) ──
+// 줄 i(마지막 빼고) = '−bounds[i]% 미만', 마지막 줄 = '−bounds[끝]% 이상', 오른쪽 = 누적 B. 첫 줄 1B 고정.
+// 아래 줄은 위 줄의 하락%에 닿으면 그 줄의 누적 B 까지 삼 → bands = [(bounds[i], mults[i+1])]. '-'·빈 칸 = 더 안 삼.
+const PH_BOUNDS = ["5", "10", "15", "20", "25", "30"];
+const PH_PRESETS = [["ex1", "예1", "+0.5B", ["1", "1.5", "2", "2.5", "3", "3.5", "4"]], ["ex2", "예2", "+1B", ["1", "2", "3", "4", "5", "6", "7"]],
+  ["ex3", "예3", "직접", ["1", "2", "4", "6", "8", "10", "20"]], ["ex4", "예4", "2배", ["1", "2", "4", "8", "16", "-", ""]]];
+function phTable(bounds, mults) {
+  const blank = (x) => x === null || x === undefined || ["", "-", "−", "–"].includes(String(x).trim());
+  const num = (x) => Number(String(x).trim().replace(/,/g, ""));
+  if (mults.length !== bounds.length + 1) return { err: "표 줄 수가 맞지 않습니다 (구간 경계 개수 + 1 = 줄 수)" };
+  if (!mults.length || blank(mults[0]) || num(mults[0]) !== 1) return { err: "첫 줄은 1B(V4.0 기본 매수) 고정입니다" };
+  let k = 1;
+  while (k < mults.length && !blank(mults[k])) k++;
+  if (mults.slice(k).some((x) => !blank(x))) return { err: "'-' 줄 아래는 비워 두세요 ('-' = 그 구간부터 더 사지 않음)" };
+  const used = mults.slice(1, k).map(num);
+  if (!used.length) return { bands: [] };
+  if (used.some((m) => !isFinite(m))) return { err: "누적 B 는 숫자로 (더 안 사면 '-')" };
+  const ds = [];
+  for (let i = 0; i < used.length; i++) {
+    if (blank(bounds[i])) return { err: `${i + 1}번째 줄의 하락% 를 넣어 주세요` };
+    const v = num(bounds[i]);
+    if (!(v > 0 && v < 100)) return { err: "하락% 는 0 보다 크고 100 보다 작게" };
+    ds.push(v);
+  }
+  for (let i = 1; i < ds.length; i++) if (ds[i] <= ds[i - 1]) return { err: `하락% 는 커지는 순서로 — −${ds[i]}% 가 앞 줄 −${ds[i - 1]}% 보다 크지 않습니다` };
+  let prev = 1;
+  for (let i = 0; i < used.length; i++) { if (used[i] < prev) return { err: `−${ds[i]}% 에 닿았을 때 누적 ${used[i]}B 가 앞 줄 ${prev}B 보다 작습니다` }; prev = used[i]; }
   const r = (x) => Math.round(x * 1e6) / 1e6;
-  return { bands: ds.map((d, i) => [r(d), r(ms[i])]) };
+  return { bands: ds.map((d, i) => [r(d), r(used[i])]) };
 }
-function phForm() {
-  const g = (id) => (document.getElementById(id) || {}).value || "";
-  return phBands(g("ph-drops"), S.phMethod || "times", g("ph-n"), g("ph-targets"));
+// bands → 보기 줄 (ph01.table_rows 와 같음) — 전략 '자세히' 화면 (보기만)
+function phRowsOf(bands) {
+  const bs = (bands || []).map((x) => [String(Number(x[0])), String(Number(x[1]))]).sort((a, b) => a[0] - b[0]);
+  if (!bs.length) return [["전 구간", "1B (기본)"]];
+  const ms = ["1"].concat(bs.map((x) => x[1]));
+  return bs.map((x, i) => [`−${x[0]}% 미만`, ms[i] + "B" + (i === 0 ? " (기본)" : "")]).concat([[`−${bs[bs.length - 1][0]}% 이상`, ms[ms.length - 1] + "B"]]);
+}
+function phRows() {
+  if (!S.phRows) { const p = PH_PRESETS[3]; S.phRows = { b: PH_BOUNDS.slice(), m: p[3].slice(), preset: p[0] }; }
+  return S.phRows;
+}
+function phForm() { const t = phRows(); return phTable(t.b, t.m); }
+function phTableHTML() {
+  const t = phRows(), n = t.m.length;
+  return `<div class="row">빠른 채우기 ${PH_PRESETS.map(([k, l, sub, ms]) => `<button type="button" class="btn small ${t.preset === k ? "primary" : ""}" data-php="${k}" title="${esc(ms.filter((x) => x && x !== "-").join("·") + "B")}">${l} <span class="small muted">${esc(sub)}</span></button>`).join("")}</div>
+    <div class="small muted">누른 뒤 칸마다 고칠 수 있습니다. '-' = 그 구간부터 더 사지 않음.</div>
+    <table class="small" id="ph-tab"><thead><tr><th>구간 (전날 종가 대비 하락)</th><th>누적 B</th><th></th></tr></thead><tbody>
+    ${t.m.map((m, i) => `<tr><td>${i < n - 1 ? `−<input type="text" inputmode="decimal" size="4" data-phb="${i}" value="${esc(t.b[i])}" aria-label="${i + 1}번째 줄 하락%">% 미만`
+        : `<span id="ph-last">−${esc(t.b[n - 2] || "")}% 이상</span>`}</td>
+      <td>${i === 0 ? "1B <span class=\"muted\">(V4.0 기본·고정)</span>" : `<input type="text" inputmode="decimal" size="4" data-phmul="${i}" value="${esc(m)}" aria-label="${i + 1}번째 줄 누적 B">B`}</td>
+      <td>${i > 0 && n > 2 ? `<button type="button" class="btn small" data-phdel="${i}" aria-label="${i + 1}번째 줄 지우기">삭제</button>` : ""}</td></tr>`).join("")}</tbody></table>
+    <div class="row"><button type="button" class="btn small" data-phadd="1">줄 추가</button></div>`;
 }
 function phSection() {
-  const m = S.phMethod || "times";
-  return `<fieldset class="sess-box"><legend>매수 구간 + 매수 시도금 <span class="small muted">(전략을 추가할 때 한 번 정함 — 기준 = 전날 종가)</span></legend>
-    <label>매수 구간 — 전날 종가 대비 하락 % (쉼표, 예 5, 10, 15)<input type="text" id="ph-drops" value="5, 10, 15" inputmode="decimal"></label>
-    <div class="row">${PH_METHODS.map(([k, t, sub]) => `<button type="button" class="btn small ${m === k ? "primary" : ""}" data-phm="${k}" title="${esc(sub)}">${t}</button>`).join("")}</div>
-    <div class="small muted">${esc((PH_METHODS.find((x) => x[0] === m) || [])[2] || "")}</div>
-    ${m === "direct" ? `<label>구간마다 누적 목표 B (쉼표, 예 2, 4, 8)<input type="text" id="ph-targets" value="2, 4, 8" inputmode="decimal"></label>`
-      : `<label>n<input type="text" id="ph-n" value="${m === "plus" ? "0.5" : "2"}" inputmode="decimal"></label>`}
-    <div class="small muted">기본 1B(LOC)는 V4.0 그대로. 단계에 닿으면 (그 단계 누적 목표 − 1B − 그날 이미 산 추가분)만 시장가로 — 한 단계 하루 한 번, 리버스 중에는 안 삼. T += 그날 쓴 돈 ÷ B.</div></fieldset>`;
+  return `<fieldset class="sess-box"><legend>매수 구간 + 누적 B <span class="small muted">(전략을 추가할 때 한 번 정함 — 기준 = 전날 종가)</span></legend>
+    <div id="ph-box">${phTableHTML()}</div>
+    <div class="small muted">첫 줄 1B(LOC)는 V4.0 그대로. 아래 줄은 <b>위 줄의 하락%에 닿으면</b> 그 줄의 누적 B 까지 — (누적 목표 − 1B − 그날 이미 산 추가분)만 시장가로. 한 단계 하루 한 번, 리버스 중에는 안 삼. T += 그날 쓴 돈 ÷ B.</div></fieldset>`;
+}
+function bindPhTable() {
+  const box = document.getElementById("ph-box");
+  if (!box) return;
+  const redraw = () => { box.innerHTML = phTableHTML(); bindPhTable(); newPreview(); };
+  box.querySelectorAll("[data-php]").forEach((b) => b.onclick = () => { const p = PH_PRESETS.find((x) => x[0] === b.dataset.php);
+    S.phRows = { b: PH_BOUNDS.slice(), m: p[3].slice(), preset: p[0] }; redraw(); });
+  box.querySelectorAll("[data-phb]").forEach((el) => el.addEventListener("input", () => { const t = phRows(); t.b[+el.dataset.phb] = el.value.trim(); t.preset = null;
+    const last = document.getElementById("ph-last"); if (last) last.textContent = `−${t.b[t.m.length - 2] || ""}% 이상`; newPreview(); }));
+  box.querySelectorAll("[data-phmul]").forEach((el) => el.addEventListener("input", () => { const t = phRows(); t.m[+el.dataset.phmul] = el.value.trim(); t.preset = null; newPreview(); }));
+  box.querySelectorAll("[data-phdel]").forEach((b) => b.onclick = () => { const t = phRows(), i = +b.dataset.phdel, n = t.m.length;
+    t.m.splice(i, 1); t.b.splice(i < n - 1 ? i : n - 2, 1); t.preset = null; redraw(); });
+  box.querySelectorAll("[data-phadd]").forEach((b) => b.onclick = () => { const t = phRows(), last = Number(t.b[t.b.length - 1]) || 0;
+    t.b.push(String(last + 5)); t.m.push(""); t.preset = null; redraw(); });
 }
 // 확인 표: 1회 매수 시도금(원금÷분할) + (PH) 구간 표·하루 최대 사용액·최악 소진 일수 — 입력할 때마다 다시 그림
 function newPreview() {
@@ -1479,25 +1522,26 @@ function newPreview() {
   const num = (id) => Number(String((document.getElementById(id) || {}).value || "").replace(/,/g, ""));
   const P = num("s-principal"), N = num("s-splits"), tg = num("s-target"), B = P > 0 && N > 0 ? P / N : 0;
   let html = B ? `<div>1회 매수 시도금 B = 원금 ÷ 분할 = <b class="num">$${money(B)}</b> · 목표 ${tg || "-"}% · T 0 에서 시작 (첫날 = 첫 매수 LOC)</div>` : `<div class="muted">원금·분할을 넣으면 1회 매수 시도금이 보입니다</div>`;
-  if (document.getElementById("ph-drops")) {
+  if (document.getElementById("ph-tab")) {
     const f = phForm();
     if (f.err) html += `<div style="color:var(--bad)">${esc(f.err)}</div>`;
+    else if (!f.bands.length) html += `<div class="muted">낙폭 단계 없음 — 1B LOC 만 (V4.0 그대로)</div>`;
     else {
       let prev = 1;
-      html += `<table class="small"><tr><th>하락</th><th>누적 목표</th><th>이 구간에서 더</th><th>하루 최대</th><th>원금 대비</th></tr>
+      html += `<table class="small"><tr><th>닿는 하락</th><th>누적 목표</th><th>단계마다 더 사는 양</th><th>하루 최대</th><th>원금 대비</th></tr>
         <tr><td>0% (기본)</td><td>1B</td><td>1B (LOC)</td><td class="num">${B ? "$" + money(B) : "-"}</td><td>${B ? (100 / N).toFixed(1) + "%" : "-"}</td></tr>`
         + f.bands.map(([d, m]) => { const ex = m - prev; prev = m;
           return `<tr><td>−${d}%</td><td>${m}B</td><td>${Math.round(ex * 1e4) / 1e4}B${B ? ` · $${money(ex * B)}` : ""}</td><td class="num">${B ? "$" + money(m * B) : "-"}</td><td>${B ? (m * B / P * 100).toFixed(1) + "%" : "-"}</td></tr>`; }).join("") + `</table>`;
       const top = f.bands[f.bands.length - 1][1];
-      html += `<div>하루 최대 사용액 <b class="num">${B ? "$" + money(top * B) : "-"}</b> · 매일 가장 깊은 단계까지 사면 약 <b>${N ? (N / top).toFixed(1) : "-"}</b> 거래일에 원금 소진 (그 뒤 V4.0 리버스)</div>`;
+      html += `<div>하루 최대 사용액 <b class="num">${B ? "$" + money(top * B) + ` (원금의 ${(top * B / P * 100).toFixed(1)}%)` : "-"}</b> · 매일 가장 깊은 단계까지 사면 약 <b>${N ? (N / top).toFixed(1) : "-"}</b> 거래일에 원금 소진 (그 뒤 V4.0 리버스)</div>`;
       if (top * B > P * 0.25) html += `<div style="color:var(--warn)">⚠ 하루 최대가 원금의 25% 를 넘습니다 — 헌법 제3조(생존 우선)에 맞는지 확인하세요</div>`;
     }
   }
   box.innerHTML = html;
 }
 function bindNewPreview() {
-  document.querySelectorAll("[data-phm]").forEach((b) => b.onclick = () => { S.phMethod = b.dataset.phm; render(); });
-  ["s-principal", "s-splits", "s-target", "ph-drops", "ph-n", "ph-targets"].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener("input", newPreview); });
+  bindPhTable();
+  ["s-principal", "s-splits", "s-target"].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener("input", newPreview); });
   newPreview();
 }
 // ── 다이얼: 돌려서 값 정하기 (끌기·휠·화살표 키·±버튼) ──
@@ -1781,7 +1825,7 @@ function addStrategy(s) {
         ${isNew || kind === "ph01" ? `<div id="new-prev" class="small"></div>
           <label class="inl small"><input type="checkbox" id="s-const" required> 투자헌법 제3조(생존 우선)·제4조(정해진 한도 = 이 원금)·제6조를 확인했습니다</label>` : ""}
         ${sessEditor("add")}
-        <div class="small muted">${isNew ? "무한매수 V4.0 계산 모드로 시작합니다 — 1회 매수 시도금 = 원금 ÷ 분할, T 0. 첫 주문표(첫 매수)는 노트북이 바로 만들고(직전 종가를 모르면 아침 계산 때), 사진 없이 매일 계산합니다. 무한매수는 원금을 다 갖고 시작 (ADR 0051)." : kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 동안 정해진 시각마다 판단합니다. 첫날 기준가는 전날 종가, 둘째 날부터는 시가(개장 N분). 지금은 모의로만 체결합니다." : kind === "ph01" ? "V4.0 뼈대(1B LOC·익절·리버스) + 낙폭 단계: 정규장에 현재가가 전날 종가 대비 단계에 닿으면 그 단계 누적 목표의 나머지만 시장가로 삽니다. 운영 전략은 auto 가 켜지고 노트북 잠금이 풀렸을 때만 주문, 아니면 텔레그램 알림만 (ADR 0060)." : ""}</div>
+        <div class="small muted">${isNew ? "무한매수 V4.0 계산 모드로 시작합니다 — 1회 매수 시도금 = 원금 ÷ 분할, T 0. 첫 주문표(첫 매수)는 노트북이 바로 만들고(직전 종가를 모르면 아침 계산 때), 사진 없이 매일 계산합니다. 무한매수는 원금을 다 갖고 시작 (ADR 0051)." : kind === "sheet" ? "숫자는 가장 최근 주문표의 보유·평단·잔금입니다." : kind === "vr" ? "VR 주문표(1배수)의 값을 그대로 넣고 배수를 고르세요." : kind === "dynamic" ? "정규장 내내 1분마다 감시해 전날 종가 대비 단계에 닿으면 시장가로 삽니다(더 깊은 단계는 그 비중까지 채워 사기). 익절·손절도 평단 기준 시장가. 기준가는 매일 전날 종가. 지금은 모의로만 체결합니다 (작업 ㉞)." : kind === "ph01" ? "V4.0 뼈대(1B LOC·익절·리버스) + 낙폭 단계: 정규장에 현재가가 전날 종가 대비 단계에 닿으면 그 단계 누적 목표의 나머지만 시장가로 삽니다. 운영 전략은 auto 가 켜지고 노트북 잠금이 풀렸을 때만 주문, 아니면 텔레그램 알림만 (ADR 0060)." : ""}</div>
         <div class="small" id="s-hint" style="color:var(--ice)"></div>
         <button class="btn primary">추가 요청</button>
       </form>
@@ -1789,7 +1833,7 @@ function addStrategy(s) {
 }
 // ── 운용 장 · 주문 방법 (ADR 0053, 작업 ⑬) — 전략 칸 sessions 는 표시·기록용 (엔진의 주문 시각은 바꾸지 않음) ──
 // SESS_RULES 는 src/autotrader/order_sessions.py 의 rules_for_web() 와 같아야 한다 (tests/test_order_sessions.py 가 맞춰 봄)
-const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC(장마감지정가)", "MOC": "MOC(장마감시장가)", "LIMIT": "보통(지정가)", "MARKET": "시장가", "LOO": "LOO(장개시지정가)", "MOO": "MOO(장개시시장가)", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"], "accept": {"LOC": ["pre", "regular"], "MOC": ["pre", "regular"], "LIMIT": ["day", "pre", "regular", "after"]}};
+const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC(장마감지정가)", "MOC": "MOC(장마감시장가)", "LIMIT": "보통(지정가)", "MARKET": "시장가", "LOO": "LOO(장개시지정가)", "MOO": "MOO(장개시시장가)", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"], "accept": {"LOC": ["pre", "regular"], "MOC": ["pre", "regular"], "LIMIT": ["day", "pre", "regular", "after"]}};
 // 장 시간 (뉴욕 시간, 서머타임과 상관없이 같음 — market_calendar.market_phase 와 같은 기준). [시, 분, 날짜 차이]
 const SESS_NY = { day: [[20, 0, -1], [3, 50, 0]], pre: [[4, 0, 0], [9, 30, 0]], regular: [[9, 30, 0], [16, 0, 0]], after: [[16, 0, 0], [19, 50, 0]] };
 const sessFamily = (g) => (g && g.sessions_family) || ({ vr: "vr", dynamic: "dynamic", ph01: "ph01", privacy: "privacy" }[g && g.kind] || "infinite");
