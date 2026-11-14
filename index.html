@@ -85,7 +85,9 @@ h2 { font-size: 15.5px; margin: 0; text-wrap: balance; font-weight: 700 }
 .btn.ghost { background: transparent; box-shadow: none }
 .live i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px }
 /* PC */
-body[data-layout="pc"] .wrap { max-width: 1360px }
+/* 작업 ㊱ (11/14, R-15): PC 는 최대 폭 없이 창 폭 − 양옆 24px (폰 배치는 그대로) */
+body[data-layout="pc"] .wrap { max-width: none; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)) }
+body[data-layout="pc"] .ttable .t-cyc { max-width: calc(100vw - 96px) }
 header.pc-top.card { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border-radius: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 6 }
 .brand { font-size: 17px; letter-spacing: -0.01em }
 .pc-body { display: flex; flex-direction: column; gap: 14px }
@@ -481,7 +483,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14h";
+const APP_VERSION = "2026-11-14j";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1120,6 +1122,40 @@ function viewMock(s) {
     <div class="card"><div class="row between"><b>프라이버시 투자법</b><button class="btn" data-tab="privacy">보기 ›</button></div><div class="small muted">사진 판독 → 다음 거래일 주문표 예측 (모의 예측, 주문 없음)</div></div>`;
 }
 // ── auto (11/07): 지금은 꺼져 있음. 켜는 조건과 켜지면 하는 일 ──
+// 작업 ㉟ (11/14, 검토 대장 R-14, ADR 0059 보충): 화면 폭 768px 미만 = '폰' → auto 는 끄기·보기만.
+// [ON]·기간·장 바꾸기는 PC 에서. 웹 화면 제한일 뿐 보안 장치가 아님 (실주문은 주인+관리자 ON + 노트북 두 겹 잠금 그대로).
+const AUTO_PHONE_MAX = 768;
+const autoPhone = (w) => (w == null ? window.innerWidth : w) < AUTO_PHONE_MAX;
+// 전략 카드에 보일 auto 버튼 — off(끄기) · on(ON 요청/확인) · ok(넓히기 확인) · edit(기간·장 바꾸기) · end(auto 끝내기)
+function autoButtons(g, width) {
+  const on = !!g.auto_on, w = g.auto_window, pend = g.auto_window_pending;
+  if (autoPhone(width)) return on ? ["off"] : [];
+  const out = [];
+  if (on) out.push("off"); else if (w) out.push("on");
+  if (pend && pend.target) out.push("ok");
+  out.push("edit");
+  if (w) out.push("end");
+  return out;
+}
+// 이번 장의 시작 = 가장 최근 한국 시간 07:00 (미국 장은 한국 자정을 넘김)
+function autoDayStart(nowMs) {
+  const k = new Date((nowMs == null ? Date.now() : nowMs) + 9 * 3600e3);
+  if (k.getUTCHours() < 7) k.setUTCDate(k.getUTCDate() - 1);
+  return k.toISOString().slice(0, 10) + "T07:00";
+}
+// 주문 이력에서 그 전략의 '누가 언제 켰는지'(마지막 auto ON 기록)와 오늘 낸 auto 주문
+function autoOnWho(log, sid) {
+  const r = (log || []).filter((x) => x.sid === sid && x.route === "auto" && x.event === "setting" && /^auto ON \(/.test(String(x.note || "")))
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))[0];
+  if (!r) return "";
+  const m = String(r.note).match(/^auto ON \((.*), [0-9T:+-]+\)$/);
+  return m ? m[1] : "";
+}
+function autoToday(log, sid, nowMs) {
+  const from = autoDayStart(nowMs);
+  return (log || []).filter((x) => x.sid === sid && x.route === "auto" && x.event !== "setting" && x.event !== "seen" && String(x.at || "").slice(0, 16) >= from)
+    .sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+}
 // 작업 ㉓ (ADR 0058): 전략마다 auto 기간(시작~끝, 끝 없음 가능)과 장. 좁히기 = 주인·관리자 바로, 넓히기 = 둘 다 확인.
 function autoWindowCards() {
   const s = S.snap ? S.snap.summary : {};
@@ -1127,14 +1163,16 @@ function autoWindowCards() {
   const rows = [];
   Object.entries(s.accounts || {}).forEach(([aid, a]) => (a.strategies || []).forEach((g) => rows.push({ aid, g })));
   if (!rows.length) return `<div class="card"><div class="empty">운영 중인 전략이 없습니다.</div></div>`;
+  const phone = autoPhone(), log = ((S.snap && S.snap.detail) || {}).order_log || [];
   return rows.map(({ aid, g }) => {
     const w = g.auto_window, pend = g.auto_window_pending, can = g.auto_selectable || [];
-    const ed = (S.awEdit || {})[g.id];
+    const bt = autoButtons(g), has = (x) => bt.includes(x);
+    const ed = phone ? null : (S.awEdit || {})[g.id];
     const today = new Date().toISOString().slice(0, 10);
     const cur = ed || (w ? { start: w.start, end: w.end || "", sessions: w.sessions } : { start: today, end: "", sessions: [] });
     const pendTxt = pend ? `<div class="small" style="margin-top:6px">⏳ 넓히기 요청: <b>${esc(pend.target ? `${pend.target.start} ~ ${pend.target.end || "끝 없음"} · ${pend.target.sessions.map((x) => ko[x]).join("·")}` : "")}</b>
         <br>요청 ${esc(pend.asked_by || "")} · 계좌 주인 ${pend.owner ? "✅ " + esc(pend.owner.by) : "기다림"} · 관리자 ${pend.admin ? "✅ " + esc(pend.admin.by) : "기다림"}
-        ${pend.target ? `<button class="btn" data-aw-ok="${esc(g.id)}" data-aw-val='${esc(JSON.stringify(pend.target))}'>확인</button>` : ""}</div>` : "";
+        ${has("ok") ? `<button class="btn" data-aw-ok="${esc(g.id)}" data-aw-val='${esc(JSON.stringify(pend.target))}'>확인</button>` : ""}</div>` : "";
     const form = ed ? `<div class="small" style="margin-top:8px">
         <label>시작일 <input type="date" id="aw-start-${esc(g.id)}" value="${esc(cur.start)}"></label>
         <label style="margin-left:8px">끝일 <input type="date" id="aw-end-${esc(g.id)}" value="${esc(cur.end || "")}" ${cur.end ? "" : "disabled"}></label>
@@ -1147,14 +1185,21 @@ function autoWindowCards() {
     const on = !!g.auto_on, op = g.auto_on_pending;
     const sw = `<div class="row" style="margin-top:6px;gap:6px;align-items:center"><b>auto</b>
         <span class="chip ${on ? "ok" : ""}">${on ? "ON" : "OFF"}</span>
-        ${on ? `<button class="btn" data-ao-off="${esc(g.id)}">OFF</button>`
-             : w ? `<button class="btn" data-ao-on="${esc(g.id)}">${op ? "ON 확인" : "ON 요청"}</button>` : `<span class="small muted">기간·장을 먼저 정해야 켤 수 있습니다</span>`}
+        ${has("off") ? `<button class="btn" data-ao-off="${esc(g.id)}">OFF</button>`
+             : has("on") ? `<button class="btn" data-ao-on="${esc(g.id)}">${op ? "ON 확인" : "ON 요청"}</button>` : phone || on ? "" : `<span class="small muted">기간·장을 먼저 정해야 켤 수 있습니다</span>`}
         ${on && !s.auto_live ? `<span class="chip warn">노트북 잠금 꺼짐 — 주문 안 나감</span>` : ""}</div>
       ${op ? `<div class="small" style="margin-top:4px">⏳ ON 요청 ${esc(op.asked_by || "")} · 계좌 주인 ${op.owner ? "✅ " + esc(op.owner.by) : "기다림"} · 관리자 ${op.admin ? "✅ " + esc(op.admin.by) : "기다림"}</div>` : ""}`;
+    // 폰: 누가 언제 켰는지 + 오늘 낸 auto 주문 (보기만)
+    const who = on ? autoOnWho(log, g.id) : "", todayAuto = autoToday(log, g.id);
+    const info = phone ? `<div class="small" style="margin-top:6px">${on ? `켠 사람·때: ${esc(who || "기록 없음")}${g.auto_on_at ? " · " + esc(String(g.auto_on_at).slice(5, 16).replace("T", " ")) : ""}` : "꺼짐"}</div>
+      <div class="small" style="margin-top:4px">오늘 낸 auto 주문 (오전 7시 이후): ${todayAuto.length ? todayAuto.map((r) => { const ev = OH_EV[r.event] || [r.event, ""];
+        return `<div>${esc(String(r.at || "").slice(11, 16))} ${esc(r.symbol || "")} <span class="${sideCls(r.side)}">${sideKo(r.side)}</span> ${r.price != null && r.price !== "종가" ? money(r.price) : r.kind === "MARKET" ? "시장가" : "종가"} × ${esc(String(r.qty ?? ""))} · <span class="res ${ev[1]}">${esc(ev[0])}</span></div>`; }).join("") : "없음"}</div>
+      <div class="small muted" style="margin-top:4px">📱 폰에서는 끄기·보기만 — ON·기간·장 바꾸기는 PC 에서</div>` : "";
+    const tools = (has("edit") || has("end")) ? `<div class="row" style="margin-top:6px;gap:6px">${has("edit") ? `<button class="btn" data-aw-edit="${esc(g.id)}">기간·장 바꾸기</button>` : ""}${has("end") ? `<button class="btn" data-aw-off="${esc(g.id)}">auto 끝내기</button>` : ""}</div>` : "";
     return `<div class="card"><div class="row between"><b>${esc(stratName(g))} · ${esc(g.symbol || "")} · ${esc(ACC_NAME[aid] || aid)}</b>
         <span class="chip ${w ? "ok" : ""}">${w ? "auto 범위 있음" : "manual 만"}</span></div>
-      <div class="small">${esc(g.auto_window_text || "auto 대상 아님")}</div>${sw}${pendTxt}
-      ${ed ? form : `<div class="row" style="margin-top:6px;gap:6px"><button class="btn" data-aw-edit="${esc(g.id)}">기간·장 바꾸기</button>${w ? `<button class="btn" data-aw-off="${esc(g.id)}">auto 끝내기</button>` : ""}</div>`}</div>`;
+      <div class="small">${esc(g.auto_window_text || "auto 대상 아님")}</div>${sw}${info}${pendTxt}
+      ${ed ? form : tools}</div>`;
   }).join("");
 }
 function bindAutoWindow() {
@@ -2656,7 +2701,8 @@ setInterval(async () => {
   } catch (e) {}
 }, 5000);
 let _lastMode = null;
-window.addEventListener("resize", () => { const m = layout(); if (m !== _lastMode) { _lastMode = m; if (S.user) render(); } });
+let _lastAutoPhone = null;   // 작업 ㉟: 폭이 768 을 넘나들면(회전 등) auto 화면을 다시 그림
+window.addEventListener("resize", () => { const m = layout(), ap = autoPhone(); if (m !== _lastMode || ap !== _lastAutoPhone) { _lastMode = m; _lastAutoPhone = ap; if (S.user) render(); } });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
 </script>
 </body>
