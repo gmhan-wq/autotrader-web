@@ -291,6 +291,88 @@ summary { cursor: pointer; color: var(--ice) }
 @keyframes flashup { 0% { background: color-mix(in srgb, var(--buy) 35%, transparent) } 100% { background: transparent } }
 @keyframes flashdown { 0% { background: color-mix(in srgb, var(--sell) 35%, transparent) } 100% { background: transparent } }
 @media (prefers-reduced-motion: reduce) { .live-dot, .flash-up, .flash-down { animation: none } }
+
+/* ── 작업 ㊴ (R-18): 콘솔 가독성·매매 동선 (표시만) ── */
+.scard { position: relative }
+.scard:hover, .scard:has(.scard-hit:hover) { border-color: var(--accent) }
+.scard-hit { position: absolute; inset: 0; z-index: 1; border: 0; padding: 0; margin: 0; background: transparent; border-radius: inherit; cursor: pointer }
+.scard-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.l3 .l3-mer { font-weight: 700; color: var(--ink) } .l3 .l3n.l3-mer { font-weight: 700 }
+.l3 .l3-plan { color: var(--muted); font-weight: 400 }
+.pill-warn { position: relative; z-index: 2; align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 30px;
+  padding: 3px 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, #ff9a6b 26%, var(--glass-strong)); color: var(--warn); font: 600 13px var(--sans); cursor: pointer }
+.pill-warn:hover { border-color: var(--warn) } .pill-warn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.run-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ok);
+  padding: 2px 10px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 12%, transparent) }
+.run-badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block }
+.eqcard .chart { max-height: 260px }
+/* 주문 화면: 전략 가로 탭 · 줄 표 */
+.otabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px; border-radius: 16px; background: var(--soft) }
+.otabs button { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 44px; padding: 6px 12px; border-radius: 12px;
+  border: 1px solid transparent; background: transparent; color: var(--ink); font: 500 14px var(--sans); cursor: pointer; text-align: left }
+.otabs button:hover { border-color: var(--accent) }
+.otabs button.on { background: var(--glass-strong); border-color: var(--glass-edge); box-shadow: 0 2px 8px rgba(70, 80, 150, 0.16); font-weight: 700 }
+.tbadge { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap }
+.tbadge.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent) }
+.tbadge.warn { color: var(--warn); background: color-mix(in srgb, #ff9a6b 24%, transparent) }
+.ogroup { display: flex; flex-direction: column; gap: 4px; margin-top: 4px }
+.ogroup h3 { margin: 6px 0 0; font-size: 13.5px; font-weight: 700 }
+.ogroup.later { margin-top: 10px; padding: 8px 12px 10px; border-radius: 14px; border: 1px dashed var(--line); background: color-mix(in srgb, var(--soft) 55%, transparent) }
+.otable { font-size: 14px }
+.otable th, .otable td { padding: 7px 8px; vertical-align: middle }
+.otable th.n, .otable td.n { text-align: right; font-variant-numeric: tabular-nums } .otable th.c, .otable td.c { text-align: center }
+.otable td.kind { white-space: nowrap } .otable .kk { color: var(--muted); font-size: 12.5px }
+.otable td.note { white-space: normal; min-width: 90px }
+.otable input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; vertical-align: middle }
+.otable tr.done td { opacity: .45 } .otable tr.done td.n, .otable tr.done td.kind { text-decoration: line-through }
+.otable tr.done td.c-put, .otable tr.done td.c-adm { opacity: 1 } .otable tr.done button.cp { text-decoration: line-through }
+.side-badge { display: inline-block; min-width: 40px; text-align: center; padding: 2px 8px; border-radius: 8px; font-size: 13px; font-weight: 700 }
+.side-badge.buy { color: var(--buy); background: color-mix(in srgb, #ff7b6b 18%, transparent) }
+.side-badge.sell { color: var(--sell); background: color-mix(in srgb, var(--sell) 14%, transparent) }
+button.cp { border: 0; border-bottom: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); background: transparent; color: var(--ink);
+  font: 600 15px var(--mono); padding: 4px 2px; min-height: 32px; cursor: copy; border-radius: 4px }
+button.cp:hover { background: var(--soft) } button.cp:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 12px); z-index: 60; pointer-events: none;
+  padding: 9px 16px; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 14px var(--sans); opacity: 0; box-shadow: var(--shadow) }
+.toast.on { opacity: 1; transform: translate(-50%, 0) }
+@media (prefers-reduced-motion: no-preference) { .toast { transition: opacity .18s, transform .18s } }
+/* 매매 표: 숫자 칸 머리·값 오른쪽 + 고정폭, VR 핵심 칸 강조 */
+.ttable th.n, .ttable td.n { text-align: right; font-variant-numeric: tabular-nums }
+.ttable th.n { font-family: var(--sans) }
+.ttable table th.key, .ttable table td.key { background: color-mix(in srgb, var(--accent) 9%, transparent); font-weight: 700; color: var(--ink) }
+.ttable table tr.t-total td.key { background: color-mix(in srgb, var(--accent) 15%, var(--soft)) }
+/* 가투 기본 설정 */
+.mockdef { padding: 8px 10px; border-radius: 12px; background: var(--soft) } .mockdef .num { font-family: var(--sans); white-space: normal }
+/* 주문 표 칸 폭 고정 (① ② 표의 세로줄이 맞게) · 폰에서는 줄마다 작은 카드 */
+.otable { table-layout: fixed; min-width: 640px }
+.otable .c-adm { width: 92px } .otable .c-side { width: 72px } .otable .c-kind { width: 30% } .otable .c-px { width: 120px }
+.otable .c-qty { width: 90px } .otable .c-amt { width: 130px } .otable .c-put { width: 64px }
+.otable .adm-l, .otable .put-l { display: inline-flex; flex-direction: row; align-items: center; font-size: 13px; gap: 6px; color: var(--ink); cursor: pointer; min-height: 32px }
+.otable .adm-l span, .otable .put-l span { display: none }
+@media (max-width: 640px) {
+  .otable { min-width: 0; table-layout: auto } .otable thead { display: none } .otable, .otable tbody { display: block }
+  .otable tr { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr) max-content; gap: 2px 10px; align-items: center;
+    grid-template-areas: "side kind kind put" "px qty amt amt" "adm note note note"; padding: 8px 2px; border-bottom: 1px solid var(--line) }
+  .otable td, .otable td.n, .otable td.c { border: 0; padding: 0; width: auto !important; text-align: left }
+  .otable .c-side { grid-area: side } .otable .c-kind { grid-area: kind; white-space: normal } .otable .c-put { grid-area: put }
+  .otable .c-px { grid-area: px } .otable .c-qty { grid-area: qty } .otable td.c-amt { grid-area: amt; color: var(--muted); text-align: right }
+  .otable .c-qty::before { content: "× "; color: var(--muted) } .otable .c-amt::before { content: "= "; }
+  .otable .c-note { grid-area: note; min-width: 0 } .otable .c-adm { grid-area: adm } .otable .c-adm:empty { display: none }
+  .otable .adm-l span, .otable .put-l span { display: inline; font-size: 12.5px; color: var(--muted) }
+  .otable tr.done td.c-amt { text-decoration: line-through }
+}
+.chip.wrap { white-space: normal; display: inline-block; border-radius: 12px }
+/* 설정: 계좌 한 줄 카드 */
+.accrow { display: grid; grid-template-columns: minmax(150px, 220px) 120px 150px minmax(0, 1fr); gap: 8px 14px; align-items: center;
+  padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass-strong) }
+.accrow .acc-desc { line-height: 1.5 } .accrow > .chip { justify-self: start } .accrow .btn { padding: 7px 13px; white-space: nowrap }
+@media (max-width: 720px) { .accrow { grid-template-columns: minmax(0, 1fr) max-content; } .accrow .acc-desc { grid-column: 1 / -1 } .accrow .acc-act { grid-column: 1 / -1 } .accrow .acc-act:empty { display: none } }
+/* 투자헌법: PC 넓은 화면 2열 카드, 폰 1열 */
+.articles { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: 1fr; gap: 0 }
+.articles li { padding: 12px 0; border-top: 1px solid var(--line) }
+@media (min-width: 900px) { body[data-layout="pc"] .articles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+  body[data-layout="pc"] .articles li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--glass-strong) } }
 </style>
 </head>
 <body>
@@ -483,7 +565,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-14l";
+const APP_VERSION = "2026-11-14m";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -732,11 +814,67 @@ function viewOrders() {
   const strat = allStrategies(s).map((x) => [x, stratName(x, (s.plans || {})[x.id])])
     .sort((a, b) => stratRank(a[1]) - stratRank(b[1]) || a[1].localeCompare(b[1])).map(([x]) => x);
   const g = strat.find((x) => x.id === S.ordStrat) || strat[0];
-  // 작업 ㉔ D: 전략 고르기 = 드롭박스 (순서 8Buy_S20 → 8Buy_T20 → PH01 → VR)
-  let out = strat.length ? `<label class="small">전략<select id="ord-strat" aria-label="주문할 전략">${strat.map((x) => `<option value="${esc(x.id)}" ${g && x.id === g.id ? "selected" : ""}>${esc(stratName(x, (s.plans || {})[x.id]))} · ${esc(x.symbol)} · ${esc(ACC_NAME[x.account] || x.account)}</option>`).join("")}</select></label>` : "";
+  // 작업 ㉔ D → ㊴ (11/14 사용자): 전략 고르기 = 가로 탭 버튼 (순서 8Buy_S20 → 8Buy_T20 → PH01 → VR), 탭 옆에 '부족 $x'·'보충 N주'
+  let out = strat.length ? `<div class="otabs" role="tablist" aria-label="주문할 전략">${strat.map((x) => `<button role="tab" data-ordstrat="${esc(x.id)}" class="${g && x.id === g.id ? "on" : ""}" aria-selected="${!!(g && x.id === g.id)}">
+      <span class="sym num">${esc(x.symbol)}</span><b>${esc(stratName(x, (s.plans || {})[x.id]))}</b><span class="small muted">${esc(ACC_NAME[x.account] || x.account)}</span>${ordBadges(s, d, x)}</button>`).join("")}</div>` : "";
   if (!g) return out + `<div class="card"><div class="empty">운영 중인 전략이 없습니다.</div></div>`;
   const acc = (s.accounts || {})[g.account];
   return out + (g.kind === "vr" ? vrOrders(s, d, g, acc) : realOrders(s, d, g, acc));
+}
+// ── 작업 ㊴ (R-18): 주문 화면 편의 — 표시·이 기기 기억만 (주문·계산·노트북과 상관없음) ──
+function ordBadges(s, d, g) {
+  const r = (d.real_orders || {})[g.account], out = [];
+  if (g.kind === "vr") {
+    const vr = (s.vr || {})[g.id] || {}, filled = new Set(vr.filled_tags || []);
+    const need = (vr.buy || []).reduce((a, [p, q], i) => a + (filled.has(`vr_buy_${i + 1}`) ? 0 : Number(p) * Number(q)), 0);
+    const usd = r && r.usd_cash != null ? Number(r.usd_cash) : null;
+    if (usd !== null && need > usd) out.push(["bad", `부족 $${money(need - usd)}`]);
+  } else {
+    const row = r && (r.strategies || []).find((x) => x.sid === g.id);
+    if (row && Number(row.usd_short) > 0) out.push(["bad", `부족 $${money(row.usd_short)}`]);
+    if (row && Number(row.diff) < 0) out.push(["warn", `보충 ${-Number(row.diff)}주`]);
+  }
+  return out.map(([c, t]) => `<span class="tbadge ${c}">${esc(t)}</span>`).join("");
+}
+// '넣음' 체크: 무한매수·PH01 = 그 장 날짜(placed:d:날짜), VR = 그 주기(placed:vr:시작일). 지난 날 기록은 지움. 저장이 안 돼도 화면은 그대로 동작.
+function placedMap(day) { try { return JSON.parse(localStorage.getItem("placed:" + day) || "{}") || {}; } catch (e) { return {}; } }
+function setPlaced(day, k, on) {
+  try {
+    const m = placedMap(day); if (on) m[k] = 1; else delete m[k];
+    localStorage.setItem("placed:" + day, JSON.stringify(m));
+    const fam = "placed:" + String(day).split(":")[0] + ":";
+    for (let i = localStorage.length - 1; i >= 0; i--) { const x = localStorage.key(i); if (x && x.startsWith(fam) && x !== "placed:" + day) localStorage.removeItem(x); }
+  } catch (e) {}
+}
+async function copyText(t) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(t); ok = true; } catch (e) {
+    try { const ta = document.createElement("textarea"); ta.value = t; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove(); } catch (e2) {} }
+  toast(ok ? `복사됨! ${t}` : "복사하지 못했습니다 — 숫자를 길게 눌러 복사하세요");
+}
+function toast(text) {
+  let el = document.getElementById("toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
+  el.textContent = text; el.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("on"), 1400);
+}
+const kindCell = (t) => { const s = String(t || ""), i = s.indexOf("("); return i > 0 ? `${esc(s.slice(0, i))}<span class="kk">${esc(s.slice(i))}</span>` : esc(s); };
+// 주문 줄 표: [관리자 주문] | 구분 | 주문유형 | 주문단가 | 수량 | 예상금액 | 비고·상태 | 넣음
+//   x = { side, kind(글자), price(문자 또는 null), priceText, qty, note(html), admin(html), pk, auto(자동 넣음 표시 이유 또는 "") }
+function oTable(items, admin, day) {
+  if (!items.length) return "";
+  const pm = placedMap(day);
+  return `<div class="scroll"><table class="otable${admin ? " adm" : ""}"><thead><tr>${admin ? '<th class="c c-adm" title="manual 관리자 주문 — 체크한 줄만 아래 [확인] 뒤 노트북이 메리츠에 주문">관리자 주문</th>' : ""}<th class="c-side">구분</th><th class="c-kind">주문유형</th>
+      <th class="n c-px">주문단가($)</th><th class="n c-qty">수량(주)</th><th class="n c-amt">예상금액($)</th><th class="c-note">비고·상태</th><th class="c c-put" title="메리츠 앱에 넣은 뒤 체크 — 이 기기에만 기억">넣음</th></tr></thead><tbody>
+    ${items.map((x) => { const done = !!x.auto || !!pm[x.pk], px = x.price != null && x.price !== "" ? String(x.price) : null;
+      const what = `${sideKo(x.side)} ${px ? money(px) : x.priceText} × ${x.qty}`;
+      return `<tr class="${done ? "done" : ""}">${admin ? `<td class="c c-adm">${x.admin ? `<label class="adm-l">${x.admin}<span>관리자 주문</span></label>` : ""}</td>` : ""}
+        <td class="c-side"><span class="side-badge ${sideCls(x.side)}">${sideKo(x.side)}</span></td><td class="kind c-kind">${kindCell(x.kind)}</td>
+        <td class="n c-px">${px ? `<button class="cp num" data-copy="${esc(px)}" aria-label="주문단가 ${esc(px)} 복사">${money(px)}</button>` : `<span class="muted">${esc(x.priceText)}</span>`}</td>
+        <td class="n c-qty"><button class="cp num" data-copy="${esc(x.qty)}" aria-label="수량 ${esc(x.qty)}주 복사">${Number(x.qty).toLocaleString("en-US")}</button></td>
+        <td class="n num c-amt">${px ? "$" + money(Number(px) * Number(x.qty)) : "-"}</td><td class="note c-note">${x.note || ""}</td>
+        <td class="c c-put"><label class="put-l"><input type="checkbox" class="placed" data-pday="${esc(day)}" data-pk="${esc(x.pk)}" ${done ? "checked" : ""} ${x.auto ? `disabled title="${esc(x.auto)}"` : ""} aria-label="${esc(what)} — 메리츠에 넣음"><span>넣음</span></label></td></tr>`; }).join("")}
+    </tbody></table></div>`;
 }
 // 작업 ㉔ D: 주문 종류 = 메리츠 이름 (노트북 display.ORDER_KO 와 같음)
 const KIND_KO = { LOC: "LOC(장마감지정가)", LIMIT: "보통(지정가)", MARKET: "시장가", MOC: "MOC(장마감시장가)", LOO: "LOO(장개시지정가)", MOO: "MOO(장개시시장가)", LIMIT_VWAP: "VWAP", LIMIT_TWAP: "TWAP", VWAP: "VWAP", TWAP: "TWAP", VR: "보통(지정가)·기간잔량" };
@@ -783,11 +921,12 @@ function vrOrders(s, d, g, acc) {
     <div class="small">${(((s.quotes || {})[g.symbol] || {}).price) ? `현재가 <b class="num">${money(s.quotes[g.symbol].price)}</b> · ` : ""}메리츠 보유 <b class="num">${Number(g.qty) + Number(g.excluded_qty || 0)}주</b>${Number(g.excluded_qty || 0) ? ` <span class="muted">(VR ${g.qty} + 따로 ${g.excluded_qty} — VR 계산은 ${g.qty}주 기준)</span>` : ""}${g.avg ? ` · 평단 <b class="num">${money(g.avg)}</b>` : ""} · 달러 예수금 <b class="num">${usd !== null ? "$" + money(usd) : "-"}</b>
       · 주문표 V <b class="num">${vr.V != null ? "$" + money(vr.V) : "-"}</b> · ${vrCashHtml(g, vr)}
       · 최소 ${vr.min != null ? money(vr.min) : "-"} · 최대 ${vr.max != null ? money(vr.max) : "-"}</div>
-    ${ladder.length ? ladder.map((l) => { const done = filled.has(l.tag), key = [g.id, l.side, "VR", l.price, l.qty].join("|");
-      return `<div class="oline">${on ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(key)}" ${!done && cfChecked(key, true) ? "checked" : ""} ${done ? "disabled" : ""} aria-label="이 줄 주문">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${l.n}단계</span>
-        <b class="num">${money(l.price)} × ${l.qty}</b>${done ? '<span class="chip ok">체결됨</span>' : "<span></span>"}</div>`; }).join("")
+    ${ladder.length ? oTable(ladder.map((l) => { const done = filled.has(l.tag), key = [g.id, l.side, "VR", l.price, l.qty].join("|");
+      return { side: l.side, kind: `${KIND_KO.VR} · ${l.n}단계`, price: l.price, qty: l.qty, pk: key, auto: done ? "이미 체결된 단계" : "",
+        note: done ? '<span class="chip ok">체결됨</span>' : "",
+        admin: on ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(key)}" ${!done && cfChecked(key, true) ? "checked" : ""} ${done ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; }), on, "vr:" + (vr.start || "-"))
       : `<div class="empty">이번 주기 주문표가 아직 없습니다 (주기가 바뀌는 날 아침 계산)</div>`}
-    <div class="small" style="margin-top:6px">남은 매수 합계 <b class="num">$${money(buyLeft)}</b>${usd !== null && buyLeft > usd ? ` <span class="chip warn">달러 예수금 $${money(buyLeft - usd)} 모자람 — 적립금 입금 확인 (예약은 받아도 실행일에 모자라면 증권사가 거부)</span>` : usd !== null && buyLeft ? ' <span class="chip ok">달러 예수금 충분</span>' : ""}</div>
+    <div class="small" style="margin-top:6px">남은 매수 합계 <b class="num">$${money(buyLeft)}</b>${usd !== null && buyLeft > usd ? ` <span class="chip warn wrap">달러 예수금 $${money(buyLeft - usd)} 모자람 — 적립금 입금 확인 (예약은 받아도 실행일에 모자라면 증권사가 거부)</span>` : usd !== null && buyLeft ? ' <span class="chip ok">달러 예수금 충분</span>' : ""}</div>
     <div class="row" style="margin-top:8px"><button class="btn" data-detail="${esc(g.id)}">VR 매매 표·자세히</button></div></section>`;
   if (on && left.length) {
     const P = S.confirmPlan && S.confirmPlan.acc === cur ? S.confirmPlan : null;
@@ -816,11 +955,26 @@ function realOrders(s, d, g, acc) {
       <span class="small muted">${esc(ACC_NAME[cur] || cur)} · 미국 ${esc(r.trade_date)} 장</span></div>`;
   if (!row.approved) return out + `<div class="empty">아직 ${esc(r.trade_date)} 주문표가 없습니다 (아침 6시 계산 뒤 생깁니다)</div></section>`;
   out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}메리츠 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
-      ${(() => { const oneLine = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
-        return `<div class="oline">${confirmOn(acc) && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done) && !l.collar && !l.auto_done ? "checked" : ""} ${l.collar || l.auto_done ? "disabled" : ""} aria-label="이 줄 주문">` : ""}<span class="${sideCls(l.side)}">${sideKo(l.side)}</span><span class="small muted">${esc(KIND_KO[l.kind] || l.kind)}</span>
-        <b class="num">${l.price ? money(l.price) : l.kind === "MOC" ? "종가" : "시장가"} × ${l.qty}</b>${l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "<span></span>"}</div>`; };
+      ${(() => {
+        // 작업 ㊴: 줄 → 표. 왼쪽 '관리자 주문' 체크(ADR 0043 manual, CONFIRM_ORDERS 켜졌을 때만)는 그대로, 오른쪽 '넣음'은 메리츠 앱에 넣은 뒤 손으로 체크.
+        // ㉘-A 가 메리츠 주문내역으로 이 전략 줄을 모두 확인했으면(완료) 보이는 줄은 '넣음' 자동 표시, auto 가 넣은 줄도 자동 표시.
+        const tsa = ((d.tonight_status || {}).accounts || {})[cur] || {};
+        const ts = tsa.trade_date === r.trade_date ? (tsa.strategies || []).find((x) => x.sid === row.sid) : null;
+        const adm = confirmOn(acc);
+        const item = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
+          return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk,
+            auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
+            note: l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "",
+            admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done) && !l.collar && !l.auto_done ? "checked" : ""} ${l.collar || l.auto_done ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
-        return show.map((l) => oneLine(l, false)).join("") + foldBox("ord:" + row.sid, hide, hide.map((l) => oneLine(l, true)).join("")); })()}
+        const later = (l) => l.later || l.near || l.catchup;
+        const now = show.filter((l) => !later(l)), after = show.filter(later), day = "d:" + r.trade_date;
+        const tsTxt = ts && ts.state !== "none" ? (ts.state === "unknown" ? "메리츠 주문내역 확인 안 됨" : ts.state === "done" ? `메리츠에 모두 들어감 (${ts.placed}줄)` : `메리츠 확인: 넣음 ${ts.placed} / 남음 ${ts.left}`) : "";
+        return (tsTxt ? `<div class="small muted">${esc(tsTxt)}</div>` : "")
+          + `<div class="ogroup"><h3>① 지금 걸 줄 <span class="small muted">${now.length}줄</span></h3>${now.length ? oTable(now.map((l) => item(l, false)), adm, day) : '<div class="empty">지금 걸 줄이 없습니다.</div>'}</div>`
+          + (after.length || hide.length ? `<div class="ogroup later"><h3>② 마감 전 확인 · 보충 (별도) <span class="small muted">${after.length}줄</span></h3>
+              ${oTable(after.map((l) => item(l, false)), adm, day)}${foldBox("ord:" + row.sid, hide, oTable(hide.map((l) => item(l, true)), adm, day))}</div>` : "");
+      })()}
       ${row.usd_share != null ? `<div class="small" style="margin-top:6px">이 전략 달러 예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
       ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
       ${row.band_status ? `<div class="small" style="margin-top:6px">📉 ${esc(row.band_status)}</div>` : ""}
@@ -902,26 +1056,25 @@ function viewHome(snap, mine) {
   let out = "";
   if (s.halted) out += `<div class="card"><span class="chip bad">자동매매 정지</span><div>${esc(s.halted)}</div></div>`;
   const B = [];                                   // [키, 이름, html] — 사용자가 순서·숨김을 정한다 (제보 #6)
-  B.push(["equity", "자산 추이", `<div class="card"><div class="row between"><h2>자산(USD)</h2></div>${equityChart(d.equity || [])}</div>`]);   // 11/07: 맨 위
+  // 작업 ㊴ (R-18): 위 → 아래 = 요약 숫자 5개 + 오늘 할 일 → 전략 카드 → 시세 → 자산(USD) 차트 (차트는 맨 아래, 낮게)
+  const isPhone = layout() === "phone" && mine;
+  if (!isPhone) B.push(["kpis", "요약 숫자", `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
+      <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`]);
   if (mine) B.push(["today", "오늘 할 일", todayCard(s, d, strat)]);
-  B.push(["market", "시세", marketStrip(s)]);
   if (!strat.length && mine) B.push(["empty", "계좌·전략 등록", `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
     <div class="small muted">메리츠 계좌와 따라갈 전략(무한매수 주문표·VR·V4.0)을 먼저 등록하세요. 계좌 API 키는 노트북 .env 에만 넣습니다.</div>
     <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`]);
-  if (layout() === "phone" && mine) {
-    phoneBlocks(s, d, B);
-  } else {
-    B.push(["kpis", "요약 숫자", `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
-      <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`]);
-    B.push(["strategies", "전략별 현황", `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`]);
-  }
+  if (isPhone) phoneBlocks(s, d, B);
+  else B.push(["strategies", "전략별 현황", `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`]);
+  B.push(["market", "시세", marketStrip(s)]);
+  B.push(["equity", "자산 추이", `<div class="card eqcard"><div class="row between"><h2>자산(USD)</h2></div>${equityChart(d.equity || [])}</div>`]);
   return out + arrangeBlocks(B, mine);
 }
 // ── 홈 카드 순서·숨김 (제보 #6): 이 기기·화면 모양(PC/폰)마다 따로 기억 ──
 function homeOrderKey() { return "homeOrder:" + layout(); }
 function homeOrder() {
   let o = {}; try { o = JSON.parse(localStorage.getItem(homeOrderKey()) || "null") || {}; } catch (e) {}
-  if (o.order && o.v !== 2) { o = { ...o, v: 2, order: ["equity", ...o.order.filter((k) => k !== "equity")] }; saveHomeOrder(o); }   // 11/07: 자산 추이 맨 위로 한 번
+  if (o.order && o.v !== 3) { o = { v: 3, hidden: o.hidden || [] }; saveHomeOrder(o); }   // 작업 ㊴: 새 기본 순서(요약 → 할 일 → 전략 → 차트)로 한 번 (숨김은 그대로)
   return o;
 }
 function saveHomeOrder(o) { try { localStorage.setItem(homeOrderKey(), JSON.stringify(o)); } catch (e) {} }
@@ -1059,7 +1212,9 @@ function strategyCard(s, g) {
   const gw = g.gap_watch || {};   // ADR 0051: 주문표보다 적게 보유가 이어지면 알림 → 3거래일째 주문 멈춤
   const status = !g.active ? ["꺼짐", ""] : gw.paused ? [`주문 멈춤 (${gw.days}거래일째 ${gw.gap}주 모자람)`, "bad"]
     : gw.days ? [`보충 필요 ${gw.days}거래일째`, "warn"] : plan && plan.source === "calc" ? ["계산 주문표", "ok"] : ["켜짐", "ok"];
-  return `<button class="card scard" data-detail="${esc(g.id)}" aria-label="${esc(g.id)} 자세히">
+  // 작업 ㊴: 카드 전체 = '자세히' 버튼(덮개), 그 위에 '보충 필요' 배지 버튼(→ 주문 탭) — 버튼 안에 버튼을 넣지 않음
+  const st = status[0] === "켜짐" ? `<span class="run-badge"><i aria-hidden="true"></i>운용 중</span>` : `<span class="chip ${status[1]}" style="align-self:flex-start">${status[0]}</span>`;
+  return `<div class="card scard"><button class="scard-hit" data-detail="${esc(g.id)}" aria-label="${esc(stratName(g, plan))} 자세히"></button>
     <div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div>
     ${ledgers3(g, plan, vr, m)}
     ${vr ? `<span class="small vrcash">${vrCashHtml(g, vr)}</span>` : ""}
@@ -1067,7 +1222,7 @@ function strategyCard(s, g) {
       <span class="muted">${metric[0]}</span><span class="num">${esc(metric[1])}</span>
       <span class="muted">평가손익 (메리츠)</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
     </div>
-    <span class="chip ${status[1]}" style="align-self:flex-start">${status[0]}</span></button>`;
+    ${st}</div>`;
 }
 // 메리츠 · 주문표 두 줄 (ADR 0048, 11/07 사용자: 자산 화면에서 가투 줄 없앰 — 가투는 가투 메뉴에서)
 // VR 등 한 계좌 한 전략이면 메리츠 달러 예수금을 그대로, 아니면 전략 몫(노트북이 나눈 값)
@@ -1104,15 +1259,16 @@ function vrCashHtml(g, vr) {
 function ledgers3(g, plan, vr, m) {
   // 버튼(카드) 안이라 표 대신 칸 나눔 (span)
   const cell = (x, cls = "num") => `<span class="${cls}">${x}</span>`;
-  const row = (name, q, avg, cash) => cell(name, "l3n") + cell(q == null ? "-" : q + "주") + cell(avg ? money(avg) : "-") + cell(cash == null ? "-" : "$" + money(cash));
+  const row = (name, q, avg, cash, k = "") => cell(name, "l3n " + k) + cell(q == null ? "-" : q + "주", "num " + k) + cell(avg ? money(avg) : "-", "num " + k) + cell(cash == null ? "-" : "$" + money(cash), "num " + k);
   const mult = plan ? Number(plan.multiplier || 1) : 1;
   const planQ = plan && plan.holding != null ? Number(plan.holding) * mult : null;
   const gap = planQ != null ? planQ - Number(g.qty || 0) : null;
   return `<span class="l3">${cell("", "l3n")}${cell("보유", "muted")}${cell("평단", "muted")}${cell(vr ? "Pool" : "잔금", "muted")}
-    ${row("메리츠", g.qty, g.avg, vr ? merUsd(g) : g.cash)}
-    ${plan ? row("주문표", planQ, plan.avg, plan.cash != null ? Number(plan.cash) * mult : null) : vr ? row("주문표", null, null, vr.pool) : ""}
+    ${row("메리츠", g.qty, g.avg, vr ? merUsd(g) : g.cash, "l3-mer")}
+    ${plan ? row("주문표", planQ, plan.avg, plan.cash != null ? Number(plan.cash) * mult : null, "l3-plan") : vr ? row("주문표", null, null, vr.pool, "l3-plan") : ""}
 </span>
-  ${gap ? `<span class="small ${gap > 0 ? "warn-t" : ""}">${gap > 0 ? `보충 필요 ${gap}주 (주문표보다 메리츠 보유가 적음)` : `메리츠 보유가 주문표보다 ${-gap}주 많음`}</span>` : ""}`;
+  ${gap > 0 ? `<button class="pill-warn" data-ordgo="${esc(g.id)}" title="주문표보다 메리츠 보유가 적음 — 누르면 주문 화면">보충 필요 ${gap}주 ›</button>`
+    : gap ? `<span class="small muted">메리츠 보유가 주문표보다 ${-gap}주 많음</span>` : ""}`;
 }
 // ── 모의 (11/07): 투자 분석용. 진행 중 전략의 모의는 매일 자동으로 이어진다 ──
 function viewMock(s) {
@@ -1122,7 +1278,7 @@ function viewMock(s) {
   const cards = strat.map((g) => {
     const plan = (s.plans || {})[g.id];
     const m = ((s.shadow || {})[g.account] || {})[g.id] || (g.sim ? { qty: g.qty, avg: g.avg, cash: g.cash, realized: g.realized } : null);
-    if (!m) return `<div class="card"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b></div><div class="empty">가투 기록이 아직 없습니다 (다음 아침 자동 실행부터)</div></div>`;
+    if (!m) return `<div class="card"><div class="row"><span class="sym num">${esc(g.symbol)}</span><b>${esc(stratName(g, plan))}</b><span class="muted small">${esc(ACC_NAME[g.account] || g.account)}</span></div><div class="empty">가투 기록이 아직 없습니다 (다음 아침 자동 실행부터)</div>${mockDefaults(g, plan)}</div>`;
     const px = Number(closes[g.symbol] || 0), q = Number(m.qty || 0), avg = Number(m.avg || 0), cash = Number(m.cash || 0);
     const val = q * px + cash, pnl = avg && q ? (px - avg) * q : null;
     tv += val; tp += pnl || 0; any = true;
@@ -1145,7 +1301,21 @@ function viewMock(s) {
     ${any ? `<div class="card"><div class="row between"><b>가투 합계</b><span class="num">평가금액 $${money(tv)} · 평가손익 <span class="${tp >= 0 ? "buy" : "sell"}">${(tp >= 0 ? "+" : "−") + "$" + money(Math.abs(tp))}</span></span></div>
       <div class="small muted">가격 = 직전 종가. 다른 분(예: 김정희 님 동적 분할매수)의 모의는 위쪽에서 그 분 계좌를 고르면 보입니다.</div></div>` : ""}
     <section class="cards">${cards || `<div class="card"><div class="empty">모의 중인 전략이 없습니다.</div></div>`}</section>
-    <div class="card"><div class="row between"><b>프라이버시 투자법</b><button class="btn" data-tab="privacy">보기 ›</button></div><div class="small muted">사진 판독 → 다음 거래일 주문표 예측 (모의 예측, 주문 없음)</div></div>`;
+    <div class="card"><div class="row between"><b>프라이버시 투자법</b><button class="btn" data-tab="privacy">보기 ›</button></div><div class="small muted">사진 판독 → 다음 거래일 주문표 예측 (가투 예측, 주문 없음)</div></div>`;
+}
+// 작업 ㊴: 가투 기록이 없을 때 그 전략 기본 설정(있는 것만) — 표시만
+function mockDefaults(g, plan) {
+  const kv = [];
+  const start = g.principal != null ? g.principal : g.budget != null ? g.budget : g.cash;
+  if (start != null && start !== "") kv.push(["시작 가상 원금", "$" + money(start) + (g.principal == null && g.budget == null ? " (전략 잔금)" : "")]);
+  const splits = g.splits || (plan && plan.splits);
+  if (splits) kv.push(["분할수", esc(splits) + "분할"]);
+  if (g.target_pct) kv.push(["목표 수익", esc(g.target_pct) + "%"]);
+  if (Number(g.multiplier) > 1) kv.push(["배수", esc(g.multiplier) + "배"]);
+  if (g.vr_conf && g.vr_conf.describe) kv.push(["VR 설정", esc(g.vr_conf.describe)]);
+  if (g.bands && g.bands.length) kv.push(["낙폭 단계", g.bands.length + "단계 (−" + esc(g.bands[0][0]) + "% ~ −" + esc(g.bands[g.bands.length - 1][0]) + "%)"]);
+  if (!kv.length) return "";
+  return `<div class="kv2 mockdef" aria-label="기본 설정">${kv.map(([k, v]) => `<span class="muted">${k}</span><span class="num">${v}</span>`).join("")}</div>`;
 }
 // ── auto (11/07): 지금은 꺼져 있음. 켜는 조건과 켜지면 하는 일 ──
 // 작업 ㉟ (11/14, 검토 대장 R-14, ADR 0059 보충): 화면 폭 768px 미만 = '폰' → auto 는 끄기·보기만.
@@ -1327,7 +1497,9 @@ function equityChart(rows) {
   if (!series.length || pts.length < 1) return head + `<div class="empty">${kind === "total" ? "아직 기록이 없습니다." : "이 종류는 11/07부터 기록합니다 — 내일부터 선이 그려집니다."}</div>`;
   if (!on.length) return head + `<div class="empty">위에서 그릴 선을 하나 이상 고르세요.</div>`;
   const vals = pts.flatMap((r) => on.map(([, , f]) => f(r)).filter(ok).map(Number));
-  const W = window.innerWidth < 700 ? 480 : 1000, H = window.innerWidth < 700 ? 280 : 300, L = 64, R = 16, T = 12, B = 30;
+  // 작업 ㊴: 낮게(폰·PC 모두 화면에서 약 220~250px) — 그림 폭을 화면 폭에 맞춰 글자 크기가 그대로 보이게
+  const narrow = window.innerWidth < 700, few = pts.length <= 3;
+  const W = narrow ? 480 : Math.max(640, Math.min(2400, Math.round(window.innerWidth - 90))), H = narrow ? 310 : 240, L = 64, R = 16, T = few ? 34 : 12, B = 30;
   let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.1 || Math.max(hi * 0.02, 10); lo -= pad; hi += pad;
   const n = pts.length, X = (i) => n === 1 ? (L + W - R) / 2 : L + i * (W - L - R) / (n - 1), Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
   const yt = Array.from({ length: 5 }, (_, i) => lo + (hi - lo) * i / 4);
@@ -1338,8 +1510,13 @@ function equityChart(rows) {
   const lines = on.map(([k, , f]) => { const ci = series.findIndex((x) => x[0] === k), c = EQ_COLORS[ci % EQ_COLORS.length];
     const xy = pts.map((r, i) => ok(f(r)) ? [X(i), Y(Number(f(r)))] : null).filter(Boolean);
     const last = xy[xy.length - 1];
-    return (xy.length > 1 ? `<polyline points="${xy.map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ")}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>` : "")
-      + (last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="${c}"/>` : ""); }).join("");
+    const line = xy.length > 1 ? `<polyline points="${xy.map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ")}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>` : "";
+    if (few) {                                     // 작업 ㊴: 점 3개 이하 → 큰 점 + 점 위에 날짜·금액
+      const dots = pts.map((r, i) => ok(f(r)) ? [X(i), Y(Number(f(r))), r.date, Number(f(r))] : null).filter(Boolean);
+      return line + dots.map(([x, y, dt, v]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="${c}" stroke="var(--glass-strong)" stroke-width="2.5"/>
+        <text x="${x.toFixed(1)}" y="${(y - 14).toFixed(1)}" font-size="12.5" font-weight="600" text-anchor="middle" fill="var(--ink)">${esc(String(dt).slice(5).replace("-", "/"))} · $${money(v)}</text>`).join("");
+    }
+    return line + (last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="${c}"/>` : ""); }).join("");
   const lastRow = pts[n - 1];
   return head + `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="자산 추이 ${esc(pts[0].date)}부터 ${esc(lastRow.date)}까지 (USD)">
     ${yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="11.5" text-anchor="end" fill="var(--muted)">$${money(v, 0)}</text>`).join("")}
@@ -1797,7 +1974,7 @@ function telegramCard(s) {
 }
 function privacyCard(s) {
   const pv = s.privacy || {}, on = !!pv.on;
-  return `<div class="card"><h2>프라이버시 투자법 <span class="chip">모의 예측</span></h2>
+  return `<div class="card"><h2>프라이버시 투자법 <span class="chip">가투 예측</span></h2>
     <div class="small muted">프라이버시 주문표 사진을 <button type="button" class="linkbtn" data-uppurpose="privacy">기록 → 사진 올리기(프라이버시)</button>로 올리면 관리자 노트북이 판독해
       <b>분석 보고서</b>(판독값·규칙 대조)와 <b>다음 거래일 주문표 예상</b>을 텔레그램으로 보내 드립니다.
       규칙은 사진 50장마다 다시 맞춥니다. 아직 주문은 내지 않습니다.</div>
@@ -1823,11 +2000,12 @@ function accountsView(s) {
   const strat = accs.flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
   return `
     <div class="card"><h2>계좌</h2>
-      ${accs.map(([aid, a]) => `<div class="row between"><span>${esc(ACC_NAME[aid] || a.name)} <span class="muted small">${esc(aid)}</span></span>
-        <span class="chip ${a.api ? "ok" : ""}">${a.api ? "API 연결" : "수동 (키 없음)"}</span></div>
-        ${owner() === S.user.id ? (S.keyFor === aid ? keyForm(aid) : `<div class="row"><button class="btn ${a.api ? "" : "primary"}" data-keyfor="${esc(aid)}">${a.api ? "API 키 바꾸기" : "API 키 등록"}</button>
-          <span class="small muted">잠가서 보내고 노트북이 받는 즉시 클라우드에서 지움 (또는 노트북 .env 의 <span class="mono">${esc(a.env_name || ("MERITZ_" + (aid === "main" ? "" : aid.toUpperCase() + "_") + "APP_KEY"))}</span>)</span></div>`)
-          : `<div class="small muted">메리츠 키는 계좌 주인만 등록할 수 있습니다.</div>`}`).join("")}
+      ${accs.map(([aid, a]) => { const own = owner() === S.user.id;   // 작업 ㊴: 한 줄 카드 = 계좌 | 상태 | 키 버튼 | 설명
+        return `<div class="accrow"><span class="acc-id"><b>${esc(ACC_NAME[aid] || a.name)}</b> <span class="muted small mono">${esc(aid)}</span>${a.name && a.name !== (ACC_NAME[aid] || a.name) ? ` <span class="muted small">${esc(a.name)}</span>` : ""}</span>
+          <span class="chip ${a.api ? "ok" : ""}">${a.api ? "연결됨" : "수동 · 키 없음"}</span>
+          <span class="acc-act">${own ? `<button class="btn ${a.api ? "" : "primary"}" data-keyfor="${esc(aid)}" ${S.keyFor === aid ? 'aria-expanded="true"' : ""}>${a.api ? "API 키 바꾸기" : "API 키 등록"}</button>` : ""}</span>
+          <span class="small muted acc-desc">${own ? `잠가서 보내고 노트북이 받는 즉시 클라우드에서 지움 (또는 노트북 .env 의 <span class="mono">${esc(a.env_name || ("MERITZ_" + (aid === "main" ? "" : aid.toUpperCase() + "_") + "APP_KEY"))}</span>)` : "메리츠 키는 계좌 주인만 등록할 수 있습니다."}</span></div>
+          ${own && S.keyFor === aid ? keyForm(aid) : ""}`; }).join("")}
       <form id="f-acc" class="row" style="align-items:flex-end">
         <label style="flex:1;min-width:110px">계좌 id<input type="text" id="a-id" placeholder="예: isa" required pattern="[a-z][a-z0-9_]{0,23}"></label>
         <label style="flex:2;min-width:150px">이름<input type="text" id="a-name" placeholder="예: ISA 계좌"></label>
@@ -2083,8 +2261,8 @@ function viewConstitution(s) {
       <div class="small muted" style="letter-spacing:.08em">${esc(c.subtitle || "")}</div>
       <h1 style="margin:4px 0 2px">📜 ${esc(c.title)}</h1>
       <div class="small muted">${c.adopted ? `채택 ${esc(c.adopted)}` : ""}${c.version ? ` · 제${esc(c.version)}판` : ""}</div>
-      <ol class="articles" style="list-style:none;padding:0;margin:14px 0 0">
-        ${c.articles.map(([t, body]) => `<li style="padding:12px 0;border-top:1px solid var(--line)"><b>${esc(t)}</b><div style="margin-top:4px;line-height:1.6">${esc(body.trim())}</div></li>`).join("")}
+      <ol class="articles">
+        ${c.articles.map(([t, body]) => `<li><b>${esc(t)}</b><div style="margin-top:4px;line-height:1.6">${esc(body.trim())}</div></li>`).join("")}
       </ol></section>
     <div class="card"><h2>헌법의 효력</h2>
       <div class="small" style="line-height:1.7">
@@ -2202,6 +2380,7 @@ function bookTable(g, e, book, lastWeek, recent) {
 }
 // VR 매매 표 (사용자 11/04, 엑셀 양식): 2주 주기마다 한 줄 — 마지막 종가·G·평가금·V·최소·최대·거래액·Pool·투자원금·계좌총액·수익률·개수·원금·평단
 const VRCOLS = ["주차", "마지막 종가", "G", "평가금 E", "V", "최소", "최대", "거래액", "시작 Pool", "마지막 Pool", "투자원금", "계좌총액", "수익률", "수익금", "개수", "매수원금", "평단"];
+const VR_KEY = [3, 4, 5, 6, 9];   // 작업 ㊴: 평가금 E · V · 최소 · 최대 · 마지막 Pool = 옅은 배경 + 굵게
 function vrTable(g, rows, kind = "real") {
   if (!rows.length) return `<div class="empty">VR 주기 기록이 아직 없습니다.</div>`;
   const n = (x) => x === null || x === undefined || x === "" ? null : Number(x);
@@ -2210,8 +2389,8 @@ function vrTable(g, rows, kind = "real") {
     const total = n(E) !== null ? n(E) + n(p1) : null, prn = n(pr), ret = total !== null && prn ? (total / prn - 1) * 100 : null;
     const c = n(cost) || null;
     return `<tr class="${done ? "" : "t-total"}"><td class="num"><b>${wk}</b><div class="small muted">${esc(String(st).slice(5))}${done ? "" : " 진행 중"}</div></td>
-      <td class="n">${m(close)}</td><td class="n">${esc(G ?? "-")}</td><td class="n">${m(E)}</td><td class="n"><b>${m(V)}</b></td><td class="n">${m(mn)}</td><td class="n">${m(mx)}</td>
-      <td class="n ${n(tr) < 0 ? "buy" : n(tr) > 0 ? "sell" : ""}">${m(tr)}</td><td class="n">${m(p0)}</td><td class="n">${m(p1)}</td><td class="n">${m(pr)}</td>
+      <td class="n">${m(close)}</td><td class="n">${esc(G ?? "-")}</td><td class="n key">${m(E)}</td><td class="n key">${m(V)}</td><td class="n key">${m(mn)}</td><td class="n key">${m(mx)}</td>
+      <td class="n ${n(tr) < 0 ? "buy" : n(tr) > 0 ? "sell" : ""}">${m(tr)}</td><td class="n">${m(p0)}</td><td class="n key">${m(p1)}</td><td class="n">${m(pr)}</td>
       <td class="n">${total === null ? "-" : money(total)}</td>
       <td class="n ${ret > 0 ? "buy" : ret < 0 ? "sell" : ""}">${ret === null ? "-" : (ret > 0 ? "+" : "") + ret.toFixed(2) + "%"}</td>
       <td class="n">${total === null || !prn ? "-" : (total - prn >= 0 ? "+" : "−") + money(Math.abs(total - prn))}</td>
@@ -2219,7 +2398,7 @@ function vrTable(g, rows, kind = "real") {
   const vrNow = kind === "real" ? ((S.snap ? S.snap.summary : {}).vr || {})[g.id] : null;   // 가투 표에는 실제 현금을 안 붙임
   return `${vrNow ? `<div class="small vrcash" style="margin:4px 0">지금 주기: ${vrCashHtml(g, vrNow)}</div>` : ""}<div class="small muted" style="margin:4px 0">${Number(g.multiplier) > 1 ? `${g.multiplier}배수 금액 · ` : ""}거래액 = 그 주기 매매 합계(매수 −, 매도 +), 마지막 Pool = 시작 Pool + 거래액(진행 중 줄은 = 남은 현금), 계좌총액 = 평가금 + Pool.
     ${rows.some((r) => !r[11]) ? "투자원금을 아직 정하지 않아 수익률은 '-' 입니다." : ""}</div>
-    <div class="scroll ttable"><table><thead><tr>${VRCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
+    <div class="scroll ttable vrt"><table><thead><tr>${VRCOLS.map((c, i) => `<th class="${i ? "n" : ""}${VR_KEY.includes(i) ? " key" : ""}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function viewTrades(s) {
   const T = (S.snap.detail || {}).trades || {};
@@ -2514,7 +2693,15 @@ function bind() {
   document.querySelectorAll("[data-mkonly]").forEach((b) => b.onclick = async () => {
     S.msg = { text: await mkProfile(b.dataset.mkonly) }; await loadAdmin(); render(); });
   document.querySelectorAll("[data-ordkind]").forEach((b) => b.onclick = () => { S.ordKind = b.dataset.ordkind; render(); });
-  document.querySelectorAll("[data-ordstrat]").forEach((b) => b.onclick = () => { S.ordStrat = b.dataset.ordstrat; S.confirmPlan = null; render(); });
+  document.querySelectorAll("[data-ordstrat]").forEach((b) => b.onclick = () => { S.ordStrat = b.dataset.ordstrat; S.confirmPlan = null; S.foldOpen = {}; render(); });
+  // 작업 ㊴: 자산 카드 '보충 필요 N주' → 주문(manual) 탭의 그 전략
+  document.querySelectorAll("[data-ordgo]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); S.ordStrat = b.dataset.ordgo; S.confirmPlan = null; S.foldOpen = {};
+    S.tab = "confirm"; (S.lastSub = S.lastSub || {}).order = "confirm"; S.detail = null; S.msg = null; render(); window.scrollTo(0, 0); });
+  // 작업 ㊴: 주문 줄 단가·수량 누르면 복사 + '복사됨!'
+  document.querySelectorAll("[data-copy]").forEach((b) => b.onclick = () => copyText(b.dataset.copy));
+  // 작업 ㊴: '넣음' = 메리츠 앱에 넣은 뒤 손으로 체크 (이 기기·그날만 기억, 주문·계산과 상관없음)
+  document.querySelectorAll("input.placed[data-pk]").forEach((c) => c.onchange = () => {
+    setPlaced(c.dataset.pday, c.dataset.pk, c.checked); const tr = c.closest("tr"); if (tr) tr.classList.toggle("done", c.checked); });
   const os_ = document.getElementById("ord-strat");
   if (os_) os_.onchange = () => { S.ordStrat = os_.value; S.confirmPlan = null; S.foldOpen = {}; render(); };
   const actSel = document.getElementById("act-as"); if (actSel) actSel.onchange = async () => {
