@@ -515,8 +515,8 @@ async function lockBytes(data, name, pass) {
   return new Blob([out], { type: "application/octet-stream" });
 }
 // 사진 종류 3가지 (11/09 작업 ⑪): 기록 → 사진 올리기 한 곳에서 고른다. 판독 뒤 사진은 노트북에서도 지우고 숫자만 남김 (작업 ⑩)
-const UP_KINDS = [["sheet", "무한매수 주문표", "시스템 계산과 비교 — 같으면 알림만, 다르면 원인과 함께 이 화면 위 '확인할 사진'에 올라옵니다"],
-  ["vr", "VR 주문표", "'다음 V 계산'·'매수·매도 계획' 사진 — V·Pool·최소·최대·사다리를 시스템 VR 주기와 비교합니다 (값은 바꾸지 않음)"],
+const UP_KINDS = [["sheet", "무한매수 주문표", "가투 주문표와 비교 — 같으면 알림만, 다르면 원인과 함께 이 화면 위 '확인할 사진'에 올라옵니다"],
+  ["vr", "VR 주문표", "'다음 V 계산'·'매수·매도 계획' 사진 — V·Pool·최소·최대·사다리를 가투 VR 주기와 비교합니다 (실제 VR 과는 비교 안 함, 값은 바꾸지 않음)"],
   ["privacy", "프라이버시", "관리자 노트북이 판독해 규칙 학습·다음 거래일 예상 (가투 → 프라이버시에서 보기)"]];
 function uploadCard(purpose) {
   if (purpose) S.upPurpose = purpose;
@@ -567,7 +567,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-16a";
+const APP_VERSION = "2026-11-16b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -655,7 +655,7 @@ function currentView() {
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
     case "mocktrades": S.tradeKind = "mock"; v = need(viewTrades); break;
-    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 시스템 계산과 다릅니다. 사진은 검증만 하고 주문은 바꾸지 않습니다 (ADR 0055). 차이를 보고 [확인함]을 누르세요. 지난 날짜 것은 노트북이 자동 정리합니다.</div>` + viewApprove() : "") + viewFailedPhotos() + viewMethodChecks() + viewOcrStats()
+    case "upload": S.upOpen = !draftCount() || S.upOpen; v = (draftCount() ? `<div class="msg">📷 확인할 사진 ${draftCount()}건 — 주문표 사진이 가투와 다릅니다. 사진은 검증만 하고 주문은 바꾸지 않습니다 (ADR 0055). 차이를 보고 [확인함]을 누르세요. 지난 날짜 것은 노트북이 자동 정리합니다.</div>` + viewApprove() : "") + viewFailedPhotos() + viewMethodChecks() + viewOcrStats()
       + uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>` + cmdList("photo"); break;
     case "mystrat": v = need(myStrategies); break;
     case "research": S.addMock = true; v = need(addStrategy); break;
@@ -2611,14 +2611,14 @@ function viewCalendar() {
 // 사진 판독 기록 (작업 ⑪): 사진은 지우고 판독 숫자·시스템 비교·선택만 (노트북 state/photo_reads)
 const READ_ST = { same: ["시스템과 같음 ✓", "ok"], diff: ["다름 ⚠", "warn"], draft: ["판독 (확인 대기)", ""], read: ["판독", ""], fail: ["판독 실패", "bad"],
   nogatu: ["가투 주문표 없음 — 비교 못 함", ""], reset: ["가투를 이 사진으로 맞춘 날", ""] };
-// 작업 ㊷: 무한매수 사진의 비교 대상 = 가투 (기록의 target "gatu"), VR·옛 기록 = 시스템
+// 작업 ㊷·㊷-2: 무한매수·VR 사진의 비교 대상 = 가투 (기록의 target "gatu"), 옛 기록 = 시스템
 const readWho = (r) => (r.target === "gatu" ? "가투" : "시스템");
 function readLogCard(sel) {
   const log = ((S.snap && S.snap.detail) || {}).read_log || [];
   if (!log.length) return `<div class="card"><h2>사진 판독 기록</h2><div class="empty">아직 없습니다. 기록 → 사진 올리기나 텔레그램으로 주문표 사진을 보내면 판독 숫자가 여기 쌓입니다 (사진은 판독 뒤 지움).</div></div>`;
   const rows = [...log.filter((r) => r.day === sel), ...log.filter((r) => r.day !== sel)].slice(0, 30);
   return `<div class="card"><h2>사진 판독 기록</h2><div class="small muted">사진은 판독 뒤 지우고 숫자만 남깁니다. 고른 날(${esc(sel || "")}) 것이 먼저 보입니다.</div>
-    ${rows.map((r) => { const st = r.status === "same" ? [r.target === "gatu" ? "가투와 같음 ✓" : "시스템과 같음 ✓", "ok"] : (READ_ST[r.status] || [r.status || "", ""]);
+    ${rows.map((r) => { const st = r.status === "same" ? [r.target === "gatu" ? "가투와 같음 ✓" : "시스템과 같음 ✓", "ok"] : r.status === "nogatu" && r.kind === "vr" ? ["가투 VR 없음 — 비교 못 함", ""] : (READ_ST[r.status] || [r.status || "", ""]);
       return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row between"><span><b>${esc(r.day || "")}</b> · ${esc({ sheet: "무한매수", vr: "VR" }[r.kind] || r.kind)} · ${esc(r.sid || "?")}</span>
         <span class="res ${st[1]}">${esc(st[0])}${r.choice ? " · " + (r.choice === "photo" ? "사진 값으로 바꿈(옛 기록)" : r.choice === "calc_auto" ? "지난 날짜 자동 정리" : r.choice === "ack" ? `확인함${r.ack_by ? " (" + esc(r.ack_by) + ")" : ""}` : "계산 유지") : ""}</span></div>
         <div class="small">${Object.entries(r.nums || {}).map(([k, v]) => `${esc(k)} <b class="num">${esc(String(v))}</b>`).join(" · ")}</div>
