@@ -567,7 +567,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-16b";
+const APP_VERSION = "2026-11-16c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1004,12 +1004,13 @@ function vrOrders(s, d, g, acc) {
   const cur = g.account, r = (d.real_orders || {})[cur], vr = (s.vr || {})[g.id] || {};
   const name = ACC_NAME[cur] || cur, filled = new Set(vr.filled_tags || []);
   const usd = r && r.usd_cash != null ? Number(r.usd_cash) : null;
-  const on = confirmOn(acc);
+  const on = confirmOn(acc) && !vr.auto_now;     // 작업 ㊸ ②: auto VR 이 켜져 있으면 manual VR 예약 막음 (노트북도 다시 확인)
   const ladder = [["SELL", vr.sell || []], ["BUY", vr.buy || []]].flatMap(([side, rows]) =>
     rows.map(([price, qty], i) => ({ side, price, qty, n: i + 1, tag: `vr_${side === "BUY" ? "buy" : "sell"}_${i + 1}` })));
   const left = ladder.filter((l) => !filled.has(l.tag));
   const buyLeft = left.filter((l) => l.side === "BUY").reduce((a, l) => a + Number(l.price) * Number(l.qty), 0);
-  let out = `<div class="msg">VR 은 2주 단위 <b>보통(지정가) · 기간잔량 예약주문</b>입니다. 주기가 바뀌면 아래 주문표 줄을 한 번 예약하면 주기 끝까지 매일 다시 걸립니다. 이미 체결된 단계는 빠집니다.</div>`;
+  let out = (vr.auto_now ? `<div class="card warn-note"><div class="small">⚠ auto VR 이 켜져 있어 노트북이 이번 주기 예약을 넣습니다 — manual 예약은 막혀 있고, 메리츠 앱에서도 따로 넣지 마세요 (auto 를 끄면 바로 manual 가능)</div></div>` : "")
+    + `<div class="msg">VR 은 2주 단위 <b>보통(지정가) · 기간잔량 예약주문</b>입니다. 주기가 바뀌면 아래 주문표 줄을 한 번 예약하면 주기 끝까지 매일 다시 걸립니다. 이미 체결된 단계는 빠집니다.</div>`;
   out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g))} 주문표</h2>
       <span class="small muted">${esc(name)}${vr.week != null ? ` · ${esc(vr.week)}주차` : ""}${vr.start ? ` · 주기 ${esc(vr.start)} ~ ${esc(vrCycleEnd(vr.start))}` : ""}</span></div>
     <div class="small">${(((s.quotes || {})[g.symbol] || {}).price) ? `현재가 <b class="num">${money(s.quotes[g.symbol].price)}</b> · ` : ""}메리츠 보유 <b class="num">${Number(g.qty) + Number(g.excluded_qty || 0)}주</b>${Number(g.excluded_qty || 0) ? ` <span class="muted">(VR ${g.qty} + 따로 ${g.excluded_qty} — VR 계산은 ${g.qty}주 기준)</span>` : ""}${g.avg ? ` · 평단 <b class="num">${money(g.avg)}</b>` : ""} · 달러 예수금 <b class="num">${usd !== null ? "$" + money(usd) : "-"}</b>
@@ -1047,6 +1048,7 @@ function realOrders(s, d, g, acc) {
   if (!row) return out + `<div class="card"><div class="empty">이 전략의 오늘 밤 주문이 아직 없습니다.</div></div>`;
   out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(row.symbol)}</span> ${esc(stratName(g, (s.plans || {})[g.id]))}</h2>
       <span class="small muted">${esc(ACC_NAME[cur] || cur)} · 미국 ${esc(r.trade_date)} 장</span></div>`;
+  if (row.auto_now) out += `<div class="small warn-t" role="note">⚠ auto 켜진 전략은 메리츠 앱에서 따로 넣지 마세요 — 'auto 가 냄' 줄은 노트북이 넣습니다 (두 번 들어감 방지, 작업 ㊸)</div>`;
   if (!row.approved) return out + `<div class="empty">아직 ${esc(r.trade_date)} 주문표가 없습니다 (아침 6시 계산 뒤 생깁니다)</div></section>`;
   out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}메리츠 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
       ${(() => {
@@ -1058,8 +1060,9 @@ function realOrders(s, d, g, acc) {
         const item = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
           return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk,
             auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
-            note: l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "",
-            admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done) && !l.collar && !l.auto_done ? "checked" : ""} ${l.collar || l.auto_done ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
+            note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
+              + (row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
+            admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
         const later = (l) => l.later || l.near || l.catchup;
         const now = show.filter((l) => !later(l)), after = show.filter(later), day = "d:" + r.trade_date;
@@ -1092,6 +1095,7 @@ function confirmPanel(cur, r, g) {
   if (!P) return `<div class="card"><div class="row between"><h2>manual</h2><span class="small muted">체크한 줄만 노트북이 메리츠에 주문합니다</span></div>
     <div class="small muted">기본 체크 = 지금 걸 주 매수·매도. 하락 대비·보충 줄('더 보기' 안 포함)은 필요할 때 체크, 거부 예상 줄은 주문할 수 없습니다.</div>
     ${locNo ? `<div class="small warn-t">⏰ ${esc(locNo)}</div>` : ""}
+    ${(r.strategies || []).some((x) => x.auto_now) ? `<div class="small warn-t">⚠ auto 켜진 전략은 메리츠 앱에서 따로 넣지 마세요 — 'auto 가 냄' 줄은 고를 수 없습니다 (auto 를 끄면 바로 manual 가능)</div>` : ""}
     ${S.cfNote && S.cfNote.acc === cur ? `<div class="small" style="color:var(--bad)" role="alert">${esc(S.cfNote.text)}</div>` : ""}
     <div class="row"><button class="btn primary" data-confirm-review="${esc(cur)}">확인</button></div></div>`;   // 작업 ㉔ D: 시험 주문 버튼 없앰 (ADR 0022 ① 끝남)
   const buy = (P.lines || []).filter((x) => x.side === "BUY").reduce((a, x) => a + (Number(x.price) || Number(((S.snap.summary.quotes || {})[g && g.symbol] || {}).price || 0)) * x.qty, 0);
