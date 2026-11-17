@@ -171,7 +171,9 @@ tr.offrow td { opacity: .45 } tr.offrow td.n { text-decoration: line-through }
 .cal .pmark { font-size: 11px; line-height: 1 } .cal .pmark.done { opacity: .45 } .cal .pmark.wait { filter: drop-shadow(0 0 2px var(--warn)) }
 .ttable td, .ttable th { padding: 6px 8px } .ttable td:first-child, .ttable th:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1 }
 .ttable tr.t-total td { background: var(--soft); font-weight: 600 } .ttable tr.t-cycle td { background: var(--soft); font-size: 13px; position: static } .ttable .t-cyc { position: sticky; left: 8px; display: inline-block; white-space: normal; max-width: min(860px, calc(100vw - 96px)) }
-.ttable tr.t-sub td { font-size: 12.5px; color: var(--muted) } .linkbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer }
+.ttable tr.t-sub td { font-size: 12.5px; color: var(--muted) }
+.ttable td.bdiff { background: color-mix(in srgb, var(--warn) 22%, transparent); font-weight: 700 }   /* 작업 ㊼: 메리츠 ≠ 주문표 칸 */
+.ttable tr.t-sheet td { color: var(--muted); border-top: 0 } .ttable tr.t-cause td { font-size: 12px; color: var(--warn); border-top: 0 } .linkbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px }
 th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 4px 4px; border-bottom: 1px solid var(--line); white-space: nowrap }
 td { padding: 7px 4px; border-bottom: 1px solid var(--line); white-space: nowrap }
@@ -567,7 +569,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-17b";
+const APP_VERSION = "2026-11-17c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -2508,7 +2510,8 @@ function bAgg(rows) {
   }
   return a;
 }
-function bCells(a, label, cls) {
+function bCells(a, label, cls, hl) {
+  const h = (i) => hl && hl.includes(i) ? " bdiff" : "";   // 작업 ㊼: 메리츠 ≠ 주문표 칸
   const sg = (x) => x === null || x === undefined || x === "" ? '<span class="muted">-</span>'
     : `<span class="${Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : ""}">${Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : ""}$${money(Math.abs(Number(x)))}</span>`;
   const pc = (x) => x === null || x === undefined || x === "" ? '<span class="muted">-</span>'
@@ -2519,13 +2522,29 @@ function bCells(a, label, cls) {
   const md = a[1] ? `<span class="chip ${a[1] === "리버스" ? "warn" : a[1] === "소진" ? "bad" : ""}">${esc(a[1])}</span>` : '<span class="muted">-</span>';
   return `<tr class="${cls || ""}"><td class="num">${label}</td><td>${md}</td><td class="num">${esc(a[2] || "-")}</td>
     <td class="n">${am(a[3])}</td><td class="n">${pl(a[4])}</td><td class="n">${a[5] === null || a[5] === undefined ? '<span class="muted">-</span>' : pl(a[5]) + "%"}</td>
-    <td class="n">${a[6] ? money(a[6]) : "-"}</td><td class="n">${a[7] ? money(a[7]) : "-"}</td>
-    <td class="n">${qn(a[8], "buy")}</td><td class="n">${qn(a[9], "sell")}</td><td class="n"><b>${Number(a[10] || 0).toLocaleString()}</b></td>
+    <td class="n">${a[6] ? money(a[6]) : "-"}</td><td class="n${h(7)}">${a[7] ? money(a[7]) : "-"}</td>
+    <td class="n${h(8)}">${qn(a[8], "buy")}</td><td class="n${h(9)}">${qn(a[9], "sell")}</td><td class="n${h(10)}"><b>${a[10] === null || a[10] === undefined ? "-" : Number(a[10] || 0).toLocaleString()}</b></td>
     <td class="n">${pl(a[11])}</td><td class="n">${am(a[12])}</td><td class="n">${am(a[13])}${a[27] ? unitCalcTag("주문표에 값이 없어 계산 (리버스 = 잔금 ÷ 4, 그 밖 = 잔금 ÷ (분할수 − T))") : ""}</td>
     <td class="n">${sg(a[14])}</td><td class="n">${am(a[15])}</td><td class="n">${am(a[16])}</td>
     <td class="n">${sg(a[17])}</td><td class="n">${sg(a[18])}</td><td class="n">${pc(a[19])}</td><td class="n">${sg(a[20])}</td><td class="n">${pc(a[21])}</td></tr>`;
 }
-function bookTable(g, e, book, lastWeek, recent) {
+// 작업 ㊼ (11/17 사용자): 메리츠 ≠ 주문표인 날만 두 줄 — ① 메리츠 줄(체결·잔고·평단·실현) ② 주문표 줄(그날 주문표) + 원인 한 줄.
+//    같은 날은 한 줄(메리츠). chk = 스냅숏 trades[전략].check {날짜: {same, diff:[칸], cause, sheet:[28칸]}} — 실제(메리츠) 표에만.
+const BSHEET_ONLY = [1, 11, 12, 13, 16];    // 모드·T·★%가격·1회 매수시도액·잔금 = 주문표 값 → 다른 날 메리츠 줄에서는 비움
+function bDay(r, label, cls, chk) {
+  const c = chk && chk[r[0]];
+  if (!c || c.same || !c.sheet) return bCells(r, label, cls, null);
+  const m = r.slice();
+  for (const i of BSHEET_ONLY) m[i] = null;
+  m[27] = 0;
+  const tag = (t, k) => `${label}<div class="small"><span class="chip ${k}">${t}</span></div>`;
+  return bCells(m, tag("메리츠", "warn"), cls, c.diff) + bCells(c.sheet, tag("주문표", ""), (cls || "") + " t-sheet", c.diff)
+    + (c.cause ? `<tr class="t-cause${cls ? " " + cls : ""}"><td></td><td colspan="${BCOLS.length - 1}">↳ ${esc(c.cause)}</td></tr>` : "");
+}
+function bDiffDays(rows, chk) {
+  return chk ? rows.filter((r) => chk[r[0]] && !chk[r[0]].same).length : 0;
+}
+function bookTable(g, e, book, lastWeek, recent, chk) {
   const cycles = [...new Set(book.map((r) => r[23]))];
   let body = "";
   for (const c of cycles) {
@@ -2534,13 +2553,14 @@ function bookTable(g, e, book, lastWeek, recent) {
     body += `<tr class="t-cycle"><td colspan="${BCOLS.length}"><span class="t-cyc"><b>싸이클 ${c}</b> · ${esc(cr[0][0].slice(5))} ~ ${esc(cr[cr.length - 1][0].slice(5))}${done ? " 끝" : " 진행 중"}
       ${e.cycles && e.cycles[c] ? ` · 규칙 ${esc(e.cycles[c])}` : ""} · 매수 $${money(a[24] || 0)} · 매도 $${money(a[25] || 0)} · 수익 ${rz === null ? "-" : (rz >= 0 ? "+" : "−") + "$" + money(Math.abs(rz)) + rate}</span></td></tr>`;
     for (const [key, name, gr, daily] of tGroups(cr, lastWeek, recent)) {
-      if (daily) { body += bCells(bAgg(gr), esc(name)); continue; }
-      const open = S.tradeOpen[g.id + key];
-      body += bCells(bAgg(gr), `<button class="linkbtn" data-topen="${esc(g.id + key)}">${open ? "▾" : "▸"} ${esc(name)}</button><div class="small muted">${gr.length}일</div>`, "t-group");
-      if (open) body += gr.map((r) => bCells(r, `<span class="small">${esc(r[0].slice(5))}</span>`, "t-sub")).join("");
+      if (daily) { body += bDay(gr[0], esc(name), "", chk); continue; }
+      const open = S.tradeOpen[g.id + key], nd = bDiffDays(gr, chk);
+      body += bCells(bAgg(gr), `<button class="linkbtn" data-topen="${esc(g.id + key)}">${open ? "▾" : "▸"} ${esc(name)}</button><div class="small muted">${gr.length}일${nd ? ` · <span class="warn-t">다른 날 ${nd}일</span>` : ""}</div>`, "t-group");
+      if (open) body += gr.map((r) => bDay(r, `<span class="small">${esc(r[0].slice(5))}</span>`, "t-sub", chk)).join("");
     }
   }
-  const total = bCells(bAgg(book), "<b>합계</b>", "t-total");
+  const ndAll = bDiffDays(book, chk);
+  const total = bCells(bAgg(book), `<b>합계</b>${ndAll ? `<div class="small warn-t">다른 날 ${ndAll}일</div>` : ""}`, "t-total");
   // 작업 ㉚ ④: 메리츠가 쓴 1주당 원가 (= 메리츠 매수금액 ÷ 매도 수량) — 27번째 칸, 옛 노트북이면 없음
   const sells = book.filter((r) => Number(r[9]) && r.length > 26);
   const costBox = sells.length ? `<details style="margin-top:8px"><summary class="small muted">자세히 — 매도 1주당 원가 (${e.cost_basis === "meritz" ? "메리츠 잔고 기준" : "장부 평단 기준"})</summary>
@@ -2564,7 +2584,8 @@ function bookTable(g, e, book, lastWeek, recent) {
         평단 = 누적 매수액 ÷ 누적개수 · 매수액 = 매수 체결금액, 매도한 날은 −(매도수량 × 직전 평단) · 누적 매수액 = 남은 매입 원가 ·
         T·★%가격·1회 매수시도액·잔금 = 그날 시스템 값 (1회 매수시도액이 주문표에 없으면 '(계산)' — 리버스 1일째 0 · 리버스 잔금 ÷ 4 · 그 밖 잔금 ÷ (분할수 − T)) · 수익 = 매도한 날만 (매도가 − 직전 평단) × 매도수량 · 누적수익 = 수익 합 − 수수료 합 ·
         보유수익률 = 종가 ÷ 평단 − 1 · 실현수익 = 수익 합 · 실현수익률 = 실현수익 ÷ 원금. 묶은 줄은 기간 합계(개수·매수액·수익)와 기간 끝 값.
-        평단·직전 평단 = 메리츠 매입평균가(이동평균, 매도해도 그대로) — 메리츠 잔고에서 체결 기록으로 따라감 (작업 ㉚).</div></details>${costBox}`;
+        평단·직전 평단 = 메리츠 매입평균가(이동평균, 매도해도 그대로) — 메리츠 잔고에서 체결 기록으로 따라감 (작업 ㉚).
+        ${chk ? `<br>메리츠 체결과 주문표가 다른 날(누적개수 또는 매수·매도 개수)은 두 줄 — '메리츠' 줄(메리츠 체결·잔고·평단·실현)과 '주문표' 줄(그날 주문표 보유·평단·잔금·T, 매수·매도개수 = 전날 주문표 보유와의 차이) — 다른 칸은 색, 아래에 원인 한 줄. 같은 날은 한 줄. 묶은 줄은 메리츠 기준 합계.` : ""}</div></details>${costBox}`;
 }
 // VR 매매 표 (사용자 11/04, 엑셀 양식): 2주 주기마다 한 줄 — 마지막 종가·G·평가금·V·최소·최대·거래액·Pool·투자원금·계좌총액·수익률·개수·원금·평단
 const VRCOLS = ["주차", "마지막 종가", "G", "평가금 E", "V", "최소", "최대", "거래액", "시작 Pool", "마지막 Pool", "투자원금", "계좌총액", "수익률", "수익금", "개수", "매수원금", "평단"];
@@ -2624,7 +2645,7 @@ function viewTrades(s) {
       <span class="chip">${kind === "mock" ? "가투" : "메리츠"}</span></div>
       ${e.vr ? vrTable(g, (e.vr || {})[kind] || [], kind) : ""}
       ${e.vr ? `<details style="margin-top:8px"><summary class="small muted">날짜별 체결 보기</summary>` : ""}
-      ${book ? bookTable(g, e, book, lastWeek, recent) : rows.length ? `<div class="scroll ttable"><table><thead><tr>${TCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
+      ${book ? bookTable(g, e, book, lastWeek, recent, kind === "real" ? e.check : null) : rows.length ? `<div class="scroll ttable"><table><thead><tr>${TCOLS.map((c, i) => `<th class="${i ? "n" : ""}">${c}</th>`).join("")}</tr></thead>
         <tbody>${total}${body}</tbody></table></div>` : `<div class="empty">${kind === "real" ? "메리츠" : "가투"} 체결 기록이 아직 없습니다.</div>`}
       ${e.vr ? `</details>` : ""}
       ${e.vr ? "" : book ? `<div class="small muted" style="margin-top:8px">미국 장 날짜 기준 · 날짜 칸은 고정, 표는 옆으로 밀어 봅니다.
