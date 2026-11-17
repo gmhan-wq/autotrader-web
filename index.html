@@ -567,7 +567,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-16c";
+const APP_VERSION = "2026-11-17a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1061,12 +1061,16 @@ function realOrders(s, d, g, acc) {
           return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk,
             auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
             note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
-              + (row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
-            admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
+              + (l.auto_wait ? ` <span class="chip ok" title="auto 가 켜져 있어 해당 장 시간·시세 조건이 되면 노트북이 자동으로 넣습니다">${esc(l.auto_wait)}</span>` : row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
+            admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done && !l.auto_wait) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
         const later = (l) => l.later || l.near || l.catchup;
         const now = show.filter((l) => !later(l)), after = show.filter(later), day = "d:" + r.trade_date;
-        const tsTxt = ts && ts.state !== "none" ? (ts.state === "unknown" ? "메리츠 주문내역 확인 안 됨" : ts.state === "done" ? `메리츠에 모두 들어감 (${ts.placed}줄)` : `메리츠 확인: 넣음 ${ts.placed} / 남음 ${ts.left}`) : "";
+        const tsTxt = ts && ts.state !== "none" ? (ts.state === "unknown" ? "메리츠 주문내역 확인 안 됨"
+          : ts.state === "done" ? `메리츠에 모두 들어감 (${ts.placed}줄)`
+          : ts.auto_left && ts.auto_left === ts.left ? (ts.later_left === ts.left ? `메리츠 확인: 지금 걸 줄 완료 (${ts.placed}줄) · 하락 대비 ${ts.left}줄 시세 감시 대기 (auto)` : `메리츠 확인: 넣음 ${ts.placed} / auto 대기 ${ts.left}줄 (장 시간·조건 되면 자동 발주)`)
+          : ts.later_left && ts.later_left === ts.left ? `메리츠 확인: 지금 걸 줄 완료 (${ts.placed}줄) · 마감 전 확인 ${ts.left}줄 남음`
+          : `메리츠 확인: 넣음 ${ts.placed} / 남음 ${ts.left}`) : "";
         return (tsTxt ? `<div class="small muted">${esc(tsTxt)}</div>` : "")
           + `<div class="ogroup"><h3>① 지금 걸 줄 <span class="small muted">${now.length}줄</span></h3>${now.length ? oTable(now.map((l) => item(l, false)), adm, day) : '<div class="empty">지금 걸 줄이 없습니다.</div>'}</div>`
           + (after.length || hide.length ? `<div class="ogroup later"><h3>② 마감 전 확인 · 보충 (별도) <span class="small muted">${after.length}줄</span></h3>
@@ -1286,12 +1290,24 @@ function tonightKpi(d, tonight) {
     return ["오늘 밤 주문", rc !== null ? rc + "건" : tonight.length + "건", rc !== null ? "메리츠에 넣을 주문" : "가상(모의) 주문 기준", ""];
   }
   const T = t.total, n = (x) => Number(x || 0).toLocaleString("en-US");
+  const stText = (x) => {
+    if (x.state === "unknown") return "확인 안 됨";
+    if (x.state === "done") return "완료";
+    if (x.auto_left && x.auto_left === x.left) return x.later_left === x.left ? `감시대기 ${n(x.left)}` : `auto대기 ${n(x.left)}`;
+    if (x.later_left && x.later_left === x.left) return `마감전확인 ${n(x.left)}`;
+    return "남음 " + n(x.left);
+  };
   const per = Object.values(t.accounts || {}).flatMap((a) => a.strategies || []).filter((x) => x.state !== "none").map((x) =>
-    `${x.name || x.sid} ${x.state === "unknown" ? "확인 안 됨" : x.state === "done" ? "완료" : "남음 " + n(x.left)}`).join(" · ");
+    `${x.name || x.sid} ${stText(x)}`).join(" · ");
   if (T.state === "unknown" && T.placed == null) return ["오늘 밤 주문", "확인 안 됨", "메리츠 주문내역 조회 실패 — 잠시 뒤 다시", "warnc"];
   if (T.state === "none") return ["오늘 밤 주문", "없음", "오늘 밤 넣을 주문이 없습니다", ""];
   if (T.state === "done") return ["오늘 밤 주문", "완료", `${n(T.placed)}줄 모두 메리츠에 들어감${per ? " · " + per : ""}`, ""];
-  return ["오늘 밤 주문", `넣음 ${n(T.placed)} / 남음 ${n(T.left)}`, (per || "메리츠에 넣을 주문") + (T.unknown ? " · 일부 확인 안 됨" : ""), T.left ? "warnc" : ""];
+  const allAutoWait = T.left > 0 && T.auto_left === T.left;
+  const allLaterWait = T.left > 0 && T.later_left === T.left;
+  const headline = allAutoWait ? `넣음 ${n(T.placed)} / auto대기 ${n(T.left)}`
+    : allLaterWait ? `넣음 ${n(T.placed)} / 마감전확인 ${n(T.left)}`
+    : `넣음 ${n(T.placed)} / 남음 ${n(T.left)}`;
+  return ["오늘 밤 주문", headline, (per || "메리츠에 넣을 주문") + (T.unknown ? " · 일부 확인 안 됨" : ""), (T.left && !allAutoWait && !allLaterWait) ? "warnc" : ""];
 }
 function realCount(d) {
   const r = d.real_orders; if (!r || !Object.keys(r).length) return null;
@@ -1483,12 +1499,12 @@ function autoWindowCards() {
              : has("on") ? `<button class="btn" data-ao-on="${esc(g.id)}">${op ? "ON 확인" : "ON 요청"}</button>` : phone || on ? "" : `<span class="small muted">기간·장을 먼저 정해야 켤 수 있습니다</span>`}
         ${on && !s.auto_live ? `<span class="chip warn">노트북 잠금 꺼짐 — 주문 안 나감</span>` : ""}</div>
       ${op ? `<div class="small" style="margin-top:4px">⏳ ON 요청 ${esc(op.asked_by || "")} · 계좌 주인 ${op.owner ? "✅ " + esc(op.owner.by) : "기다림"} · 관리자 ${op.admin ? "✅ " + esc(op.admin.by) : "기다림"}</div>` : ""}`;
-    // 폰: 누가 언제 켰는지 + 오늘 낸 auto 주문 (보기만)
+    // 누가 언제 켰는지 + 오늘 낸 auto 주문 (폰·PC 모두 표시, 폰 안내 문구만 폰에서)
     const who = on ? autoOnWho(log, g.id) : "", todayAuto = autoToday(log, g.id);
-    const info = phone ? `<div class="small" style="margin-top:6px">${on ? `켠 사람·때: ${esc(who || "기록 없음")}${g.auto_on_at ? " · " + esc(String(g.auto_on_at).slice(5, 16).replace("T", " ")) : ""}` : "꺼짐"}</div>
+    const info = (phone || on || todayAuto.length) ? `<div class="small" style="margin-top:6px">${on ? `켠 사람·때: ${esc(who || "기록 없음")}${g.auto_on_at ? " · " + esc(String(g.auto_on_at).slice(5, 16).replace("T", " ")) : ""}` : "꺼짐"}</div>
       <div class="small" style="margin-top:4px">오늘 낸 auto 주문 (오전 7시 이후): ${todayAuto.length ? todayAuto.map((r) => { const ev = OH_EV[r.event] || [r.event, ""];
         return `<div>${esc(String(r.at || "").slice(11, 16))} ${esc(r.symbol || "")} <span class="${sideCls(r.side)}">${sideKo(r.side)}</span> ${r.price != null && r.price !== "종가" ? money(r.price) : r.kind === "MARKET" ? "시장가" : "종가"} × ${esc(String(r.qty ?? ""))} · <span class="res ${ev[1]}">${esc(ev[0])}</span></div>`; }).join("") : "없음"}</div>
-      <div class="small muted" style="margin-top:4px">📱 폰에서는 끄기·보기만 — ON·기간·장 바꾸기는 PC 에서</div>` : "";
+      ${phone ? `<div class="small muted" style="margin-top:4px">📱 폰에서는 끄기·보기만 — ON·기간·장 바꾸기는 PC 에서</div>` : ""}` : "";
     const tools = (has("edit") || has("end")) ? `<div class="row" style="margin-top:6px;gap:6px">${has("edit") ? `<button class="btn" data-aw-edit="${esc(g.id)}">기간·장 바꾸기</button>` : ""}${has("end") ? `<button class="btn" data-aw-off="${esc(g.id)}">auto 끝내기</button>` : ""}</div>` : "";
     return `<div class="card"><div class="row between"><b>${esc(stratName(g))} · ${esc(g.symbol || "")} · ${esc(ACC_NAME[aid] || aid)}</b>
         <span class="chip ${w ? "ok" : ""}">${w ? "auto 범위 있음" : "manual 만"}</span></div>
@@ -1518,8 +1534,14 @@ function bindAutoWindow() {
 function viewAuto() {
   const s = S.snap ? S.snap.summary : {};
   const conf = !!s.confirm_orders;
+  const autoCount = allStrategies(s).filter((g) => g.auto_on).length;
+  const desc = s.auto_live && autoCount > 0
+    ? `현재 <b>${autoCount}개 전략</b>에서 <b>auto 자동 주문</b>이 작동 중입니다 — 아래 설정된 기간·장 시간에 노트북이 직접 메리츠에 주문하며, 하락 대비 줄('마감 전 확인')도 시세가 근접하면 자동으로 넣습니다.`
+    : s.auto_live
+    ? `노트북 <b>auto 잠금</b>이 풀려 있습니다 — 아래에서 전략별 기간·장을 정하고 <b>auto ON</b>을 켜면 그 범위 안에서 노트북이 직접 주문합니다.`
+    : `지금은 <b>manual</b> 단계입니다 — 매일 18:00 프리장이 열리면 텔레그램으로 오늘 밤 주문을 알리고, 관리자가 'manual'에서 골라 넣습니다.`;
   return `<div class="card"><div class="row between"><h2>auto</h2><span class="chip ${s.auto_live ? "ok" : ""}">${s.auto_live ? "켜짐" : "꺼짐"}</span></div>
-      <div class="small">지금은 <b>manual</b> 단계입니다 — 매일 18:00 프리장이 열리면 텔레그램으로 오늘 밤 주문을 알리고, 관리자가 'manual'에서 골라 넣습니다.</div>
+      <div class="small">${desc}</div>
       <div class="small" style="margin-top:6px">manual: <span class="chip ${conf ? "ok" : ""}">${conf ? "노트북에서 켜짐" : "노트북에서 아직 안 켜짐 (.env CONFIRM_ORDERS=YES)"}</span></div></div>
     <h2 style="margin:12px 4px 6px">전략별 auto 기간·장 <span class="chip">ADR 0058</span></h2>
     <div class="small muted" style="margin:0 4px 6px">auto 가 켜져도 노트북은 <b>기간 안 + 고른 장 + 그 장에서 받는 주문 방법</b>일 때만 직접 넣습니다. 그 밖은 manual. 바꾸면 기록과 텔레그램에 누가·언제·무엇을 남깁니다.</div>
