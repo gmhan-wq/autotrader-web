@@ -567,7 +567,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-17a";
+const APP_VERSION = "2026-11-17b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1431,7 +1431,7 @@ function mockDefaults(g, plan) {
   if (!kv.length) return "";
   return `<div class="kv2 mockdef" aria-label="기본 설정">${kv.map(([k, v]) => `<span class="muted">${k}</span><span class="num">${v}</span>`).join("")}</div>`;
 }
-// ── auto (11/07): 지금은 꺼져 있음. 켜는 조건과 켜지면 하는 일 ──
+// ── auto (11/07 → 작업 ㊻ 11/17): 지금 상태·전략별 기간·장·켜는 조건 ──
 // 작업 ㉟ (11/14, 검토 대장 R-14, ADR 0059 보충): 화면 폭 768px 미만 = '폰' → auto 는 끄기·보기만.
 // [ON]·기간·장 바꾸기는 PC 에서. 웹 화면 제한일 뿐 보안 장치가 아님 (실주문은 주인+관리자 ON + 노트북 두 겹 잠금 그대로).
 const AUTO_PHONE_MAX = 768;
@@ -1531,17 +1531,37 @@ function bindAutoWindow() {
   document.querySelectorAll("[data-aw-off]").forEach((b) => b.onclick = () => send("set_strategy", { id: b.dataset.awOff, auto_window: null }));
   document.querySelectorAll("[data-aw-ok]").forEach((b) => b.onclick = () => send("set_strategy", { id: b.dataset.awOk, auto_window: JSON.parse(b.dataset.awVal) }));
 }
+// 작업 ㊻ A (11/17, R-24): auto 카드 맨 위 글 = 지금 상태 그대로. list = [{name, auto_on, w: auto_window}], ko = 장 이름
+function autoHead(live, list, ko) {
+  const md = (x) => String(x || "").slice(5).replace("-", "/");
+  const on = (list || []).filter((g) => g.auto_on);
+  const parts = on.map((g) => {
+    const w = g.w || null, ss = ((w && w.sessions) || []).map((x) => (ko || {})[x] || x).join("·");
+    return `${g.name}(${ss || "장 없음"}, ${w ? md(w.start) + "~" + (w.end ? md(w.end) : "") : "기간 없음"})`;
+  });
+  if (!live) return { chip: "잠금 닫힘", cls: "warn", text: "노트북 실주문 잠금 닫힘 — 주문 안 나감"
+    + (on.length ? ` (웹에서 auto 켠 전략 ${on.length}개: ${parts.join(" · ")})` : " — 18:00 알림 뒤 manual 로") };
+  if (!on.length) return { chip: "켠 전략 없음", cls: "", text: "auto 켠 전략 없음 — 18:00 알림 뒤 manual 로" };
+  return { chip: `켜짐 ${on.length}개`, cls: "ok", text: "auto 켜짐 — " + parts.join(" · ") };
+}
+// 작업 ㊻ B (ADR 0022·0059): '켜는 조건' 카드 — ①② 채운 날짜, ③ = 주인 결정 → 노트북 잠금 한 번 풀기 → 웹에서 전략마다 ON
+const AUTO_READY = [
+  ["① manual '시험 주문'(SOXL 1주 −25% LOC)이 메리츠에 정상 접수", "✅ 11/10 (S01 프리장 접수)"],
+  ["② manual 로 매수일·매도일 각 한 번 이상 정상 체결 (VR 은 예약 매수 또는 매도 1번)", "✅ 11/13 (8Buy·VR) · PH01 은 리버스라 매도 체결로 갈음 11/14"],
+  ["③ 계좌 주인 결정 → 노트북 실주문 잠금 한 번 풀기 (.env, 사용자가 노트북에서) → 웹에서 전략마다 auto ON (주인 + 관리자 둘 다 확인, 기간·장 안에서만)", ""]];
+function autoReady(live, onCount) {
+  const st3 = `${live ? "✅ 노트북 잠금 풀림" : "노트북 잠금 닫힘"} · 지금 auto 켜진 전략 ${Number(onCount) || 0}개`;
+  return AUTO_READY.map(([t, done], i) => [t, i === 2 ? st3 : done, i === 2 ? !!live : true]);
+}
 function viewAuto() {
   const s = S.snap ? S.snap.summary : {};
   const conf = !!s.confirm_orders;
-  const autoCount = allStrategies(s).filter((g) => g.auto_on).length;
-  const desc = s.auto_live && autoCount > 0
-    ? `현재 <b>${autoCount}개 전략</b>에서 <b>auto 자동 주문</b>이 작동 중입니다 — 아래 설정된 기간·장 시간에 노트북이 직접 메리츠에 주문하며, 하락 대비 줄('마감 전 확인')도 시세가 근접하면 자동으로 넣습니다.`
-    : s.auto_live
-    ? `노트북 <b>auto 잠금</b>이 풀려 있습니다 — 아래에서 전략별 기간·장을 정하고 <b>auto ON</b>을 켜면 그 범위 안에서 노트북이 직접 주문합니다.`
-    : `지금은 <b>manual</b> 단계입니다 — 매일 18:00 프리장이 열리면 텔레그램으로 오늘 밤 주문을 알리고, 관리자가 'manual'에서 골라 넣습니다.`;
-  return `<div class="card"><div class="row between"><h2>auto</h2><span class="chip ${s.auto_live ? "ok" : ""}">${s.auto_live ? "켜짐" : "꺼짐"}</span></div>
-      <div class="small">${desc}</div>
+  const list = allStrategies(s).map((g) => ({ name: stratName(g, (s.plans || {})[g.id]), auto_on: !!g.auto_on, w: g.auto_window }));
+  const head = autoHead(!!s.auto_live, list, SESS_RULES.session_ko);
+  const onCount = list.filter((g) => g.auto_on).length;
+  return `<div class="card"><div class="row between"><h2>auto</h2><span class="chip ${head.cls}">${esc(head.chip)}</span></div>
+      <div class="small"><b>${esc(head.text)}</b></div>
+      <div class="small muted" style="margin-top:4px">auto 는 전략마다 정한 기간·장 안에서만 노트북이 직접 메리츠에 넣습니다. 그 밖의 줄은 18:00 프리장 알림 뒤 manual 에서 골라 넣습니다.</div>
       <div class="small" style="margin-top:6px">manual: <span class="chip ${conf ? "ok" : ""}">${conf ? "노트북에서 켜짐" : "노트북에서 아직 안 켜짐 (.env CONFIRM_ORDERS=YES)"}</span></div></div>
     <h2 style="margin:12px 4px 6px">전략별 auto 기간·장 <span class="chip">ADR 0058</span></h2>
     <div class="small muted" style="margin:0 4px 6px">auto 가 켜져도 노트북은 <b>기간 안 + 고른 장 + 그 장에서 받는 주문 방법</b>일 때만 직접 넣습니다. 그 밖은 manual. 바꾸면 기록과 텔레그램에 누가·언제·무엇을 남깁니다.</div>
@@ -1550,11 +1570,10 @@ function viewAuto() {
       <div class="small">· 위에서 정한 기간·장 안에서만 노트북이 오늘 밤 주문(계산 주문표·VR)을 메리츠에 직접 넣습니다.<br>
         · 마감 전 '근처' 하락 대비 줄도 조건이 되면 넣고, 체결·거부는 지금처럼 알립니다.<br>
         · 전략별 auto OFF 는 계좌 주인 또는 관리자가 바로, ON 은 둘 다 확인 (ADR 0059). 노트북 잠금이 꺼져 있으면 ON 이어도 주문이 나가지 않습니다.</div></div>
-    <div class="card"><h2>켜는 조건 <span class="chip ok">채택 · 11/07</span></h2>
-      <div class="small">① manual '시험 주문'(SOXL 1주 −25% LOC)이 메리츠에 정상 접수<br>
-        ② manual 로 매수일·매도일 각 한 번 이상 정상 체결<br>
-        ③ 계좌 주인이 결정 → 관리자가 노트북 .env 에서 켬 (웹에서는 켤 수 없음)</div>
-      <div class="small muted" style="margin-top:6px">예전 조건 '5거래일 메리츠 = 가투'는 11/07 사용자 결정으로 없앴습니다 (모의는 분석용).</div></div>`;
+    <div class="card"><h2>켜는 조건 <span class="chip ok">ADR 0022 · 0059</span></h2>
+      <div class="small">${autoReady(!!s.auto_live, onCount).map(([t, st, ok]) => `<div style="margin-top:4px">${esc(t)}${st ? ` <span class="chip ${ok ? "ok" : ""}">${esc(st)}</span>` : ""}</div>`).join("")}</div>
+      <div class="small muted" style="margin-top:6px">노트북 잠금은 한 번 풀면 그대로 — 전략마다 켜고 끄는 것은 웹에서 (끄기는 주인 또는 관리자 바로). 웹은 노트북 잠금을 풀 수 없습니다.
+        예전 조건 '5거래일 메리츠 = 가투'는 11/07 사용자 결정으로 없앴습니다 (모의는 분석용).</div></div>`;
 }
 // 작업 ㉒: PH01 은 '무한매수 N분할 주문표'가 아니라 'PH01' (전략 칸 display_kind·운용 장 가족·종류로 알아봄)
 const isPh01 = (g) => !!g && (String(g.display_kind || "").toUpperCase() === "PH01" || g.sessions_family === "ph01" || g.kind === "ph01");
@@ -1645,6 +1664,19 @@ function equityChart(rows) {
     ${lines}</svg>
     <div class="small">${on.map(([, l, f]) => `${esc(l)} <b class="num">${ok(f(lastRow)) ? "$" + money(f(lastRow)) : "-"}</b>`).join(" · ")}</div>`;
 }
+// 작업 ㊻ C (11/17, R-24): 1회매수시도 B — 주문표에 값이 없으면(PH01 등) 노트북 publish.sheet_unit 과 같은 식으로 계산해 '(계산)' 표시.
+// x = {unit, unit_calc, mode, rdays, cash, splits, T}. 돌려줌 [값|null, 계산 설명('' = 주문표 값)]. 표시만 (주문 계산 그대로).
+function unitView(x) {
+  x = x || {};
+  if (x.unit != null && x.unit !== "") return [Number(x.unit), x.unit_calc || ""];
+  if (x.cash == null || x.cash === "") return [null, ""];
+  const c = Number(x.cash), r2 = (v) => Math.round(v * 100) / 100;
+  if (x.mode === "reverse") return Number(x.rdays || 0) === 0 ? [0, "리버스 1일째 — 매수 없음"] : [r2(c / 4), "리버스 쿼터매수 = 잔금 ÷ 4"];
+  const N = Number(x.splits || 0), T = Number(x.T || 0);
+  if (!(N > 0) || N - T <= 0) return [null, ""];
+  return [r2(c / (N - T)), "잔금 ÷ (분할수 − T)"];
+}
+const unitCalcTag = (note) => note ? ` <small class="muted" title="${esc(note)}">(계산)</small>` : "";
 function viewStrategy(s, d, sid) {
   const g = allStrategies(s, true).find((x) => x.id === sid);
   if (!g) { S.detail = null; return viewHome({ summary: s, detail: d }, true); }
@@ -1652,7 +1684,8 @@ function viewStrategy(s, d, sid) {
   let out = `<div class="row"><button class="btn" data-back-home="1">← 현황</button>
     <span class="sym num">${esc(g.symbol)}</span><h2>${esc(stratName(g, plan))}</h2><span class="chip ${g.active ? "ok" : ""}">${g.active ? (g.mock_only ? "켜짐 · 가투 전용" : "켜짐") : "꺼짐"}</span></div>`;
   if (plan) {
-    const facts = [["1회매수시도 B", money(plan.unit), "잔금 ÷ (분할수 − T)"], ["현재 회차 T", plan.T, `${Number(plan.splits)}분할 · ${plan.phase}`],
+    const [bU, bNote] = unitView(plan);
+    const facts = [["1회매수시도 B", bU == null ? "-" : money(bU) + unitCalcTag(bNote), esc(bNote || "잔금 ÷ (분할수 − T)")], ["현재 회차 T", plan.T, `${Number(plan.splits)}분할 · ${plan.phase}`],
       ["★%", (Number(plan.star_pct) > 0 ? "+" : "") + plan.star_pct + "%", `목표 ${Number(plan.target_pct)}% × (1 − 2T/분할수)`], ["★지점", money(plan.star_price), "평단 × (1 + ★%)"],
       ["평단", money(plan.avg), `보유 ${plan.holding}주 (주문표)`], ["목표가", money(plan.target_price), `평단 × ${1 + Number(plan.target_pct) / 100}`],
       ["직전 종가", money(plan.close), `종가날짜 ${esc(plan.sheet_date)}`]];
@@ -2488,7 +2521,7 @@ function bCells(a, label, cls) {
     <td class="n">${am(a[3])}</td><td class="n">${pl(a[4])}</td><td class="n">${a[5] === null || a[5] === undefined ? '<span class="muted">-</span>' : pl(a[5]) + "%"}</td>
     <td class="n">${a[6] ? money(a[6]) : "-"}</td><td class="n">${a[7] ? money(a[7]) : "-"}</td>
     <td class="n">${qn(a[8], "buy")}</td><td class="n">${qn(a[9], "sell")}</td><td class="n"><b>${Number(a[10] || 0).toLocaleString()}</b></td>
-    <td class="n">${pl(a[11])}</td><td class="n">${am(a[12])}</td><td class="n">${am(a[13])}</td>
+    <td class="n">${pl(a[11])}</td><td class="n">${am(a[12])}</td><td class="n">${am(a[13])}${a[27] ? unitCalcTag("주문표에 값이 없어 계산 (리버스 = 잔금 ÷ 4, 그 밖 = 잔금 ÷ (분할수 − T))") : ""}</td>
     <td class="n">${sg(a[14])}</td><td class="n">${am(a[15])}</td><td class="n">${am(a[16])}</td>
     <td class="n">${sg(a[17])}</td><td class="n">${sg(a[18])}</td><td class="n">${pc(a[19])}</td><td class="n">${sg(a[20])}</td><td class="n">${pc(a[21])}</td></tr>`;
 }
@@ -2529,7 +2562,7 @@ function bookTable(g, e, book, lastWeek, recent) {
         : `<div class="small muted">이 기간에 기록된 수수료가 없습니다.</div>`}
       <div class="small muted" style="margin-top:6px;line-height:1.6">모드 = 그날 장 끝 뒤 주문표(전반전·후반전·소진·리버스) · 원금 = 전략을 추가할 때 정한 투자금(없으면 -) ·
         평단 = 누적 매수액 ÷ 누적개수 · 매수액 = 매수 체결금액, 매도한 날은 −(매도수량 × 직전 평단) · 누적 매수액 = 남은 매입 원가 ·
-        T·★%가격·1회 매수시도액·잔금 = 그날 시스템 값 · 수익 = 매도한 날만 (매도가 − 직전 평단) × 매도수량 · 누적수익 = 수익 합 − 수수료 합 ·
+        T·★%가격·1회 매수시도액·잔금 = 그날 시스템 값 (1회 매수시도액이 주문표에 없으면 '(계산)' — 리버스 1일째 0 · 리버스 잔금 ÷ 4 · 그 밖 잔금 ÷ (분할수 − T)) · 수익 = 매도한 날만 (매도가 − 직전 평단) × 매도수량 · 누적수익 = 수익 합 − 수수료 합 ·
         보유수익률 = 종가 ÷ 평단 − 1 · 실현수익 = 수익 합 · 실현수익률 = 실현수익 ÷ 원금. 묶은 줄은 기간 합계(개수·매수액·수익)와 기간 끝 값.
         평단·직전 평단 = 메리츠 매입평균가(이동평균, 매도해도 그대로) — 메리츠 잔고에서 체결 기록으로 따라감 (작업 ㉚).</div></details>${costBox}`;
 }
@@ -2698,7 +2731,8 @@ function calSheetCard(td, x) {
   const [st, stCls, stNote] = calStatus(x), N = Number(x.splits || 0), T = Number(x.T || 0);
   const key = `${td}|${x.sid}`, open = (S.calOpen || {})[key];
   const starPx = x.star ? Number(x.star) : (x.mode !== "reverse" && N && x.avg && x.target_pct ? Number(x.avg) * (1 + Number(x.target_pct) * (1 - 2 * T / N) / 100) : null);
-  const facts = [["T", x.T ?? "-"], ["1회매수", x.unit != null ? "$" + money(x.unit) : "-"], ["종가 (" + esc(String(x.sheet_date || "").slice(5).replace("-", "/")) + ")", money(x.close)],
+  const [xU, xNote] = unitView(x);
+  const facts = [["T", x.T ?? "-"], ["1회매수", xU != null ? "$" + money(xU) + unitCalcTag(xNote) : "-"], ["종가 (" + esc(String(x.sheet_date || "").slice(5).replace("-", "/")) + ")", money(x.close)],
     ["별지점", starPx ? money(starPx) : "-"], ["분할 · 목표", `${x.splits ?? "-"} · ${x.target_pct != null ? x.target_pct + "%" : "-"}`], ["주문표", x.source === "calc" ? "계산" : x.source === "ocr" ? "사진" : esc(x.source || "-")]];
   const gx = allStrategies((S.snap || {}).summary || {}).find((y) => y.id === x.sid);
   return `<section class="card"><div class="row between"><h2><span class="sym num">${esc(x.symbol)}</span> ${esc(gx ? stratName(gx, (((S.snap || {}).summary || {}).plans || {})[x.sid]) : sidName(x.sid))} · ${esc(ACC_NAME[x.account] || x.account)}</h2>
