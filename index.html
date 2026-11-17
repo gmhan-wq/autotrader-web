@@ -569,7 +569,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-17c";
+const APP_VERSION = "2026-11-17d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1239,6 +1239,14 @@ function todayCard(s, d, strat) {
   return `<section class="card today" aria-label="오늘 할 일"><h2>오늘 할 일</h2>${items.map(([tab, text, cls]) =>
     `<button class="todo ${cls}" data-tab="${tab}"><span>${esc(text)}</span><span aria-hidden="true">›</span></button>`).join("")}</section>`;
 }
+// 작업 ㊽: 종가 날짜 'M/D' — { by: {종목: "11/16"}, one: 모든 종목이 같은 날이면 그 날짜 }
+function closeDays(s, syms) {
+  const cd = s.close_dates || {}, by = {};
+  for (const sym of syms) { const iso = cd[sym]; if (iso && /^\d{4}-\d{2}-\d{2}/.test(iso)) by[sym] = Number(iso.slice(5, 7)) + "/" + Number(iso.slice(8, 10)); }
+  const vals = syms.map((k) => by[k]);
+  const one = vals.length && vals.every((v) => v && v === vals[0]) ? vals[0] : "";
+  return { by, one };
+}
 function marketStrip(s) {
   const m = s.market;
   // 실시간: 보고 있는 동안 관리자 노트북이 5초마다 올리는 시세가 현황(스냅숏)보다 새로우면 그것을 쓴다
@@ -1248,16 +1256,19 @@ function marketStrip(s) {
   const hm = (iso) => iso ? iso.slice(11, 16) : "";
   const phase = m ? `<span class="chip phase-${esc(m.code)}">${esc(m.label)}${m.until ? " ~" + hm(m.until) : ""}</span>
     ${m.next_label ? `<span class="small muted">다음 ${esc(m.next_label)} ${m.next_at && m.next_at.slice(0, 10) !== new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? m.next_at.slice(5, 10).replace("-", "/") + " " : ""}${hm(m.next_at)}</span>` : ""}` : "";
+  // 작업 ㊽: 기준 = 가장 최근 끝난 정규장 종가, 그 날짜를 같이 보인다 (종목마다 날짜가 다르면 종목 옆에)
+  const cdays = closeDays(s, Object.keys(q)), oneDay = cdays.one;
   const items = Object.entries(q).map(([sym, v]) => {
     const prev = Number((s.closes || {})[sym]), px = Number(v.price), ch = prev ? (px / prev - 1) * 100 : null;
     const dir = S.livePrev && S.livePrev[sym] !== undefined && Number(S.livePrev[sym]) !== px ? (px > Number(S.livePrev[sym]) ? "up" : "down") : "";
-    return `<span class="q"><span class="sym num">${esc(sym)}</span><b class="${dir ? "flash-" + dir : ""}">${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%</span>` : ""}</span>`; }).join("");
+    const dd = cdays.by[sym], tip = prev ? ` title="${esc((dd ? dd + " " : "") + "종가 " + money(prev) + " 대비")}"` : "";
+    return `<span class="q"${tip}><span class="sym num">${esc(sym)}</span><b class="${dir ? "flash-" + dir : ""}">${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%${!oneDay && dd ? `<span class="muted"> (${esc(dd)})</span>` : ""}</span>` : ""}</span>`; }).join("");
   const at = Object.values(q)[0];
   const hms = (iso) => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "Asia/Seoul" }); };
   // 주간거래·프리장인데 값이 직전 종가 그대로면 메리츠가 그 시간 시세를 주지 않는 것 (11/02 확인) — 멈춘 게 아님을 알린다
   const flat = m && (m.code === "day" || m.code === "pre") && Object.entries(q).length &&
     Object.entries(q).every(([sym, v]) => Number((s.closes || {})[sym]) === Number(v.price));
-  return `<section class="card mkt" id="mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">${liveNew ? `<span class="live-dot"></span>실시간 ${hms(at.at)}` : `메리츠 시세 ${hm(at.at)}`} · 직전 종가 대비</span>` : ""}
+  return `<section class="card mkt" id="mkt" aria-label="현재가와 장 구분">${phase}${items}${at ? `<span class="small muted grow" style="text-align:right">${liveNew ? `<span class="live-dot"></span>실시간 ${hms(at.at)}` : `메리츠 시세 ${hm(at.at)}`} · 직전 종가 대비${oneDay ? ` (${esc(oneDay)} 종가)` : ""}</span>` : ""}
     ${flat ? `<span class="small" style="color:var(--warn);flex-basis:100%">${esc(m.label)} 시간에는 메리츠 시세가 직전 종가 그대로입니다 (실시간 값 확인 중)</span>` : ""}</section>`;
 }
 function phoneBlocks(s, d, B) {
