@@ -595,7 +595,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-18d";
+const APP_VERSION = "2026-11-18e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1088,7 +1088,7 @@ function realOrders(s, d, g, acc) {
         const item = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
           return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk,
             auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
-            note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.catchup_add ? `<span class="chip warn" title="메리츠 보유가 계산보다 적어 이 LOC 매수 줄에 부족분을 더함 (작업 ㊾)">부족분 ${l.catchup_add}주 포함</span>` : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
+            note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.catchup_add ? `<span class="chip warn" title="메리츠 보유가 계산보다 적어 이 LOC 매수 줄에 부족분을 더함 (작업 ㊾)">부족분 ${l.catchup_add}주 포함</span>` : l.market_skip ? `<span class="chip" title="${esc(l.market_skip)}">시장가 안 냄</span>` : l.market_wait ? `<span class="chip" title="${esc(l.market_wait)}">마감 1분 전 · 조건 ${money(l.cond_price)}</span>` : l.method_note ? `<span class="chip warn">${esc(l.method_note)}</span>` : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
               + (l.auto_wait ? ` <span class="chip ok" title="auto 가 켜져 있어 해당 장 시간·시세 조건이 되면 노트북이 자동으로 넣습니다">${esc(l.auto_wait)}</span>` : row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
             admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done && !l.auto_wait) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
@@ -2082,6 +2082,15 @@ function cmdList(cat) {
 
 // 작업 ㊿ (ADR 0066): 8Buy 새로 시작 방법 — V4.0(지금 방법) · V3.0(2025 강의) · V2.2. 가투·실계좌는 메뉴로 정함 (㊿ 보충)
 const BUY_METHODS = [["V4.0", "지금 방법"], ["V3.0", "2025 강의 · 반복리"], ["V2.2", "40분할 · 단리 · 쿼터손절"]];
+// 작업 51 (ADR 0067): 8Buy 주문 방법 — 주 매수 줄·별% LOC 매도 줄에만 (사다리·첫 매수 큰수·목표% 지정가·MOC 그대로)
+const ORDER_METHODS = [["LOC", "LOC (기본)", "장 마감 지정가 — 지금 그대로"],
+  ["TWAP", "TWAP", "가격 지정 Limit TWAP · 메리츠 예약(본장 1시간 전까지, 넘기면 그날 LOC)"],
+  ["MARKET", "시장가", "정규장 마감 1분 전, 현재가가 별지점 아래(매수)·이상(매도)일 때만"]];
+function orderMethodSelect(id, cur, hour) {
+  return `<label>주문 방법 (주 매수·별% 매도 줄)<select id="${id}">${ORDER_METHODS.map(([k, t, sub]) => `<option value="${k}" ${k === (cur || "LOC") ? "selected" : ""}>${t} — ${sub}</option>`).join("")}</select></label>
+    <label>TWAP 시간<select id="${id}-hour"><option value="close_10m" ${hour !== "close_30m" ? "selected" : ""}>장 종료 10분 전 (기본)</option><option value="close_30m" ${hour === "close_30m" ? "selected" : ""}>장 종료 30분 전</option></select></label>`;
+}
+const orderMethodText = (m, h) => m === "TWAP" ? `TWAP (${h === "close_30m" ? "장 종료 30분 전" : "장 종료 10분 전"})` : m === "MARKET" ? "시장가 (마감 1분 전)" : "LOC";
 function buyMethodDefaults() {             // 방법·종목에 맞는 분할·목표% 기본값 (원문: V3.0 20분할 SOXL 20·TQQQ 15 / V2.2 40분할 SOXL 12·TQQQ 10)
   const m = S.buyMethod || "V4.0", sym = (document.getElementById("s-symbol") || {}).value || "SOXL";
   const sp = document.getElementById("s-splits"), tg = document.getElementById("s-target");
@@ -2458,6 +2467,8 @@ function changeForm(g, accs) {
         <label>모의 기간 마지막 날<input type="date" id="ch-until" value="${esc(g.params.until || "")}"></label></div>` : ""}` : ""}
     ${(((S.snap || {}).summary || {}).cycle_gates || {})[g.id] && (S.snap.summary.cycle_gates[g.id].real || S.snap.summary.cycle_gates[g.id].mock)
       ? `<label>새 싸이클 규칙 (예: 30분할 · 목표 15% · 1회 매수금 $600)<input type="text" id="ch-cycle" maxlength="200" ${S.cycleNew ? "required" : ""}></label>` : ""}
+    ${g.kind === "sheet" ? `<div class="grid2">${orderMethodSelect("ch-om", g.order_method, g.twap_hour)}</div>
+      <div class="small muted">지금 주문 방법: ${esc(orderMethodText(g.order_method, g.twap_hour))} — 진행 중 전략이라 당사자 모두 동의해야 바뀝니다 (ADR 0037)</div>` : ""}
     <label class="inl"><input type="checkbox" id="ch-sess" ${S.chSess ? "checked" : ""}> 운용 장 · 주문 방법 바꾸기 <span class="small muted">지금: ${esc(sessText(sessOf(g)))}</span></label>
     ${S.chSess && S.sessSel.ch && S.sessSel.ch.sid === g.id ? sessEditor("ch") : ""}
     <label>이유 (왜 바꾸는지 — 당사자에게 보입니다)<textarea id="ch-note" rows="2" maxlength="500" required></textarea></label>
@@ -2509,6 +2520,7 @@ function addStrategy(s) {
           ${kind === "ph01" ? `<label>화면 이름 (바꿀 수 있음)<input type="text" id="s-name" maxlength="40" placeholder="PH01 · 종목 · 계좌 (비우면 자동)"></label>` : ""}
           ${KIND_FIELDS[fk].map(([k, t, type, v]) => `<label>${t}<input type="${type}" id="s-${k}" value="${esc(v)}" ${type === "number" ? 'inputmode="numeric"' : type === "text" ? 'inputmode="decimal"' : ""} ${v === "" ? "required" : ""}></label>`).join("")}
         </div>
+        ${kind === "sheet" ? `<div class="grid2">${orderMethodSelect("s-om", "LOC", "close_10m")}</div>` : ""}
         ${kind === "vr" ? vrModeSection() : ""}
         ${kind === "dynamic" ? dynSection() : ""}
         ${kind === "ph01" ? phSection() : ""}
@@ -3239,6 +3251,10 @@ function bind() {
     const on = document.getElementById("ch-on"); if (on && on.checked) { change.active = true; parts.push("다시 켜기"); }
     const cy = document.getElementById("ch-cycle"); if (cy && cy.value.trim()) { change.cycle_rule = cy.value.trim(); parts.push(`새 싸이클 규칙: ${change.cycle_rule}`); }
     const acc = document.getElementById("ch-acc").value; if (acc && acc !== g.account) { change.account = acc; parts.push(`계좌 → ${ACC_NAME[acc] || acc}`); }
+    const om = document.getElementById("ch-om");                                   // 작업 51: 주문 방법 (합의)
+    if (om) { const m = om.value, h = (document.getElementById("ch-om-hour") || {}).value || "close_10m";
+      if (m !== (g.order_method || "LOC") || (m === "TWAP" && h !== (g.twap_hour || "close_10m"))) {
+        change.order_method = { method: m, hour: h }; parts.push(`주문 방법 → ${orderMethodText(m, h)}`); } }
     if (S.chParams) { const f = dynForm(), ser = (a) => [...a].sort((x, y) => x[0] - y[0]).map(([d, w]) => `${d}:${w}`).join(",");
       change.params = { rules: ser(f.rules), stops: ser(f.stops), tp: String(f.tp), tp_sell: String(f.tpSell),
         checks: document.getElementById("ch-checks").value, until: document.getElementById("ch-until").value };
@@ -3301,6 +3317,7 @@ function bind() {
     for (const [k] of KIND_FIELDS[fk]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
     if (kind === "sheet") p.start = isNew ? "new" : "cont";
     if (isNew) p.method = S.buyMethod || "V4.0";                                // 작업 ㊿: V4.0 · V3.0 · V2.2
+    if (kind === "sheet") { p.order_method = v("s-om") || "LOC"; p.twap_hour = v("s-om-hour") || "close_10m"; }   // 작업 51
     if (kind === "vr") { p.vr_mode = S.vrMode || "accum"; if (p.vr_mode === "hold") p.contribution = "0"; }   // 작업 ㊲ A
     if (kind === "ph01") {
       const f = phForm();
