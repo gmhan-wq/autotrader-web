@@ -375,6 +375,32 @@ button.cp:hover { background: var(--soft) } button.cp:focus-visible { outline: 2
 .articles li { padding: 12px 0; border-top: 1px solid var(--line) }
 @media (min-width: 900px) { body[data-layout="pc"] .articles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
   body[data-layout="pc"] .articles li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--glass-strong) } }
+/* ── VR Progress 진행률 바 & 평가금 진행 상황 차트 ── */
+.vr-viz { padding: 18px 20px; gap: 16px }
+.vr-prog-box { display: flex; flex-direction: column; gap: 6px }
+.vr-prog-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap }
+.vr-prog-title { font-size: 16px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em }
+.vr-prog-weeks { display: inline-flex; align-items: center; gap: 6px; font: 600 13.5px var(--mono); color: var(--ink) }
+.vr-prog-weeks select { width: auto; min-width: 0; padding: 2px 8px; font: 500 12px var(--sans); border-radius: 8px; height: 26px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); cursor: pointer }
+.vr-prog-pcts { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 13px; margin-top: 2px }
+.vr-prog-done { color: #1abc9c; font-weight: 700 }
+.vr-prog-rem { color: #94a3b8; font-weight: 500 }
+.vr-prog-track { width: 100%; height: 14px; border-radius: 999px; background: #e5e7eb; overflow: hidden; position: relative; box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08) }
+:root[data-theme="dark"] .vr-prog-track { background: rgba(148, 163, 184, 0.22) }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vr-prog-track { background: rgba(148, 163, 184, 0.22) } }
+.vr-prog-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #10b981, #1abc9c); transition: width .25s ease }
+.vr-chart-box { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line) }
+.vr-chart-head { display: flex; justify-content: flex-end; align-items: center }
+.vr-chart-title { font-size: 14.5px; font-weight: 700; color: var(--ink) }
+.vr-eval-num { fill: #1e40af; paint-order: stroke; stroke: var(--glass-strong); stroke-width: 4px; stroke-linejoin: round }
+:root[data-theme="dark"] .vr-eval-num { fill: #60a5fa }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vr-eval-num { fill: #60a5fa } }
+.vr-legend { display: flex; justify-content: center; align-items: center; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink); padding-top: 4px }
+.vr-leg-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500 }
+.vr-leg-dash-min { width: 22px; height: 0; border-top: 2.5px dashed #1abc9c; display: inline-block }
+.vr-leg-dash-max { width: 22px; height: 0; border-top: 2.5px dashed #f87171; display: inline-block }
+.vr-leg-line-eval { width: 22px; height: 0; border-top: 2.8px solid #2b579a; display: inline-block }
+.vr-leg-dot-cur { width: 10px; height: 10px; border-radius: 50%; background: #2b579a; display: inline-block; box-shadow: 0 0 0 2px rgba(43, 87, 154, 0.24) }
 </style>
 </head>
 <body>
@@ -569,7 +595,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-17d";
+const APP_VERSION = "2026-11-18b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1052,7 +1078,7 @@ function realOrders(s, d, g, acc) {
       <span class="small muted">${esc(ACC_NAME[cur] || cur)} · 미국 ${esc(r.trade_date)} 장</span></div>`;
   if (row.auto_now) out += `<div class="small warn-t" role="note">⚠ auto 켜진 전략은 메리츠 앱에서 따로 넣지 마세요 — 'auto 가 냄' 줄은 노트북이 넣습니다 (두 번 들어감 방지, 작업 ㊸)</div>`;
   if (!row.approved) return out + `<div class="empty">아직 ${esc(r.trade_date)} 주문표가 없습니다 (아침 6시 계산 뒤 생깁니다)</div></section>`;
-  out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}메리츠 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
+  out += `<div class="small">${row.current ? `현재가 <b class="num">${money(row.current)}</b> · ` : ""}메리츠 보유 <b class="num">${row.real}주</b> · 주문표 ${row.want}주 ${row.unsure ? '<span class="chip warn">❔ 메리츠 보유 확인 못 함 → 차이 줄 없음</span>' : row.diff === 0 ? '<span class="chip ok">같음</span>' : `<span class="chip warn">차이 ${row.diff > 0 ? "+" : ""}${row.diff}주 → 아래에 맞춤 주문 포함</span>`}</div>
       ${(() => {
         // 작업 ㊴: 줄 → 표. 왼쪽 '관리자 주문' 체크(ADR 0043 manual, CONFIRM_ORDERS 켜졌을 때만)는 그대로, 오른쪽 '넣음'은 메리츠 앱에 넣은 뒤 손으로 체크.
         // ㉘-A 가 메리츠 주문내역으로 이 전략 줄을 모두 확인했으면(완료) 보이는 줄은 '넣음' 자동 표시, auto 가 넣은 줄도 자동 표시.
@@ -1062,7 +1088,7 @@ function realOrders(s, d, g, acc) {
         const item = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
           return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk,
             auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
-            note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
+            note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.catchup_add ? `<span class="chip warn" title="메리츠 보유가 계산보다 적어 이 LOC 매수 줄에 부족분을 더함 (작업 ㊾)">부족분 ${l.catchup_add}주 포함</span>` : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
               + (l.auto_wait ? ` <span class="chip ok" title="auto 가 켜져 있어 해당 장 시간·시세 조건이 되면 노트북이 자동으로 넣습니다">${esc(l.auto_wait)}</span>` : row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
             admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done && !l.auto_wait) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
@@ -1717,6 +1743,7 @@ function viewStrategy(s, d, sid) {
       ["주기 시작 Pool", "$" + money(vrCash(g, vr).start), "V·매수점 계산에 쓴 값 (주기 동안 고정)"],
       ["남은 현금", "$" + money(vrCash(g, vr).left), (() => { const c = vrCash(g, vr); return "시작 Pool − 이번 주기 매수 + 매도" + (c.usd != null ? ` · 메리츠 예수금 $${money(c.usd)}` + (c.warn ? ` ⚠ 차이 ${c.diff > 0 ? "+" : "−"}$${money(Math.abs(c.diff))}` : "") : ""); })()], ["보유", g.qty + "주", px ? `종가 ${money(px)} · 평가 $${money(g.qty * Number(px))}` : ""]];
     out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
+    out += vrProgressAndChartCard(s, d, g, vr, null, "real");
     out += vrConfCard(g, s);                       // 작업 ㊲: 종류·한도·배수·다음 주기 바뀜 (보기만)
     const lv = (arr, kind) => arr.map(([p, q], i) => ({ p, q, kind, tag: `vr_${kind}_${i + 1}` }));
     const levels = [...lv(vr.sell || [], "sell").reverse(), ...lv(vr.buy || [], "buy")];
@@ -1740,6 +1767,173 @@ function vrConfCard(g, s) {
   if (ps && ps.on) rows.push([`수익 ${Number(ps.pct)}% → ${esc(ps.to)}`, (ps.rows || []).map((r) => `${esc(r.account)} 옮길 돈 $${money(r.due)}`).join(" · ")]);
   return `<div class="card"><div class="row between"><h2>VR 설정</h2><span class="small muted">보기만 · 바꾸기는 합의 뒤 명령으로, 다음 주기 시작에 (ADR 0037·0061)</span></div>
     <table class="small"><tbody>${rows.map(([a, b]) => `<tr><td class="muted">${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+const VR_TARGET_OPTS = [[260, "260주차 (5년)"], [520, "520주차 (10년)"], [780, "780주차 (15년)"], [1040, "1040주차 (20년)"]];
+function vrTargetWeeks(sid, vr) {
+  try {
+    const saved = Number(localStorage.getItem("vrTargetWeeks:" + sid));
+    if (saved > 0) return saved;
+  } catch (e) {}
+  const t = vr && Number(vr.target_weeks);
+  return t > 0 ? t : 520;
+}
+function vrSeriesForChart(s, d, g, vr, rowsOverride, kind = "real") {
+  const num = (v) => (v === null || v === undefined || v === "" || isNaN(Number(v))) ? null : Number(v);
+  let pts = [];
+  const trows = rowsOverride || (((((d || {}).trades || {})[g.id] || {}).vr || {})[kind]);
+  if (Array.isArray(trows) && trows.length) {
+    pts = trows.map((r) => ({
+      week: Number(r[0] || 0),
+      start: r[1] || "",
+      eval: num(r[4]),
+      V: num(r[5]),
+      min: num(r[6]),
+      max: num(r[7]),
+      current: !r[14],
+    }));
+  } else if (vr && Array.isArray(vr.series) && vr.series.length) {
+    pts = vr.series.map((p) => ({
+      week: Number(p.week || 0),
+      start: p.start || "",
+      eval: num(p.eval),
+      V: num(p.V),
+      min: num(p.min),
+      max: num(p.max),
+      current: !!p.current,
+    }));
+  } else if (vr) {
+    pts = [{
+      week: Number(vr.week || 1),
+      start: vr.start || "",
+      eval: num(vr.eval_now),
+      V: num(vr.V),
+      min: num(vr.min),
+      max: num(vr.max),
+      current: true,
+    }];
+  }
+  if (pts.length && kind === "real") {
+    const livePx = num((((S.live || {}).quotes || {})[g.symbol])) ?? num((((s || {}).quotes || {})[g.symbol] || {}).price) ?? num(((s || {}).closes || {})[g.symbol]);
+    const last = pts[pts.length - 1];
+    if (livePx !== null && Number(g.qty) >= 0) {
+      last.eval = Math.round(livePx * Number(g.qty) * 100) / 100;
+    } else if (last.eval === null && vr && num(vr.eval_now) !== null) {
+      last.eval = num(vr.eval_now);
+    }
+  }
+  pts = pts.filter((p) => p.V !== null || p.min !== null || p.max !== null || p.eval !== null);
+  if (pts.length === 1) {
+    const p0 = pts[0];
+    pts.unshift({
+      week: Math.max(1, p0.week - 2),
+      start: p0.start,
+      eval: p0.eval,
+      V: p0.V,
+      min: p0.min,
+      max: p0.max,
+      current: false,
+    });
+  }
+  return pts;
+}
+function vrProgressAndChartCard(s, d, g, vr, rowsOverride, kind = "real", bare = false) {
+  // 가투(mock) 표는 실제 VR 상태로 채우지 않는다 — 주차는 그 표의 마지막 줄 (11/18 Claude Code 검토)
+  const vrObj = vr || (kind === "real" && s && s.vr ? s.vr[g.id] : null) || {};
+  const pts = vrSeriesForChart(s, d, g, vrObj, rowsOverride, kind);
+  const curWeek = Number((kind === "real" ? vrObj.week : null) ?? (pts.length ? pts[pts.length - 1].week : 0));
+  const targetWeeks = vrTargetWeeks(g.id, vrObj);
+  const pctDone = Math.min(100, Math.max(0, (curWeek / targetWeeks) * 100));
+  const pctRem = Math.max(0, 100 - pctDone);
+  const opts = VR_TARGET_OPTS.some(([w]) => w === targetWeeks) ? VR_TARGET_OPTS : [[targetWeeks, `${targetWeeks}주차`], ...VR_TARGET_OPTS];
+
+  const progHtml = `<div class="vr-prog-box">
+    <div class="vr-prog-head">
+      <span class="vr-prog-title">Progress</span>
+      <span class="vr-prog-weeks">${curWeek}주차 / ${targetWeeks}주차
+        <select data-vr-target="${esc(g.id)}" aria-label="VR 목표 주차 설정" title="장기 목표 주차 설정 (기본 520주차 = 10년)">
+          ${opts.map(([w, lbl]) => `<option value="${w}" ${w === targetWeeks ? "selected" : ""}>목표 ${esc(lbl)}</option>`).join("")}
+        </select>
+      </span>
+    </div>
+    <div class="vr-prog-pcts">
+      <span class="vr-prog-done">${pctDone.toFixed(2)}%</span>
+      <span class="vr-prog-rem">${pctRem.toFixed(2)}%</span>
+    </div>
+    <div class="vr-prog-track" role="progressbar" aria-valuenow="${curWeek}" aria-valuemin="0" aria-valuemax="${targetWeeks}" aria-label="VR 진행률 ${pctDone.toFixed(2)}%">
+      <div class="vr-prog-fill" style="width:${pctDone.toFixed(2)}%"></div>
+    </div>
+  </div>`;
+
+  if (!pts.length) {
+    return `<section class="${bare ? "" : "card "}vr-viz">${progHtml}<div class="empty">아직 VR 평가금 시계열 기록이 없습니다.</div></section>`;
+  }
+
+  const ok = (v) => v !== null && v !== undefined && !isNaN(Number(v));
+  const allVals = pts.flatMap((p) => [p.min, p.max, p.eval, p.V].filter(ok).map(Number));
+  const narrow = window.innerWidth < 700;
+  const W = narrow ? 500 : 860, H = narrow ? 280 : 300, L = 68, R = 36, T = 34, B = 36;
+  let lo = Math.min(...allVals), hi = Math.max(...allVals);
+  const span = (hi - lo) || Math.max(hi * 0.15, 100);
+  lo = Math.max(0, lo - span * 0.16);
+  hi = hi + span * 0.22;
+
+  const n = pts.length;
+  const X = (i) => n === 1 ? (L + W - R) / 2 : L + (i * (W - L - R)) / (n - 1);
+  const Y = (v) => T + ((hi - v) / (hi - lo)) * (H - T - B);
+  const yt = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
+
+  const maxLab = Math.max(2, Math.floor((W - L - R) / 64));
+  const step = Math.max(1, Math.ceil(n / maxLab));
+  const xi = [];
+  for (let i = 0; i < n; i += step) xi.push(i);
+  if (xi[xi.length - 1] !== n - 1) {
+    if (n - 1 - xi[xi.length - 1] < Math.ceil(step / 2) && xi.length > 1) xi.pop();
+    xi.push(n - 1);
+  }
+
+  const poly = (field, stroke, width, dash = "") => {
+    const xy = pts.map((p, i) => ok(p[field]) ? [X(i), Y(Number(p[field]))] : null).filter(Boolean);
+    if (!xy.length) return "";
+    const ptsStr = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    const dashAttr = dash ? ` stroke-dasharray="${dash}"` : "";
+    return xy.length > 1
+      ? `<polyline points="${ptsStr}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"${dashAttr}/>`
+      : `<circle cx="${xy[0][0].toFixed(1)}" cy="${xy[0][1].toFixed(1)}" r="3.5" fill="${stroke}"/>`;
+  };
+
+  const evalPts = pts.map((p, i) => ok(p.eval) ? { i, x: X(i), y: Y(Number(p.eval)), v: Number(p.eval), wk: p.week } : null).filter(Boolean);
+  const curEval = evalPts.length ? evalPts[evalPts.length - 1] : null;
+  const curDotHtml = curEval ? (() => {
+    const cx = curEval.x.toFixed(1), cy = curEval.y.toFixed(1);
+    const ty = Math.max(18, curEval.y - 13).toFixed(1);
+    const anchor = curEval.x > W - 75 ? "end" : curEval.x < L + 55 ? "start" : "middle";
+    return `<circle cx="${cx}" cy="${cy}" r="11" fill="rgba(43, 87, 154, 0.16)"/>
+      <circle cx="${cx}" cy="${cy}" r="6.2" fill="#2b579a" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="${cx}" y="${ty}" font-size="13.5" font-weight="700" font-family="IBM Plex Mono, monospace" text-anchor="${anchor}" class="vr-eval-num">$${money(curEval.v, 0)}</text>`;
+  })() : "";
+
+  const chartHtml = `<div class="vr-chart-box">
+    <div class="vr-chart-head"><span class="vr-chart-title">평가금 진행 상황</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="VR 평가금 진행 상황 (V min, V max, 평가금, 현재 평가금)">
+      ${yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="2 2"/>
+        <text x="${L - 8}" y="${(Y(v) + 4).toFixed(1)}" font-size="11.5" font-family="IBM Plex Mono, monospace" text-anchor="end" fill="var(--muted)">$${money(v, 0)}</text>`).join("")}
+      <line x1="${L}" x2="${L}" y1="${T - 8}" y2="${H - B}" stroke="var(--line)"/>
+      <line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/>
+      ${xi.map((i) => `<text x="${X(i).toFixed(1)}" y="${H - 11}" font-size="11.5" text-anchor="middle" fill="var(--muted)">${esc(pts[i].week)}주차</text>`).join("")}
+      ${poly("min", "#1abc9c", "2.2", "6 4")}
+      ${poly("max", "#f87171", "2.2", "6 4")}
+      ${poly("eval", "#2b579a", "2.8", "")}
+      ${curDotHtml}
+    </svg>
+    <div class="vr-legend" aria-label="차트 범례">
+      <span class="vr-leg-item"><i class="vr-leg-dash-min"></i>V min</span>
+      <span class="vr-leg-item"><i class="vr-leg-dash-max"></i>V max</span>
+      <span class="vr-leg-item"><i class="vr-leg-line-eval"></i>평가금</span>
+      <span class="vr-leg-item"><i class="vr-leg-dot-cur"></i>현재 평가금</span>
+    </div>
+  </div>`;
+
+  return `<section class="${bare ? "" : "card "}vr-viz" aria-label="VR 진행률 및 평가금 진행 상황">${progHtml}${chartHtml}</section>`;
 }
 function lineWhy(l, p) {
   const px = Number(l.price);
@@ -2616,7 +2810,9 @@ function vrTable(g, rows, kind = "real") {
       <td class="n">${total === null || !prn ? "-" : (total - prn >= 0 ? "+" : "−") + money(Math.abs(total - prn))}</td>
       <td class="n"><b>${qty}</b></td><td class="n">${c ? money(c) : "-"}</td><td class="n">${c && qty ? money(c / qty) : "-"}</td></tr>`; }).join("");
   const vrNow = kind === "real" ? ((S.snap ? S.snap.summary : {}).vr || {})[g.id] : null;   // 가투 표에는 실제 현금을 안 붙임
-  return `${vrNow ? `<div class="small vrcash" style="margin:4px 0">지금 주기: ${vrCashHtml(g, vrNow)}</div>` : ""}<div class="small muted" style="margin:4px 0">${Number(g.multiplier) > 1 ? `${g.multiplier}배수 금액 · ` : ""}거래액 = 그 주기 매매 합계(매수 −, 매도 +), 마지막 Pool = 시작 Pool + 거래액(진행 중 줄은 = 남은 현금), 계좌총액 = 평가금 + Pool.
+  const sSnap = S.snap ? S.snap.summary : {}, dSnap = S.snap ? (S.snap.detail || {}) : {};
+  const vizHtml = vrProgressAndChartCard(sSnap, dSnap, g, vrNow, rows, kind, true);   // 기록 표 카드 안 → 카드 겹치지 않게
+  return `${vizHtml}${vrNow ? `<div class="small vrcash" style="margin:4px 0">지금 주기: ${vrCashHtml(g, vrNow)}</div>` : ""}<div class="small muted" style="margin:4px 0">${Number(g.multiplier) > 1 ? `${g.multiplier}배수 금액 · ` : ""}거래액 = 그 주기 매매 합계(매수 −, 매도 +), 마지막 Pool = 시작 Pool + 거래액(진행 중 줄은 = 남은 현금), 계좌총액 = 평가금 + Pool.
     ${rows.some((r) => !r[11]) ? "투자원금을 아직 정하지 않아 수익률은 '-' 입니다." : ""}</div>
     <div class="scroll ttable vrt"><table><thead><tr>${VRCOLS.map((c, i) => `<th class="${i ? "n" : ""}${VR_KEY.includes(i) ? " key" : ""}">${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
@@ -2936,6 +3132,10 @@ function bind() {
     S.actAs = actSel.value || null; try { if (S.actAs) localStorage.setItem("actAs", S.actAs); else localStorage.removeItem("actAs"); } catch (e) {}
     S.detail = null; S.msg = { text: S.actAs ? "공동 운영 계좌로 바꿨습니다. 승인·설정은 그 계좌 노트북으로 갑니다." : "내 계좌로 돌아왔습니다." }; await refresh(); };
   document.querySelectorAll("[data-tradesid]").forEach((b) => b.onclick = () => { S.tradeSid = b.dataset.tradesid; render(); });
+  document.querySelectorAll("[data-vr-target]").forEach((sel) => sel.onchange = () => {
+    try { localStorage.setItem("vrTargetWeeks:" + sel.dataset.vrTarget, sel.value); } catch (e) {}
+    render();
+  });
   document.querySelectorAll("[data-tradekind]").forEach((b) => b.onclick = () => { S.tradeKind = b.dataset.tradekind; render(); });
   document.querySelectorAll("[data-topen]").forEach((b) => b.onclick = () => { S.tradeOpen[b.dataset.topen] = !S.tradeOpen[b.dataset.topen]; render(); });
   document.querySelectorAll("[data-uppurpose]").forEach((b) => b.onclick = () => { S.upPurpose = b.dataset.uppurpose; S.upOpen = true;
