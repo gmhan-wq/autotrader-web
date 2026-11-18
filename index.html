@@ -595,7 +595,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-18b";
+const APP_VERSION = "2026-11-18d";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -2080,6 +2080,15 @@ function cmdList(cat) {
       : `<div class="cmd small"><div class="row between"><span><span class="muted num">${esc(at)}</span> ${esc(brief)}</span>${chip}</div></div>`; }).join("")}</div>`;
 }
 
+// 작업 ㊿ (ADR 0066): 8Buy 새로 시작 방법 — V4.0(지금 방법) · V3.0(2025 강의) · V2.2. 가투·실계좌는 메뉴로 정함 (㊿ 보충)
+const BUY_METHODS = [["V4.0", "지금 방법"], ["V3.0", "2025 강의 · 반복리"], ["V2.2", "40분할 · 단리 · 쿼터손절"]];
+function buyMethodDefaults() {             // 방법·종목에 맞는 분할·목표% 기본값 (원문: V3.0 20분할 SOXL 20·TQQQ 15 / V2.2 40분할 SOXL 12·TQQQ 10)
+  const m = S.buyMethod || "V4.0", sym = (document.getElementById("s-symbol") || {}).value || "SOXL";
+  const sp = document.getElementById("s-splits"), tg = document.getElementById("s-target");
+  if (sp) sp.value = m === "V2.2" ? "40" : "20";
+  if (tg) tg.value = m === "V2.2" ? (sym === "SOXL" ? "12" : "10") : (sym === "SOXL" ? "20" : "15");
+  if (typeof newPreview === "function") newPreview();
+}
 const KIND_FIELDS = {
   // 작업 ㉛: 8Buy [새로 시작] · PH — 원금 ÷ 분할 = 1회 매수 시도금, T 0 에서 V4.0 계산 모드 첫 주문표
   sheet_new: [["principal", "투자 원금 $ (USD — 이 전략의 한도, ADR 0049)", "text", ""], ["splits", "분할 횟수 (20 기본 · 40)", "number", "20"],
@@ -2490,6 +2499,9 @@ function addStrategy(s) {
           `<button type="button" class="btn ${kind === k ? "primary" : ""}" data-kind="${k}" style="text-align:left;line-height:1.3"><b>${t}</b><br><span class="small" style="opacity:.8;font-weight:400">${sub}</span></button>`).join("")}</div>
         ${kind === "sheet" ? `<div class="row small"><span class="muted">8Buy:</span>${[["cont", "이어서 하기", "보유·평단·잔금·배수"], ["new", "새로 시작", "원금·분할·목표%"]].map(([m, t, sub]) =>
           `<button type="button" class="btn small ${(S.buyMode || "cont") === m ? "primary" : ""}" data-buymode="${m}">${t} <span style="opacity:.75">(${sub})</span></button>`).join("")}</div>` : ""}
+        ${isNew ? `<div class="row small"><span class="muted">방법:</span>${BUY_METHODS.map(([m, sub]) =>
+          `<button type="button" class="btn small ${(S.buyMethod || "V4.0") === m ? "primary" : ""}" data-buymethod="${m}">${m} <span style="opacity:.75">(${sub})</span></button>`).join("")}</div>
+          ${(S.buyMethod || "V4.0") !== "V4.0" ? `<div class="small muted">8Buy ${esc(S.buyMethod)} — V4.0 새로 시작과 같은 길(매일 계산 주문표). ${S.addMock ? "여기서 만들면 <b>가투 전략</b>입니다 (메리츠 주문·장부에서 빠짐)." : "여기서 만들면 <b>실계좌 전략</b>입니다 — 오늘 밤 주문·manual 가능, auto 는 꺼진 채 시작 (켜기는 주인 + 관리자, ADR 0059)."} 가투와 실계좌는 별개로 운용되며 순서가 없습니다.</div>` : ""}` : ""}
         <div class="grid2">
           <label>전략 id<input type="text" id="s-id" required pattern="[a-z][a-z0-9_]{0,23}" placeholder="예: ${kind === "vr" ? "tqqq_vr" : kind === "ph01" ? "ph01_soxl2" : kind === "dynamic" ? "soxl_dyn" : isNew ? "soxl_8buy2" : "soxl_mumae"}"></label>
           <label>종목<select id="s-symbol"><option>SOXL</option><option ${kind === "vr" ? "selected" : ""}>TQQQ</option></select></label>
@@ -3196,6 +3208,10 @@ function bind() {
   document.querySelectorAll("[data-back]").forEach((b) => b.onclick = () => { S.viewing = null; render(); });
   document.querySelectorAll("[data-kind]").forEach((b) => b.onclick = () => { S.newKind = b.dataset.kind; render(); });
   document.querySelectorAll("[data-buymode]").forEach((b) => b.onclick = () => { S.buyMode = b.dataset.buymode; render(); });
+  document.querySelectorAll("[data-buymethod]").forEach((b) => b.onclick = () => { S.buyMethod = b.dataset.buymethod; render(); buyMethodDefaults(); });   // 작업 ㊿
+  if (S.buyMode === "new" && document.getElementById("s-splits") && !document.getElementById("ph-tab")) {
+    const sy = document.getElementById("s-symbol"); if (sy) sy.addEventListener("change", buyMethodDefaults);
+  }
   bindNewPreview();
   bindDials();
   document.querySelectorAll("[data-propose]").forEach((b) => b.onclick = () => {
@@ -3284,6 +3300,7 @@ function bind() {
     const p = { kind, id: v("s-id").toLowerCase(), symbol: v("s-symbol"), account: v("s-account"), mock_only: !!S.addMock };
     for (const [k] of KIND_FIELDS[fk]) { const x = v("s-" + k); if (x !== "") p[k] = (k === "rules" || k === "checks") ? x : x.replace(/,/g, ""); }
     if (kind === "sheet") p.start = isNew ? "new" : "cont";
+    if (isNew) p.method = S.buyMethod || "V4.0";                                // 작업 ㊿: V4.0 · V3.0 · V2.2
     if (kind === "vr") { p.vr_mode = S.vrMode || "accum"; if (p.vr_mode === "hold") p.contribution = "0"; }   // 작업 ㊲ A
     if (kind === "ph01") {
       const f = phForm();
