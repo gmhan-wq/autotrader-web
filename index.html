@@ -595,7 +595,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-19a";
+const APP_VERSION = "2026-11-20a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1277,7 +1277,9 @@ function marketStrip(s) {
   const m = s.market;
   // 실시간: 보고 있는 동안 관리자 노트북이 5초마다 올리는 시세가 현황(스냅숏)보다 새로우면 그것을 쓴다
   const snapAt = Object.values(s.quotes || {})[0], liveNew = S.live && S.live.at && (!snapAt || new Date(S.live.at) > new Date(snapAt.at || 0));
-  const q = liveNew ? Object.fromEntries(Object.entries(S.live.quotes || {}).map(([k, v]) => [k, { price: v, at: S.live.at }])) : (s.quotes || {});
+  // 작업 55: 애프터장엔 노트북이 Yahoo 마지막 체결가를 표시용으로 보충 (실시간 = {price, source, at}, 현황 = show·show_at) — 주문 값은 메리츠 그대로
+  const q = liveNew ? Object.fromEntries(Object.entries(S.live.quotes || {}).map(([k, v]) => [k, v && typeof v === "object" ? { price: v.price, at: S.live.at, src: v.source, srcAt: v.at } : { price: v, at: S.live.at }]))
+    : Object.fromEntries(Object.entries(s.quotes || {}).map(([k, v]) => [k, v && v.show ? { ...v, price: v.show, src: v.source, srcAt: v.show_at } : v]));
   if (!m && !Object.keys(q).length) return "";
   const hm = (iso) => iso ? iso.slice(11, 16) : "";
   const phase = m ? `<span class="chip phase-${esc(m.code)}">${esc(m.label)}${m.until ? " ~" + hm(m.until) : ""}</span>
@@ -1292,7 +1294,7 @@ function marketStrip(s) {
     const fl = flatOf(sym, v);
     const dir = S.livePrev && S.livePrev[sym] !== undefined && Number(S.livePrev[sym]) !== px ? (px > Number(S.livePrev[sym]) ? "up" : "down") : "";
     const dd = cdays.by[sym], tip = prev ? ` title="${esc((dd ? dd + " " : "") + "종가 " + money(prev) + " 대비")}"` : "";
-    return `<span class="q"${tip}><span class="sym num">${esc(sym)}</span><b class="${fl ? "muted" : dir ? "flash-" + dir : ""}">${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%${!oneDay && dd ? `<span class="muted"> (${esc(dd)})</span>` : ""}</span>` : ""}${fl ? `<span class="small muted">정규장 종가 (시간외 값 없음)</span>` : ""}</span>`; }).join("");
+    return `<span class="q"${tip}><span class="sym num">${esc(sym)}</span><b class="${fl ? "muted" : dir ? "flash-" + dir : ""}">${money(v.price)}</b>${ch !== null && isFinite(ch) ? `<span class="small num ${ch > 0 ? "buy" : ch < 0 ? "sell" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(2)}%${!oneDay && dd ? `<span class="muted"> (${esc(dd)})</span>` : ""}</span>` : ""}${fl ? `<span class="small muted">정규장 종가 (시간외 값 없음)</span>` : ""}${v.src === "yahoo_after" ? `<span class="small muted" title="메리츠 API 에 애프터장 값이 없어 Yahoo 마지막 체결가를 보여 줍니다 (표시만 — 주문은 메리츠 값)">애프터 (Yahoo) ${esc(v.srcAt || "")}</span>` : ""}</span>`; }).join("");
   const at = Object.values(q)[0];
   const hms = (iso) => { if (!iso) return ""; const d = new Date(iso); return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "Asia/Seoul" }); };
   // 주간거래·프리장·애프터장인데 값이 이번 장 내내 그대로면 메리츠 API 가 그 시간 체결가를 주지 않는 것 — 움직이는 실시간처럼 보이지 않게 (작업 53-보충)
@@ -1305,6 +1307,7 @@ function marketStrip(s) {
 // 5초 실시간 값이 스냅숏 값과 다르면 움직인 것으로 본다. 옛 노트북(flat 없음)이면 직전 종가와 똑같을 때만.
 function quoteFlat(s, sym, v) {
   const m = s.market; if (!m || !["day", "pre", "after"].includes(m.code)) return false;
+  if (v && v.src === "yahoo_after") return false;             // 작업 55: Yahoo 값을 보여 줄 때는 '시간외 값 없음' 아님
   const sq = (s.quotes || {})[sym] || {}, px = Number(v.price);
   if (sq.flat === true && sq.phase === m.code) return Number(sq.price) === px;
   if (sq.flat === false) return false;
