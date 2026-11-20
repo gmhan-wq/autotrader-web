@@ -595,7 +595,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-20a";
+const APP_VERSION = "2026-11-20b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -648,9 +648,10 @@ function layout() {
   if (pref === "pc" || pref === "phone") return pref;
   return window.innerWidth >= 900 ? "pc" : "phone";
 }
-// 메뉴 여섯 개 (2026-11-01 개편, 11/07 모의 추가): PC 왼쪽 메뉴 = 폰 아래 탭. 각 메뉴 안의 화면은 위쪽 버튼으로 고른다.
+// 메뉴 (PC 상단 내비게이션에는 '통계' 탭 추가, 모바일 하단 탭 바는 기존 6개 그대로 유지):
 const GROUPS = [
   ["home", "자산", [["home", "자산"]]],
+  ["stats", "통계", [["stats", "통계"]]],
   ["order", "주문", [["confirm", "manual"], ["auto", "auto"]]],
   ["strategy", "전략", [["constitution", "투자헌법"], ["mystrat", "내 전략"], ["consensus", "수정 합의"], ["addstrat", "전략 추가"], ["sessions", "장·주문 방법"]]],   // 장·주문 방법: 11/09 작업 ⑬
   ["record", "기록", [["trades", "매매 표"], ["orderlog", "주문 이력"], ["calendar", "주문표 달력"], ["upload", "사진 올리기"], ["board", "알림"]]],   // 주문 이력: 11/14 작업 ⑱ (ADR 0056 ⑥)   // 사진 올리기: 11/09 작업 ⑪ (주문과 별개)   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
@@ -679,6 +680,7 @@ function currentView() {
   let v;
   switch (S.tab) {
     case "home": v = viewHome(S.snap, true); break;
+    case "stats": v = need(viewStats); break;
     case "confirm": v = viewOrders() + cmdList("order"); break;          // 작업 ⑮: 주문 메뉴는 주문만 (사진 초안은 기록 → 사진 올리기)
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
@@ -908,9 +910,10 @@ function renderInner() {
         <main class="pc-main">${actBand}${notes}<div id="view">${currentView()}</div></main>
       </div>`;
   } else {
+    if (S.tab === "stats") S.tab = "home";
     const t = S.snap ? (S.snap.summary.totals || {}) : {};
     const bk = S.snap ? S.snap.summary.broker : null, tv = bk ? bk.value : t.value;
-    const tabs = GROUPS.map((g) => [g[0], g[1]]);
+    const tabs = GROUPS.filter((g) => g[0] !== "stats").map((g) => [g[0], g[1]]);
     $app.innerHTML = `
       <header class="ph-top card">
         <div class="row"><b>${esc(S.name)}</b><span class="grow"></span>${engine}</div>${actSwitch()}
@@ -1314,6 +1317,7 @@ function quoteFlat(s, sym, v) {
   return Number((s.closes || {})[sym]) === px;
 }
 function phoneBlocks(s, d, B) {
+  B.unshift(["phone_stats", "투자원금·손익 통계", phoneStatsSection(s, d)]);
   let accs = "";
   for (const [accId, acc] of Object.entries(s.accounts || {})) {
     const rows = acc.strategies.map((g) => ({ ...g, account: accId }));
@@ -3054,6 +3058,357 @@ function viewBoard() {
   return `<div class="card"><h2>게시판</h2>${ns.map((n) => `<div class="notice"><span class="small muted">${when(n.at)}</span><span>${esc(n.text)}</span></div>`).join("")}</div>`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 📊 투자원금·확정손익(익절/손절 분리)·원화 환산·캘린더·시계열 통계 UI
+//   - PC: 상단 '통계' 탭 (넓은 2단 그리드 레이아웃)
+//   - 모바일(폰): 기존 '자산' 탭 최상단 세로 배치 + 하단 기존 자산 보유 내역
+// ══════════════════════════════════════════════════════════════════════════════
+function resolveStatsData(s, d) {
+  if (d && d.stats && d.stats.all) return d.stats;
+  // 스냅샷에 아직 stats가 없는 구버전 호환용 클라이언트 계산 Fallback
+  const fx = (s && s.fx && Number(s.fx.usdkrw) > 500) ? Number(s.fx.usdkrw) : 1350;
+  const closes = (s && s.closes) || {};
+  const strats = allStrategies(s || {}, false);
+  let inv = 0, cash = 0, seed = 0, ev = 0, evPnl = 0;
+  const srows = strats.map((g) => {
+    const q = Number(g.qty || 0) + Number(g.excluded_qty || 0), avg = Number(g.avg || 0), c = Number(g.cash || 0);
+    const px = closes[g.symbol] != null ? Number(closes[g.symbol]) : avg;
+    const gi = q > 0 && avg > 0 ? q * avg : 0, ge = q * px + c, gp = q > 0 && avg > 0 ? (px - avg) * q : 0;
+    const gs = gi + c;
+    inv += gi; cash += c; seed += gs; ev += ge; evPnl += gp;
+    const rz = Number(g.realized || 0);
+    return {
+      sid: g.id, name: stratName(g, ((s || {}).plans || {})[g.id]), account: g.account,
+      account_label: ACC_NAME[g.account] || g.account, symbol: g.symbol, qty: q, avg, close: px,
+      seed_usd: gs, invested_usd: gi, cash_usd: c, exhaustion_pct: gs > 0 ? (gi / gs) * 100 : 0,
+      eval_usd: ge, eval_pnl_usd: gp, eval_pnl_pct: gi > 0 ? (gp / gi) * 100 : 0,
+      net_pnl_usd: rz, profit_usd: rz > 0 ? rz : 0, profit_count: rz > 0 ? 1 : 0,
+      loss_usd: rz < 0 ? rz : 0, loss_count: rz < 0 ? 1 : 0, return_pct: gi > 0 ? (rz / gi) * 100 : 0,
+      month_net_usd: rz, month_profit_usd: rz > 0 ? rz : 0, month_loss_usd: rz < 0 ? rz : 0,
+    };
+  });
+  const emptyP = (lbl) => ({ label: lbl, range: "", net_usd: 0, profit_usd: 0, profit_count: 0, loss_usd: 0, loss_count: 0, return_pct: 0, win_rate_pct: 0 });
+  const scope = {
+    capital: {
+      total_seed_usd: seed, invested_usd: inv, available_cash_usd: cash,
+      exhaustion_pct: seed > 0 ? (inv / seed) * 100 : 0, eval_usd: ev, eval_pnl_usd: evPnl,
+      eval_pnl_pct: inv > 0 ? (evPnl / inv) * 100 : 0,
+    },
+    periods: { week: emptyP("이번 주"), month: emptyP("이번 달"), year: emptyP("올해 연간"), all: emptyP("전체 누적") },
+    series: { weekly: [], monthly: [], yearly: [] },
+    calendar: {},
+    strategies: srows,
+  };
+  return { usdkrw: fx, current_month: new Date().toISOString().slice(0, 7), accounts: [], all: scope, by_account: {} };
+}
+
+function statsKrw(usd, fx, signed = false) {
+  const r = Number(fx) > 500 ? Number(fx) : ((S.snap && S.snap.summary && S.snap.summary.fx && Number(S.snap.summary.fx.usdkrw)) || 1350);
+  if (usd === null || usd === undefined || isNaN(Number(usd))) return "-";
+  const v = Math.round(Number(usd) * r), a = Math.abs(v);
+  const sg = v < 0 ? "−" : (signed && v > 0 ? "+" : "");
+  if (a === 0) return "₩0";
+  if (a >= 1e8) return `${sg}₩${(a / 1e8).toFixed(2)}억 (약 ${sg}${Math.round(a / 1e4).toLocaleString("ko-KR")}만원)`;
+  if (a >= 1e4) return `약 ${sg}${Math.round(a / 1e4).toLocaleString("ko-KR")}만원`;
+  return `${sg}₩${a.toLocaleString("ko-KR")}`;
+}
+
+function statsUsdSigned(x) {
+  if (x === null || x === undefined || isNaN(Number(x))) return "-";
+  const v = Number(x);
+  return (v > 0 ? "+" : v < 0 ? "−" : "") + "$" + money(Math.abs(v));
+}
+
+function statsPctSigned(x) {
+  if (x === null || x === undefined || isNaN(Number(x))) return "0.00%";
+  const v = Number(x);
+  return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2) + "%";
+}
+
+function statsAccountFilterBar(st) {
+  const accs = st.accounts || [];
+  const cur = (S.statsAcc && (S.statsAcc === "all" || (st.by_account || {})[S.statsAcc])) ? S.statsAcc : "all";
+  S.statsAcc = cur;
+  const fx = st.usdkrw || 1350;
+  return `<div class="card" style="padding:12px 16px"><div class="row between" style="gap:10px">
+    <div class="row" style="gap:6px">
+      <b>📊 계좌 필터</b>
+      <div class="seg" role="tablist" aria-label="통계 계좌 필터">
+        <button type="button" role="tab" data-stacc="all" class="${cur === "all" ? "on" : ""}" aria-selected="${cur === "all"}">전체 계좌</button>
+        ${accs.map((a) => `<button type="button" role="tab" data-stacc="${esc(a.id)}" class="${cur === a.id ? "on" : ""}" aria-selected="${cur === a.id}">${esc(ACC_NAME[a.id] || a.label || a.id)}</button>`).join("")}
+      </div>
+    </div>
+    <span class="small muted num">적용 환율: ₩${money(fx, 2)} / $1</span>
+  </div></div>`;
+}
+
+function statsCapitalCard(scope, fx) {
+  const c = scope.capital || {};
+  const exh = Math.min(100, Math.max(0, Number(c.exhaustion_pct || 0)));
+  const evPnl = Number(c.eval_pnl_usd || 0);
+  const evCls = evPnl > 0 ? "buy" : evPnl < 0 ? "sell" : "";
+  return `<section class="card" aria-label="자본 및 투자원금 현황">
+    <div class="row between"><h2>💰 자본 · 투자원금 현황</h2><span class="chip">시드 소진율 <b class="num">${exh.toFixed(1)}%</b></span></div>
+    <div>
+      <div class="row between small"><span class="muted">현재 투자원금 / 총 운용 시드</span><span class="num"><b>$${money(c.invested_usd)}</b> / $${money(c.total_seed_usd)}</span></div>
+      <div class="st-seed-bar" role="progressbar" aria-valuenow="${exh.toFixed(1)}" aria-valuemin="0" aria-valuemax="100"><div class="st-seed-fill" style="width:${exh.toFixed(1)}%"></div></div>
+    </div>
+    <div class="st-cap-grid">
+      <div class="st-cap-box"><span class="small muted">현재 투자원금 (매수원금 합)</span><b class="num">$${money(c.invested_usd)}</b><span class="krw">${esc(statsKrw(c.invested_usd, fx))}</span></div>
+      <div class="st-cap-box"><span class="small muted">총 운용 시드</span><b class="num">$${money(c.total_seed_usd)}</b><span class="krw">${esc(statsKrw(c.total_seed_usd, fx))}</span></div>
+      <div class="st-cap-box"><span class="small muted">가용 예수금 (잔금)</span><b class="num">$${money(c.available_cash_usd)}</b><span class="krw">${esc(statsKrw(c.available_cash_usd, fx))}</span></div>
+      <div class="st-cap-box"><span class="small muted">현재 평가금액 (주식+잔금)</span><b class="num">$${money(c.eval_usd)}</b><span class="krw">${esc(statsKrw(c.eval_usd, fx))}</span></div>
+      <div class="st-cap-box"><span class="small muted">평가손익 (수익률)</span><b class="num ${evCls}">${statsUsdSigned(evPnl)} (${statsPctSigned(c.eval_pnl_pct)})</b><span class="krw ${evCls}">${esc(statsKrw(evPnl, fx, true))}</span></div>
+    </div>
+  </section>`;
+}
+
+function statsPeriodCard(scope, fx) {
+  const P = scope.periods || {};
+  const pKey = ["week", "month", "year", "all"].includes(S.statsPeriod) ? S.statsPeriod : "month";
+  S.statsPeriod = pKey;
+  const cur = P[pKey] || { label: "이번 달", range: "", net_usd: 0, profit_usd: 0, profit_count: 0, loss_usd: 0, loss_count: 0, return_pct: 0, win_rate_pct: 0 };
+  const net = Number(cur.net_usd || 0), prof = Number(cur.profit_usd || 0), loss = Number(cur.loss_usd || 0);
+  const netCls = net > 0 ? "buy" : net < 0 ? "sell" : "";
+  const tabs = [["week", "이번 주"], ["month", "이번 달"], ["year", "올해 연간"], ["all", "전체 누적"]];
+  return `<section class="card" aria-label="기간별 확정 손익 분해">
+    <div class="row between">
+      <h2>📈 기간별 확정 손익 (익절 / 손절 분리)</h2>
+      <div class="seg" role="tablist" aria-label="기간 선택">
+        ${tabs.map(([k, lbl]) => `<button type="button" role="tab" data-stperiod="${k}" class="${pKey === k ? "on" : ""}" aria-selected="${pKey === k}">${lbl}</button>`).join("")}
+      </div>
+    </div>
+    <div class="row between small muted">
+      <span>조회 기간: <b>${esc(cur.label)}</b>${cur.range ? ` (${esc(cur.range)})` : ""}</span>
+      <span>투자원금 대비 수익률 <b class="num ${netCls}">${statsPctSigned(cur.return_pct)}</b> · 총 ${Number(cur.total_count || (Number(cur.profit_count || 0) + Number(cur.loss_count || 0)))}건</span>
+    </div>
+    <div class="st-pgrid">
+      <div class="st-pbox net">
+        <span class="small muted">순 확정 손익 (${esc(cur.label)})</span>
+        <b class="num ${netCls}">${statsUsdSigned(net)}</b>
+        <span class="small num ${netCls}">${esc(statsKrw(net, fx, true))} · 수익률 ${statsPctSigned(cur.return_pct)}</span>
+      </div>
+      <div class="st-pbox prof">
+        <div class="row between"><span class="small muted">총 익절 금액</span><span class="chip" style="color:var(--buy);border-color:currentColor">익절 ${Number(cur.profit_count || 0)}건</span></div>
+        <b class="num buy">+${"$" + money(Math.abs(prof))}</b>
+        <span class="small num buy">${esc(statsKrw(prof, fx, true))}${cur.profit_pct ? ` (+${Math.abs(Number(cur.profit_pct)).toFixed(2)}%)` : ""}</span>
+      </div>
+      <div class="st-pbox loss">
+        <div class="row between"><span class="small muted">총 손절 금액</span><span class="chip" style="color:var(--sell);border-color:currentColor">손절 ${Number(cur.loss_count || 0)}건</span></div>
+        <b class="num sell">${loss < 0 ? "−" : ""}${"$" + money(Math.abs(loss))}</b>
+        <span class="small num sell">${esc(statsKrw(loss, fx, true))}${cur.loss_pct ? ` (−${Math.abs(Number(cur.loss_pct)).toFixed(2)}%)` : ""}</span>
+      </div>
+    </div>
+  </section>`;
+}
+
+function statsSeriesChartCard(scope, fx) {
+  const mode = ["weekly", "monthly", "yearly"].includes(S.statsSeriesMode) ? S.statsSeriesMode : "monthly";
+  S.statsSeriesMode = mode;
+  const rows = ((scope.series || {})[mode] || []).slice(-16);
+  const tabs = [["weekly", "주간"], ["monthly", "월간"], ["yearly", "연간"]];
+  const head = `<div class="row between">
+    <h2>📊 기간별 손익 막대 · 누적 수익 곡선</h2>
+    <div class="seg" role="tablist" aria-label="차트 주기 선택">
+      ${tabs.map(([k, lbl]) => `<button type="button" role="tab" data-stseries="${k}" class="${mode === k ? "on" : ""}" aria-selected="${mode === k}">${lbl}</button>`).join("")}
+    </div>
+  </div>`;
+
+  if (!rows.length) {
+    return `<section class="card">${head}<div class="empty">아직 집계된 확정 손익 시계열 데이터가 없습니다.</div></section>`;
+  }
+
+  const narrow = window.innerWidth < 700;
+  const W = narrow ? 480 : 680, H = narrow ? 250 : 270, L = 64, R = 20, T = 26, B = 36;
+  const vals = [0, ...rows.flatMap((r) => [Number(r.profit_usd || 0), Number(r.loss_usd || 0), Number(r.net_usd || 0), Number(r.cum_usd || 0)])];
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const span = (hi - lo) || 100;
+  lo -= span * 0.15;
+  hi += span * 0.2;
+  const Y = (v) => T + ((hi - v) / (hi - lo)) * (H - T - B);
+  const y0 = Y(0);
+  const n = rows.length;
+  const slotW = (W - L - R) / Math.max(1, n);
+  const barW = Math.min(34, Math.max(10, slotW * 0.42));
+  const X = (i) => L + slotW * (i + 0.5);
+  const yt = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
+
+  const bars = rows.map((r, i) => {
+    const cx = X(i), prof = Number(r.profit_usd || 0), loss = Number(r.loss_usd || 0), net = Number(r.net_usd || 0);
+    let bHtml = "";
+    if (prof > 0) {
+      const yp = Y(prof), h = Math.max(2, y0 - yp);
+      bHtml += `<rect x="${(cx - barW / 2).toFixed(1)}" y="${yp.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="var(--buy)" opacity="0.85"/>`;
+    }
+    if (loss < 0) {
+      const yl = Y(loss), h = Math.max(2, yl - y0);
+      bHtml += `<rect x="${(cx - barW / 2).toFixed(1)}" y="${y0.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="var(--sell)" opacity="0.85"/>`;
+    }
+    if (prof === 0 && loss === 0) {
+      bHtml += `<rect x="${(cx - barW / 2).toFixed(1)}" y="${(y0 - 1).toFixed(1)}" width="${barW.toFixed(1)}" height="2" fill="var(--muted)" opacity="0.5"/>`;
+    }
+    const lblY = net >= 0 ? Math.max(14, Y(Math.max(prof, net)) - 6) : Math.min(H - B - 4, Y(Math.min(loss, net)) + 13);
+    const valTxt = net !== 0 ? `<text x="${cx.toFixed(1)}" y="${lblY.toFixed(1)}" font-size="10.5" font-family="IBM Plex Mono, monospace" font-weight="600" text-anchor="middle" fill="${net > 0 ? "var(--buy)" : "var(--sell)"}">${net > 0 ? "+" : "−"}$${money(Math.abs(net), 0)}</text>` : "";
+    return bHtml + valTxt + `<text x="${cx.toFixed(1)}" y="${H - 11}" font-size="11" text-anchor="middle" fill="var(--muted)">${esc(r.label || r.bucket)}</text>`;
+  }).join("");
+
+  const cumPts = rows.map((r, i) => `${X(i).toFixed(1)},${Y(Number(r.cum_usd || 0)).toFixed(1)}`).join(" ");
+  const cumLine = rows.length > 1
+    ? `<polyline points="${cumPts}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>`
+    : "";
+  const cumDots = rows.map((r, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(Number(r.cum_usd || 0)).toFixed(1)}" r="3.8" fill="var(--accent)" stroke="var(--glass-strong)" stroke-width="1.5"/>`).join("");
+  const lastRow = rows[rows.length - 1];
+
+  return `<section class="card" aria-label="기간별 손익 차트">
+    ${head}
+    <svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="손익 막대 및 누적 수익 곡선">
+      ${yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="2 2"/>
+        <text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="11" font-family="IBM Plex Mono, monospace" text-anchor="end" fill="var(--muted)">${v < 0 ? "−$" : "$"}${money(Math.abs(v), 0)}</text>`).join("")}
+      <line x1="${L}" x2="${W - R}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" stroke="var(--muted)" stroke-width="1.2" opacity="0.6"/>
+      ${bars}
+      ${cumLine}
+      ${cumDots}
+    </svg>
+    <div class="row between small muted">
+      <div class="row" style="gap:12px">
+        <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--buy);margin-right:4px"></i>익절</span>
+        <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--sell);margin-right:4px"></i>손절</span>
+        <span><i style="display:inline-block;width:12px;height:3px;background:var(--accent);margin-right:4px;vertical-align:middle"></i>누적 확정손익</span>
+      </div>
+      <span class="num">누적 확정: <b class="${Number(lastRow.cum_usd) >= 0 ? "buy" : "sell"}">${statsUsdSigned(lastRow.cum_usd)}</b> (${esc(statsKrw(lastRow.cum_usd, fx, true))})</span>
+    </div>
+  </section>`;
+}
+
+function statsCalendarCard(scope, st, fx) {
+  const cal = scope.calendar || {};
+  const curYm = S.statsMonth || st.current_month || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 7);
+  S.statsMonth = curYm;
+  const [Y, M] = curYm.split("-").map(Number);
+  const firstDow = new Date(Date.UTC(Y, M - 1, 1)).getUTCDay();
+  const lastDay = new Date(Date.UTC(Y, M, 0)).getUTCDate();
+  const todayStr = st.today || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const shiftYm = (delta) => {
+    const dt = new Date(Date.UTC(Y, M - 1 + delta, 1));
+    return dt.toISOString().slice(0, 7);
+  };
+
+  let mProf = 0, mLoss = 0, mProfCnt = 0, mLossCnt = 0;
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(`<div class="st-cal-cell empty" aria-hidden="true"></div>`);
+  for (let dd = 1; dd <= lastDay; dd++) {
+    const k = ymd(Y, M, dd);
+    const entry = cal[k];
+    const isToday = k === todayStr;
+    const isSel = S.statsCalDay === k;
+    if (entry) {
+      mProf += Number(entry.profit_usd || 0);
+      mLoss += Number(entry.loss_usd || 0);
+      mProfCnt += Number(entry.profit_count || 0);
+      mLossCnt += Number(entry.loss_count || 0);
+      const net = Number(entry.net_usd || 0);
+      const cls = net > 0 ? "prof" : net < 0 ? "loss" : "";
+      const txtCls = net > 0 ? "buy" : net < 0 ? "sell" : "";
+      const shortKrw = Math.round(Math.abs(net * fx) / 10000);
+      cells.push(`<button type="button" class="st-cal-cell ${cls} ${isToday ? "today" : ""} ${isSel ? "sel" : ""}" data-stcalday="${k}">
+        <span class="dnum">${dd}</span>
+        <span class="dpnl ${txtCls}">${net > 0 ? "+" : "−"}$${money(Math.abs(net), 0)}</span>
+        <span class="dkrw">${shortKrw > 0 ? `${net > 0 ? "+" : "−"}${shortKrw.toLocaleString()}만` : ""}</span>
+      </button>`);
+    } else {
+      cells.push(`<div class="st-cal-cell ${isToday ? "today" : ""}"><span class="dnum">${dd}</span></div>`);
+    }
+  }
+  const mNet = mProf + mLoss;
+  const selDay = S.statsCalDay && cal[S.statsCalDay] ? cal[S.statsCalDay] : null;
+
+  return `<section class="card" aria-label="월간 수익 캘린더">
+    <div class="row between">
+      <h2>📅 월간 확정 손익 캘린더</h2>
+      <div class="row">
+        <button type="button" class="btn small" data-stcalm="${shiftYm(-1)}" aria-label="이전 달">‹</button>
+        <b class="num">${Y}년 ${M}월</b>
+        <button type="button" class="btn small" data-stcalm="${shiftYm(1)}" aria-label="다음 달">›</button>
+      </div>
+    </div>
+    <div class="row between small">
+      <span>${M}월 합계: <b class="num ${mNet > 0 ? "buy" : mNet < 0 ? "sell" : ""}">${statsUsdSigned(mNet)}</b> (${esc(statsKrw(mNet, fx, true))})</span>
+      <span><span class="buy">익절 +$${money(mProf)} (${mProfCnt}건)</span> · <span class="sell">손절 ${mLoss < 0 ? "−" : ""}$${money(Math.abs(mLoss))} (${mLossCnt}건)</span></span>
+    </div>
+    <div class="st-cal">
+      ${DOW.map((w) => `<span class="dow">${w}</span>`).join("")}
+      ${cells.join("")}
+    </div>
+    ${selDay ? `<div class="card" style="margin-top:8px;padding:10px 12px;background:var(--soft)">
+      <div class="row between"><b>${esc(selDay.date)} 확정 손익 내역</b><span class="num ${Number(selDay.net_usd) >= 0 ? "buy" : "sell"}"><b>${statsUsdSigned(selDay.net_usd)}</b> (${esc(statsKrw(selDay.net_usd, fx, true))})</span></div>
+      ${(selDay.items || []).map((it) => `<div class="row between small" style="border-top:1px solid var(--line);padding-top:4px">
+        <span><span class="sym num">${esc(it.symbol)}</span> <b>${esc(it.name)}</b> <span class="muted">(${esc(ACC_NAME[it.account] || it.account)}) · ${it.qty}주 매도 @$${money(it.sell_price)} (평단 $${money(it.avg_cost)})</span></span>
+        <span class="num ${Number(it.pnl_usd) >= 0 ? "buy" : "sell"}"><b>${statsUsdSigned(it.pnl_usd)}</b> (${esc(statsKrw(it.pnl_usd, fx, true))})</span>
+      </div>`).join("")}
+    </div>` : `<div class="small muted">빨간 칸 = 익절일 · 파란 칸 = 손절일 (날짜를 누르면 당일 매도 체결 상세 내역을 봅니다)</div>`}
+  </section>`;
+}
+
+function statsStrategiesTableCard(scope, fx) {
+  const rows = scope.strategies || [];
+  if (!rows.length) return `<section class="card"><h2>🎯 계좌 · 전략별 성과 요약</h2><div class="empty">운용 중인 전략이 없습니다.</div></section>`;
+  return `<section class="card" aria-label="전략별 성과표">
+    <div class="row between"><h2>🎯 계좌 · 전략별 투자원금 & 확정 손익 성과표</h2><span class="small muted">클릭하면 전략 상세로 이동</span></div>
+    <div class="scroll"><table>
+      <thead><tr>
+        <th>전략 (계좌)</th>
+        <th class="n">현재 투자원금</th>
+        <th class="n">가용 예수금</th>
+        <th class="n">시드 소진율</th>
+        <th class="n">현재 평가손익</th>
+        <th class="n">이번 달 손익</th>
+        <th class="n">누적 확정손익 (수익률)</th>
+        <th class="n">익절 / 손절</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r) => {
+          const evPnl = Number(r.eval_pnl_usd || 0), mNet = Number(r.month_net_usd || 0), net = Number(r.net_pnl_usd || 0);
+          return `<tr>
+            <td><button type="button" class="linkbtn" data-detail="${esc(r.sid)}"><b>${esc(r.name)}</b></button> <span class="sym num">${esc(r.symbol)}</span> <span class="small muted">${esc(r.account_label)} · ${r.qty}주</span></td>
+            <td class="n num"><b>$${money(r.invested_usd)}</b><div class="small muted">${esc(statsKrw(r.invested_usd, fx))}</div></td>
+            <td class="n num">$${money(r.cash_usd)}</td>
+            <td class="n num">${Number(r.exhaustion_pct || 0).toFixed(1)}%</td>
+            <td class="n num ${evPnl > 0 ? "buy" : evPnl < 0 ? "sell" : ""}">${statsUsdSigned(evPnl)}<div class="small">${statsPctSigned(r.eval_pnl_pct)}</div></td>
+            <td class="n num ${mNet > 0 ? "buy" : mNet < 0 ? "sell" : ""}">${statsUsdSigned(mNet)}<div class="small muted">${esc(statsKrw(mNet, fx, true))}</div></td>
+            <td class="n num ${net > 0 ? "buy" : net < 0 ? "sell" : ""}"><b>${statsUsdSigned(net)}</b> (${statsPctSigned(r.return_pct)})<div class="small muted">${esc(statsKrw(net, fx, true))}</div></td>
+            <td class="n num"><span class="buy">+${r.profit_count}건($${money(r.profit_usd, 0)})</span> / <span class="sell">−${r.loss_count}건($${money(Math.abs(Number(r.loss_usd || 0)), 0)})</span></td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table></div>
+  </section>`;
+}
+
+function viewStats(s) {
+  const d = (S.snap && S.snap.detail) || {};
+  const st = resolveStatsData(s, d);
+  const curAcc = (S.statsAcc && S.statsAcc !== "all" && (st.by_account || {})[S.statsAcc]) ? S.statsAcc : "all";
+  const scope = curAcc === "all" ? st.all : st.by_account[curAcc];
+  const fx = st.usdkrw || 1350;
+
+  return `${statsAccountFilterBar(st)}
+    <div class="st-grid-pc">
+      ${statsCapitalCard(scope, fx)}
+      ${statsPeriodCard(scope, fx)}
+      ${statsSeriesChartCard(scope, fx)}
+      ${statsCalendarCard(scope, st, fx)}
+    </div>
+    ${statsStrategiesTableCard(scope, fx)}`;
+}
+
+function phoneStatsSection(s, d) {
+  const st = resolveStatsData(s, d);
+  const curAcc = (S.statsAcc && S.statsAcc !== "all" && (st.by_account || {})[S.statsAcc]) ? S.statsAcc : "all";
+  const scope = curAcc === "all" ? st.all : st.by_account[curAcc];
+  const fx = st.usdkrw || 1350;
+  return `${statsAccountFilterBar(st)}${statsCapitalCard(scope, fx)}${statsPeriodCard(scope, fx)}${statsSeriesChartCard(scope, fx)}${statsCalendarCard(scope, st, fx)}`;
+}
+
 function viewFamily() {
   if (S.viewing) {
     const o = S.owners.find((x) => x.owner_id === S.viewing) || {};
@@ -3212,6 +3567,11 @@ function bind() {
     render(); });
   document.querySelectorAll("[data-calday]").forEach((b) => b.onclick = () => { S.calDay = b.dataset.calday; S.calMonth = S.calDay.slice(0, 7); render(); });
   document.querySelectorAll("[data-calm]").forEach((b) => b.onclick = () => { S.calMonth = b.dataset.calm; render(); });
+  document.querySelectorAll("[data-stacc]").forEach((b) => b.onclick = () => { S.statsAcc = b.dataset.stacc; S.statsCalDay = null; render(); });
+  document.querySelectorAll("[data-stperiod]").forEach((b) => b.onclick = () => { S.statsPeriod = b.dataset.stperiod; render(); });
+  document.querySelectorAll("[data-stseries]").forEach((b) => b.onclick = () => { S.statsSeriesMode = b.dataset.stseries; render(); });
+  document.querySelectorAll("[data-stcalm]").forEach((b) => b.onclick = () => { S.statsMonth = b.dataset.stcalm; S.statsCalDay = null; render(); });
+  document.querySelectorAll("[data-stcalday]").forEach((b) => b.onclick = () => { S.statsCalDay = S.statsCalDay === b.dataset.stcalday ? null : b.dataset.stcalday; render(); });
   document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = (e) => { e.preventDefault(); S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
   document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = async () => {
