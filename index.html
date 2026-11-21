@@ -107,7 +107,7 @@ body[data-layout="phone"] .wrap { padding-bottom: calc(84px + env(safe-area-inse
 .ph-total { display: flex; flex-direction: column; gap: 2px } .ph-total b { font-size: 30px; font-weight: 600 }
 .banner { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 16px; border-radius: 14px; border: 1px solid currentColor;
   background: var(--glass-strong); color: var(--warn); font: 700 14px var(--sans); cursor: pointer }
-.ph-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+.ph-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 6px max(8px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px));
   background: var(--glass-strong); border-top: 1px solid var(--glass-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px) }
 .ph-nav button { min-height: 52px; border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); border-radius: 12px; cursor: pointer }
@@ -355,7 +355,8 @@ button.cp:hover { background: var(--soft) } button.cp:focus-visible { outline: 2
 @media (max-width: 640px) {
   .otable { min-width: 0; table-layout: auto } .otable thead { display: none } .otable, .otable tbody { display: block }
   .otable tr { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr) max-content; gap: 2px 10px; align-items: center;
-    grid-template-areas: "side kind kind put" "px qty amt amt" "adm note note note"; padding: 8px 2px; border-bottom: 1px solid var(--line) }
+    grid-template-areas: "side px qty st" "kind kind amt put" "adm note note note"; padding: 10px 2px; border-bottom: 1px solid var(--line) }   /* 작업 ㊹-C: 매수·매도 칩 · 가격 × 수량 크게 · 상태 칩 */
+  .otable .c-st { grid-area: st; justify-self: end } .otable td.c-px button.cp, .otable td.c-qty button.cp { font-size: 17px } .otable td.c-qty { justify-self: start }
   .otable td, .otable td.n, .otable td.c { border: 0; padding: 0; width: auto !important; text-align: left }
   .otable .c-side { grid-area: side } .otable .c-kind { grid-area: kind; white-space: normal } .otable .c-put { grid-area: put }
   .otable .c-px { grid-area: px } .otable .c-qty { grid-area: qty } .otable td.c-amt { grid-area: amt; color: var(--muted); text-align: right }
@@ -365,6 +366,31 @@ button.cp:hover { background: var(--soft) } button.cp:focus-visible { outline: 2
   .otable tr.done td.c-amt { text-decoration: line-through }
 }
 .chip.wrap { white-space: normal; display: inline-block; border-radius: 12px }
+/* 작업 ㊹ (11/21): 수익률 그래프 · 장중 분석 · 폰 개편 (현황 · 주문 · 전략 · 기록) — PC 배치는 그대로 */
+.chip.exp { color: var(--accent); border-color: currentColor }
+.lvline { display: block; margin-top: 2px } .kpi-basis { display: block; font-size: 11.5px; font-weight: 400; font-family: var(--sans) }
+.otable th.c-st, .otable td.c-st { width: 96px }
+.st-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--muted); background: var(--soft) }
+.st-chip.exp { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent) } .st-chip.put { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent) }
+.ph-head { flex-wrap: nowrap; gap: 6px } .ph-title { font-size: 19px; white-space: nowrap } .ph-menu-b { min-height: 44px; padding: 6px 12px }
+.ph-menu { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line) } .ph-menu .btn { min-height: 44px }
+.ph-sum { gap: 2px } .ph-big { font-size: 30px; font-weight: 600; line-height: 1.2; white-space: nowrap } .ph-sub { gap: 14px; font-size: 13.5px }
+.ph-todo { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 48px; padding: 0 16px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, #ff9a6b 22%, var(--glass-strong)); color: var(--warn); font: 600 14px var(--sans); cursor: pointer; text-align: left }
+.phq { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px } .phq-c { gap: 2px; padding: 12px 14px } .phq-c b { font-size: 22px; font-weight: 600 }
+.ph-tn { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer; min-height: 56px }
+.ph-bar { display: block; height: 8px; border-radius: 4px; background: var(--soft); overflow: hidden } .ph-bar i { display: block; height: 100%; background: var(--ok) }
+.lright { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto } .lrow.on { background: var(--soft); border-radius: 10px }
+.ph-shead { flex-wrap: nowrap } .ph-shead b { font-size: 17px; white-space: nowrap } .ph-shead .btn { min-height: 44px; min-width: 44px }
+.ph-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px } .ph-facts .card { gap: 2px; padding: 10px 12px }
+.ph-facts b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.bandlist { display: flex; flex-direction: column } .bandrow { display: grid; grid-template-columns: 56px 1fr auto; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); color: var(--muted) }
+.bandrow.next { color: var(--accent); font-weight: 600 } .bandrow.hit { color: var(--ink) }
+.ph-more > summary { cursor: pointer; font-weight: 600; min-height: 32px } .ph-ohead { padding: 0 4px } .ph-auto { padding: 10px 14px; flex-direction: row; align-items: center }
+body[data-layout="phone"] .otabs button > .sym, body[data-layout="phone"] .otabs button > .small { display: none } .ph-ctl { gap: 6px }
+body[data-layout="phone"] .otabs, body[data-layout="phone"] .subnav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none } body[data-layout="phone"] .otabs button, body[data-layout="phone"] .subnav button { flex: 0 0 auto }
+body[data-layout="phone"] .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none } body[data-layout="phone"] .seg button { flex: 0 0 auto; min-height: 40px }
+body[data-layout="phone"] .eqcard .chart { max-height: 220px }
 /* 설정: 계좌 한 줄 카드 */
 .accrow { display: grid; grid-template-columns: minmax(150px, 220px) 120px 150px minmax(0, 1fr); gap: 8px 14px; align-items: center;
   padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass-strong) }
@@ -595,7 +621,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-20b";
+const APP_VERSION = "2026-11-21a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -661,11 +687,20 @@ const GROUPS = [
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["security", "2단계 인증"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
 const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm", fb_bug: "board", fb_idea: "board" };      // 예전 이름 → 새 화면
+// 작업 ㊹-C (11/21 사용자): 폰 하단 메뉴 = 현황 · 주문 · 전략 · 기록 4개 (가투·설정은 위 '메뉴' 단추로).
+// 폰 기록 = 수익률 · 매매 · 달력 · 통계 (11/20 '자산' 탭 통계를 여기로) + 주문 이력 · 사진 올리기 · 알림 그대로. PC 는 그대로.
+const PH_TABS = [["home", "현황"], ["order", "주문"], ["strategy", "전략"], ["record", "기록"]];
+const PH_RECORD = [["perf", "수익률"], ["trades", "매매"], ["calendar", "달력"], ["stats", "통계"]];
 function pagesOf(g) {
-  return g[2].filter(([k]) => k !== "admin" || S.admin);
+  const p = g[2].filter(([k]) => k !== "admin" || S.admin);
+  if (g[0] === "record" && layout() === "phone") return [...PH_RECORD, ...p.filter(([k]) => !PH_RECORD.some(([x]) => x === k))];
+  return p;
 }
-function groupOf(tab) { return GROUPS.find((g) => g[2].some(([k]) => k === tab)) || GROUPS[0]; }
-const VIEWS = Object.fromEntries(GROUPS.flatMap((g) => g[2]));
+function groupOf(tab) {
+  if (layout() === "phone" && PH_RECORD.some(([k]) => k === tab)) return GROUPS.find((g) => g[0] === "record");
+  return GROUPS.find((g) => g[2].some(([k]) => k === tab)) || GROUPS[0];
+}
+const VIEWS = { ...Object.fromEntries(GROUPS.flatMap((g) => g[2])), perf: "수익률" };
 const draftCount = () => S.snap ? Object.keys(S.snap.summary.drafts || {}).length : 0;
 const pendingMembers = () => (S.members || []).filter((m) => m.status === "pending").length;
 function subNav() {
@@ -680,7 +715,8 @@ function currentView() {
   let v;
   switch (S.tab) {
     case "home": v = viewHome(S.snap, true); break;
-    case "stats": v = need(viewStats); break;
+    case "stats": v = need((s) => layout() === "phone" ? phoneStatsSection(s, S.snap.detail || {}) : viewStats(s)); break;
+    case "perf": v = need((s) => viewPerf(s, S.snap.detail || {})); break;      // 작업 ㊹-A: 폰 기록 → 수익률
     case "confirm": v = viewOrders() + cmdList("order"); break;          // 작업 ⑮: 주문 메뉴는 주문만 (사진 초안은 기록 → 사진 올리기)
     case "auto": v = viewAuto(); break;
     case "mockstat": v = need(viewMock); break;
@@ -880,6 +916,7 @@ function render() {
   restoreForm(kept);
 }
 function renderInner() {
+  LIVE_BITS = {}; _locN = 0;                      // 작업 ㊹: 장중에 새로 그릴 작은 조각 목록
   if (!S.user) return renderLogin();
   if (S.status && S.status !== "approved") return renderPending();
   const mode = layout();
@@ -910,24 +947,24 @@ function renderInner() {
         <main class="pc-main">${actBand}${notes}<div id="view">${currentView()}</div></main>
       </div>`;
   } else {
-    if (S.tab === "stats") S.tab = "home";
-    const t = S.snap ? (S.snap.summary.totals || {}) : {};
-    const bk = S.snap ? S.snap.summary.broker : null, tv = bk ? bk.value : t.value;
-    const tabs = GROUPS.filter((g) => g[0] !== "stats").map((g) => [g[0], g[1]]);
+    // 작업 ㊹-C: 폰 = 머리 한 줄(제목 · 노트북 n분 전 · auto 켠 전략 수 · 메뉴) + 화면 + 하단 4개. 설명용 고정 글 없음 (사용자 11/17)
+    const autoN = S.snap ? allStrategies(S.snap.summary).filter((g) => g.auto_on).length : 0;
+    const title = S.detail ? "전략" : S.tab === "home" ? "현황" : esc(groupOf(S.tab)[1]);
+    const navOn = (k) => S.detail ? k === "strategy" : grp === k;
+    const eng = S.snap ? `<span class="chip ${(Date.now() - new Date(S.snap.taken_at).getTime()) < 1800000 ? "ok" : "warn"} live" title="${when(S.snap.taken_at)}"><i></i>노트북 ${ago(S.snap.taken_at)}</span>` : `<span class="chip">노트북 연결 전</span>`;
+    const menu = S.phMenu ? `<nav class="ph-menu" aria-label="더 보기">
+        <button class="btn" data-tab="mock">가투</button><button class="btn" data-tab="settings">설정${pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>
+        ${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></nav>` : "";
     $app.innerHTML = `
       <header class="ph-top card">
-        <div class="row"><b>${esc(S.name)}</b><span class="grow"></span>${engine}</div>${actSwitch()}
-        ${S.tab === "home" && !S.detail && S.snap ? `<div class="ph-total"><span class="small muted">평가금액 (${bk ? "메리츠" : "메리츠 연결 전"})</span><b class="num">$${money(tv)}</b>${krw(tv) ? `<span class="krw">${krw(tv)}${S.snap.summary.fx ? " · 환율 " + money(S.snap.summary.fx.usdkrw, 0) : ""}</span>` : ""}
-          ${bk ? `<span class="small muted">${brokerNote(bk)}</span>` : ""}
-          <span class="small">평가손익 <span class="num ${Number(t.eval_pnl) >= 0 ? "buy" : "sell"}">${Number(t.eval_pnl) >= 0 ? "+" : "−"}$${money(Math.abs(Number(t.eval_pnl || 0)))}</span></span></div>`
-          : `<h1>${S.detail ? "전략" : esc(groupOf(S.tab)[1])}</h1>`}
+        <div class="row ph-head"><b class="ph-title">${title}</b><span class="grow"></span>${eng}${autoN ? `<span class="chip ok">auto ${autoN}</span>` : ""}
+          <button class="btn ghost ph-menu-b" id="b-phmenu" aria-expanded="${!!S.phMenu}" aria-label="메뉴 — 가투·설정·새로 고침">메뉴</button></div>${menu}${actSwitch()}
       </header>
-      ${actBand}${drafts && S.tab !== "upload" && S.tab !== "home" ? `<button class="banner" data-tab="upload">확인할 주문표 사진 ${drafts}건 (기록 → 사진 올리기) <span aria-hidden="true">›</span></button>` : ""}
-      ${notes}
+      ${actBand}${notes}
       <div id="view">${currentView()}</div>
-      ${grp === "settings" ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
+      ${grp === "settings" && !S.phMenu ? `<div class="row" style="justify-content:center">${sw}<button class="btn" id="b-refresh">새로 고침</button><button class="btn" id="b-out">로그아웃</button></div>` : ""}
 
-      <nav class="ph-nav" aria-label="하단 메뉴">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-current="${grp === k && !S.detail}">${l}${k === "record" && drafts ? `<span class="badge">${drafts}</span>` : ""}${k === "settings" && pendingMembers() ? `<span class="badge">${pendingMembers()}</span>` : ""}</button>`).join("")}</nav>`;
+      <nav class="ph-nav" aria-label="하단 메뉴">${PH_TABS.map(([k, l]) => `<button data-tab="${k}" aria-current="${navOn(k)}">${l}${k === "record" && drafts ? `<span class="badge">${drafts}</span>` : ""}</button>`).join("")}</nav>`;
   }
   bind();
 }
@@ -944,7 +981,21 @@ function viewOrders() {
       <span class="sym num">${esc(x.symbol)}</span><b>${esc(stratName(x, (s.plans || {})[x.id]))}</b><span class="small muted">${esc(ACC_NAME[x.account] || x.account)}</span>${ordBadges(s, d, x)}</button>`).join("")}</div>` : "";
   if (!g) return out + `<div class="card"><div class="empty">운영 중인 전략이 없습니다.</div></div>`;
   const acc = (s.accounts || {})[g.account];
+  if (layout() === "phone") out = phOrderHead(d) + out + phAutoLine(g);   // 작업 ㊹-C: 폰 주문 = 머리(오늘 밤 · 넣음 n / m) → 전략 칩 → auto 한 줄
   return out + (g.kind === "vr" ? vrOrders(s, d, g, acc) : realOrders(s, d, g, acc));
+}
+function phOrderHead(d) {
+  const t = (d.tonight_status || {}).total || {}, td = Object.values(d.real_orders || {}).map((r) => r && r.trade_date).filter(Boolean)[0];
+  return `<div class="row ph-ohead"><b>오늘 밤 주문</b>${td ? `<span class="small muted num">${esc(String(td).slice(5).replace("-", "/"))}</span>` : ""}<span class="grow"></span>
+    ${t.total ? `<b class="num">넣음 ${Number(t.placed || 0)} / ${Number(t.total)}</b>` : ""}</div>`;
+}
+// auto 켜진 전략만 한 줄 — 폰은 끄기만 (작업 ㉟, ADR 0059)
+function phAutoLine(g) {
+  if (!g.auto_on) return "";
+  const w = g.auto_window || {}, ko = (SESS_RULES.session_ko || {});
+  const ss = (w.sessions || []).map((x) => ko[x] || x).join("·"), end = w.end ? String(w.end).slice(5).replace("-", "/") + "까지" : "";
+  return `<div class="card ph-auto row"><span class="chip ok">● auto</span><span class="small">${esc([ss, end].filter(Boolean).join(" · "))}</span><span class="grow"></span>
+    ${autoButtons(g).includes("off") ? `<button class="btn" data-ao-off="${esc(g.id)}">끄기</button>` : ""}</div>`;
 }
 // ── 작업 ㊴ (R-18): 주문 화면 편의 — 표시·이 기기 기억만 (주문·계산·노트북과 상관없음) ──
 function ordBadges(s, d, g) {
@@ -988,16 +1039,16 @@ const kindCell = (t) => { const s = String(t || ""), i = s.indexOf("("); return 
 //   x = { side, kind(글자), price(문자 또는 null), priceText, qty, note(html), admin(html), pk, auto(자동 넣음 표시 이유 또는 "") }
 function oTable(items, admin, day) {
   if (!items.length) return "";
-  const pm = placedMap(day);
+  const pm = placedMap(day), ph = layout() === "phone";   // 작업 ㊹-C: 폰은 줄마다 상태 칩 (넣음 / 체결 예상 / 대기)
   return `<div class="scroll"><table class="otable${admin ? " adm" : ""}"><thead><tr>${admin ? '<th class="c c-adm" title="manual 관리자 주문 — 체크한 줄만 아래 [확인] 뒤 노트북이 메리츠에 주문">관리자 주문</th>' : ""}<th class="c-side">구분</th><th class="c-kind">주문유형</th>
-      <th class="n c-px">주문단가($)</th><th class="n c-qty">수량(주)</th><th class="n c-amt">예상금액($)</th><th class="c-note">비고·상태</th><th class="c c-put" title="메리츠 앱에 넣은 뒤 체크 — 이 기기에만 기억">넣음</th></tr></thead><tbody>
+      <th class="n c-px">주문단가($)</th><th class="n c-qty">수량(주)</th><th class="n c-amt">예상금액($)</th><th class="c-note">비고·상태</th>${ph ? '<th class="c-st">상태</th>' : ""}<th class="c c-put" title="메리츠 앱에 넣은 뒤 체크 — 이 기기에만 기억">넣음</th></tr></thead><tbody>
     ${items.map((x) => { const done = !!x.auto || !!pm[x.pk], px = x.price != null && x.price !== "" ? String(x.price) : null;
       const what = `${sideKo(x.side)} ${px ? money(px) : x.priceText} × ${x.qty}`;
       return `<tr class="${done ? "done" : ""}">${admin ? `<td class="c c-adm">${x.admin ? `<label class="adm-l">${x.admin}<span>관리자 주문</span></label>` : ""}</td>` : ""}
         <td class="c-side"><span class="side-badge ${sideCls(x.side)}">${sideKo(x.side)}</span></td><td class="kind c-kind">${kindCell(x.kind)}</td>
         <td class="n c-px">${px ? `<button class="cp num" data-copy="${esc(px)}" aria-label="주문단가 ${esc(px)} 복사">${money(px)}</button>` : `<span class="muted">${esc(x.priceText)}</span>`}</td>
         <td class="n c-qty"><button class="cp num" data-copy="${esc(x.qty)}" aria-label="수량 ${esc(x.qty)}주 복사">${Number(x.qty).toLocaleString("en-US")}</button></td>
-        <td class="n num c-amt">${px ? "$" + money(Number(px) * Number(x.qty)) : "-"}</td><td class="note c-note">${x.note || ""}</td>
+        <td class="n num c-amt">${px ? "$" + money(Number(px) * Number(x.qty)) : "-"}</td><td class="note c-note">${x.note || ""}</td>${ph ? `<td class="c-st"><span class="st-chip ${done ? "put" : x.exp ? "exp" : ""}">${done ? "넣음" : x.exp ? "체결 예상" : "대기"}</span></td>` : ""}
         <td class="c c-put"><label class="put-l"><input type="checkbox" class="placed" data-pday="${esc(day)}" data-pk="${esc(x.pk)}" ${done ? "checked" : ""} ${x.auto ? `disabled title="${esc(x.auto)}"` : ""} aria-label="${esc(what)} — 메리츠에 넣음"><span>넣음</span></label></td></tr>`; }).join("")}
     </tbody></table></div>`;
 }
@@ -1041,7 +1092,7 @@ function vrOrders(s, d, g, acc) {
   const left = ladder.filter((l) => !filled.has(l.tag));
   const buyLeft = left.filter((l) => l.side === "BUY").reduce((a, l) => a + Number(l.price) * Number(l.qty), 0);
   let out = (vr.auto_now ? `<div class="card warn-note"><div class="small">⚠ auto VR 이 켜져 있어 노트북이 이번 주기 예약을 넣습니다 — manual 예약은 막혀 있고, 메리츠 앱에서도 따로 넣지 마세요 (auto 를 끄면 바로 manual 가능)</div></div>` : "")
-    + `<div class="msg">VR 은 2주 단위 <b>보통(지정가) · 기간잔량 예약주문</b>입니다. 주기가 바뀌면 아래 주문표 줄을 한 번 예약하면 주기 끝까지 매일 다시 걸립니다. 이미 체결된 단계는 빠집니다.</div>`;
+    + (layout() === "phone" ? "" : `<div class="msg">VR 은 2주 단위 <b>보통(지정가) · 기간잔량 예약주문</b>입니다. 주기가 바뀌면 아래 주문표 줄을 한 번 예약하면 주기 끝까지 매일 다시 걸립니다. 이미 체결된 단계는 빠집니다.</div>`);
   out += `<section class="card"><div class="row between"><h2><span class="sym num">${esc(g.symbol)}</span> ${esc(stratName(g))} 주문표</h2>
       <span class="small muted">${esc(name)}${vr.week != null ? ` · ${esc(vr.week)}주차` : ""}${vr.start ? ` · 주기 ${esc(vr.start)} ~ ${esc(vrCycleEnd(vr.start))}` : ""}</span></div>
     <div class="small">${(((s.quotes || {})[g.symbol] || {}).price) ? `현재가 <b class="num">${money(s.quotes[g.symbol].price)}</b> · ` : ""}메리츠 보유 <b class="num">${Number(g.qty) + Number(g.excluded_qty || 0)}주</b>${Number(g.excluded_qty || 0) ? ` <span class="muted">(VR ${g.qty} + 따로 ${g.excluded_qty} — VR 계산은 ${g.qty}주 기준)</span>` : ""}${g.avg ? ` · 평단 <b class="num">${money(g.avg)}</b>` : ""} · 달러 예수금 <b class="num">${usd !== null ? "$" + money(usd) : "-"}</b>
@@ -1071,8 +1122,8 @@ function vrOrders(s, d, g, acc) {
   return out;
 }
 function realOrders(s, d, g, acc) {
-  const cur = g.account, r = (d.real_orders || {})[cur];
-  let out = `<div class="msg">메리츠 앱에 이 목록대로 넣으면 됩니다. <b>거부 예상</b> 줄은 현재가 대비 ±28% 밖이라(증권사 기준 30%) 증권사가 받지 않으니 옆의 가격으로 넣으세요. 노트북이 <b>메리츠 보유</b>와 주문표로 계산했습니다.</div>`;
+  const cur = g.account, r = (d.real_orders || {})[cur], ph = layout() === "phone";   // 작업 ㊹-C: 폰은 안내 문단 없이 숫자·칩·단추만
+  let out = ph ? "" : `<div class="msg">메리츠 앱에 이 목록대로 넣으면 됩니다. <b>거부 예상</b> 줄은 현재가 대비 ±28% 밖이라(증권사 기준 30%) 증권사가 받지 않으니 옆의 가격으로 넣으세요. 노트북이 <b>메리츠 보유</b>와 주문표로 계산했습니다.</div>`;
   const miss = ordersMissing(r, acc);
   if (miss) return out + miss;
   const row = (r.strategies || []).find((x) => x.sid === g.id);
@@ -1089,9 +1140,10 @@ function realOrders(s, d, g, acc) {
         const ts = tsa.trade_date === r.trade_date ? (tsa.strategies || []).find((x) => x.sid === row.sid) : null;
         const adm = confirmOn(acc);
         const item = (l, folded) => { const lk = [row.sid, l.side, l.kind, l.price || "종가", l.qty].join("|");   // 작업 ㉒: MOC(가격 없음)도 고르기
-          return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk,
+          return { side: l.side, kind: KIND_KO[l.kind] || l.kind, price: l.price || null, priceText: l.kind === "MOC" ? "종가" : "시장가", qty: l.qty, pk: lk, exp: locHit(row.symbol, l),
             auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
             note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.catchup_add ? `<span class="chip warn" title="메리츠 보유가 계산보다 적어 이 LOC 매수 줄에 부족분을 더함 (작업 ㊾)">부족분 ${l.catchup_add}주 포함</span>` : l.market_skip ? `<span class="chip" title="${esc(l.market_skip)}">시장가 안 냄</span>` : l.market_wait ? `<span class="chip" title="${esc(l.market_wait)}">마감 1분 전 · 조건 ${money(l.cond_price)}</span>` : l.method_note ? `<span class="chip warn">${esc(l.method_note)}</span>` : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
+              + (l.kind === "LOC" && l.price ? locChip(row.symbol, l.side, l.price) : "")        // 작업 ㊹-B ②: 지금가 기준 체결 예상 (참고만)
               + (l.auto_wait ? ` <span class="chip ok" title="auto 가 켜져 있어 해당 장 시간·시세 조건이 되면 노트북이 자동으로 넣습니다">${esc(l.auto_wait)}</span>` : row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
             admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done && !l.auto_wait) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
@@ -1108,10 +1160,10 @@ function realOrders(s, d, g, acc) {
               ${oTable(after.map((l) => item(l, false)), adm, day)}${foldBox("ord:" + row.sid, hide, oTable(hide.map((l) => item(l, true)), adm, day))}</div>` : "");
       })()}
       ${row.usd_share != null ? `<div class="small" style="margin-top:6px">이 전략 달러 예수금 몫 <b class="num">$${money(row.usd_share)}</b> <span class="muted">(달러 예수금을 주문표 잔금 비율로)</span> · 지금 걸 주 매수 <b class="num">$${money(row.lock_need)}</b> ${Number(row.usd_short) > 0 ? `<span class="chip warn">$${money(row.usd_short)} 부족</span>` : '<span class="chip ok">충분</span>'}</div>` : ""}
-      ${row.later_pct ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
+      ${row.later_pct && !ph ? `<div class="small muted">마감 전 확인 기준: 현재가 −${esc(row.later_pct)}% 보다 낮은 LOC 매수 줄</div>` : ""}
       ${row.band_status ? `<div class="small" style="margin-top:6px">📉 ${esc(row.band_status)}</div>` : ""}
       ${(row.warnings || []).map((w) => `<div class="small" style="color:var(--warn)">! ${esc(w)}</div>`).join("")}
-      <div class="small muted" style="margin-top:6px">LOC 주문은 걸면 주문가능금액이 묶입니다 → 주 매수 줄만 지금 걸고(≤ 1회 매수금), 1주씩 하락 대비 줄은 현재가가 기준 안으로 오면 '마감 전 걸기', 아니면 '마감 전 확인'(급락하면 텔레그램 알림). LOC 는 종가로 체결.</div></section>`;
+      ${ph ? "" : `<div class="small muted" style="margin-top:6px">LOC 주문은 걸면 주문가능금액이 묶입니다 → 주 매수 줄만 지금 걸고(≤ 1회 매수금), 1주씩 하락 대비 줄은 현재가가 기준 안으로 오면 '마감 전 걸기', 아니면 '마감 전 확인'(급락하면 텔레그램 알림). LOC 는 종가로 체결.</div>`}</section>`;
   if (r.cash != null && Number(r.short || 0) > 0)
     out += `<div class="card warn-note"><div class="small">⚠ ${esc(ACC_NAME[cur] || cur)} 전체 주문가능 <b class="num">$${money(r.cash)}</b> (원화 통합증거금 포함) — 이 계좌 무한매수 전략들의 지금 걸 매수에 <b class="num">$${money(r.short)}</b> 모자랍니다</div></div>`;
   out += confirmPanel(cur, r, g);
@@ -1175,13 +1227,14 @@ function viewHome(snap, mine) {
   const s = snap.summary, d = snap.detail || {};
   if (S.detail && mine) return viewStrategy(s, d, S.detail);
   const t = s.totals || {}, strat = allStrategies(s);
+  const bn = brokerNow(s, d);                      // 작업 ㊹-D: 프리·정규·애프터장엔 보유 × 지금가 + 달러 예수금 (표시만)
   const tonight = Object.values(d.tonight || {}).flat();
   const signed = (x) => x === null || x === undefined ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + "$" + money(Math.abs(Number(x)));
   const pnlCls = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
   const kpis = [
-    ...(s.broker ? [["평가금액 (메리츠)", "$" + money(s.broker.value), `${krw(s.broker.value) ? krw(s.broker.value) + " · " : ""}${brokerNote(s.broker)}`, ""]] : []),
+    ...(s.broker ? [["평가금액 (메리츠)", lv("lv-pcval", () => { const b = brokerNow(S.snap.summary, S.snap.detail || {}); return `<span id="lv-pcval">$${money(b.value)}<small class="muted kpi-basis">${esc(b.basis)}</small></span>`; }), `${krw(bn.value) ? krw(bn.value) + " · " : ""}${brokerNote(s.broker)}`, ""]] : []),
     ...(s.broker ? [] : [["평가금액", "$" + money(t.value), "메리츠 연결 전 (보유 × 종가 + 잔금)", ""]]),
-    ["평가손익", signed(t.eval_pnl), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 기준" : "평단 있는 보유 기준", pnlCls(t.eval_pnl)],
+    ["평가손익", lv("lv-pceval", () => { const e = evalNow(S.snap.summary); return `<span id="lv-pceval" class="${pnlClass(e.v)}">${signedUsd(e.v)}</span>`; }), krw(t.eval_pnl) ? krw(t.eval_pnl) + " · 평단 기준" : "평단 있는 보유 기준", ""],
     ["실현손익", signed(t.realized), "프로그램 기록 이후 누적", pnlCls(t.realized)],
     ...(s.broker ? [["달러 예수금 (메리츠)", "$" + money(s.broker.usd), "계좌별 달러 예수금 합계", ""]] : []),
     tonightKpi(d, tonight),
@@ -1193,18 +1246,18 @@ function viewHome(snap, mine) {
   const isPhone = layout() === "phone" && mine;
   if (!isPhone) B.push(["kpis", "요약 숫자", `<section class="kpis" aria-label="요약">${kpis.map(([l, v, sub, c]) => `<div class="card kpi"><span class="small muted">${l}</span>
       <b class="num ${c}">${v}</b><span class="muted kpi-sub" title="${esc(sub)}">${sub}</span></div>`).join("")}</section>`]);
-  if (mine) B.push(["today", "오늘 할 일", todayCard(s, d, strat)]);
+  if (mine && !isPhone) B.push(["today", "오늘 할 일", todayCard(s, d, strat)]);   // 폰은 할 일이 있을 때만 주황 띠 한 줄 (작업 ㊹-C)
   if (!strat.length && mine) B.push(["empty", "계좌·전략 등록", `<div class="card"><h2>아직 등록한 계좌·전략이 없습니다</h2>
     <div class="small muted">메리츠 계좌와 따라갈 전략(무한매수 주문표·VR·V4.0)을 먼저 등록하세요. 계좌 API 키는 노트북 .env 에만 넣습니다.</div>
     <div class="row"><button class="btn primary" data-tab="addstrat">계좌·전략 등록하기</button></div></div>`]);
-  if (isPhone) phoneBlocks(s, d, B);
+  if (isPhone) phoneHome(s, d, strat, B);          // 작업 ㊹-C: 폰 현황 = 평가금 → 할 일 띠 → 시세 두 칸 → 오늘 밤 주문 → 전략 → 수익률 그래프
   else B.push(["strategies", "전략별 현황", `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`]);
-  B.push(["market", "시세", marketStrip(s)]);
-  B.push(["equity", "자산 추이", `<div class="card eqcard"><div class="row between"><h2>자산(USD)</h2></div>${equityChart(d.equity || [])}</div>`]);
+  if (!isPhone) B.push(["market", "시세", marketStrip(s)]);
+  B.push(["equity", "자산 추이", `<div class="card eqcard"><div class="row between">${isPhone ? "<h2>수익률</h2>" : "<h2>자산(USD)</h2>"}</div>${equityChart(d.equity || [])}</div>`]);
   return out + arrangeBlocks(B, mine);
 }
 // ── 홈 카드 순서·숨김 (제보 #6): 이 기기·화면 모양(PC/폰)마다 따로 기억 ──
-function homeOrderKey() { return "homeOrder:" + layout(); }
+function homeOrderKey() { return "homeOrder:" + (layout() === "phone" ? "phone2" : layout()); }   // 작업 ㊹-C: 폰은 새 배치라 예전 순서를 쓰지 않음
 function homeOrder() {
   let o = {}; try { o = JSON.parse(localStorage.getItem(homeOrderKey()) || "null") || {}; } catch (e) {}
   if (o.order && o.v !== 3) { o = { v: 3, hidden: o.hidden || [] }; saveHomeOrder(o); }   // 작업 ㊴: 새 기본 순서(요약 → 할 일 → 전략 → 차트)로 한 번 (숨김은 그대로)
@@ -1279,10 +1332,8 @@ function closeDays(s, syms) {
 function marketStrip(s) {
   const m = s.market;
   // 실시간: 보고 있는 동안 관리자 노트북이 5초마다 올리는 시세가 현황(스냅숏)보다 새로우면 그것을 쓴다
-  const snapAt = Object.values(s.quotes || {})[0], liveNew = S.live && S.live.at && (!snapAt || new Date(S.live.at) > new Date(snapAt.at || 0));
-  // 작업 55: 애프터장엔 노트북이 Yahoo 마지막 체결가를 표시용으로 보충 (실시간 = {price, source, at}, 현황 = show·show_at) — 주문 값은 메리츠 그대로
-  const q = liveNew ? Object.fromEntries(Object.entries(S.live.quotes || {}).map(([k, v]) => [k, v && typeof v === "object" ? { price: v.price, at: S.live.at, src: v.source, srcAt: v.at } : { price: v, at: S.live.at }]))
-    : Object.fromEntries(Object.entries(s.quotes || {}).map(([k, v]) => [k, v && v.show ? { ...v, price: v.show, src: v.source, srcAt: v.show_at } : v]));
+  // 작업 55: 애프터장엔 노트북이 Yahoo 마지막 체결가를 표시용으로 보충 — 고르기는 quoteMap 한 곳 (작업 ㊹)
+  const { q, liveNew } = quoteMap(s);
   if (!m && !Object.keys(q).length) return "";
   const hm = (iso) => iso ? iso.slice(11, 16) : "";
   const phase = m ? `<span class="chip phase-${esc(m.code)}">${esc(m.label)}${m.until ? " ~" + hm(m.until) : ""}</span>
@@ -1316,29 +1367,319 @@ function quoteFlat(s, sym, v) {
   if (sq.flat === false) return false;
   return Number((s.closes || {})[sym]) === px;
 }
-function phoneBlocks(s, d, B) {
-  B.unshift(["phone_stats", "투자원금·손익 통계", phoneStatsSection(s, d)]);
-  let accs = "";
-  for (const [accId, acc] of Object.entries(s.accounts || {})) {
-    const rows = acc.strategies.map((g) => ({ ...g, account: accId }));
-    if (!rows.length) continue;
-    const lc = (s.last_check || {})[accId];
-    accs += `<section class="card list"><div class="row"><b>${esc(ACC_NAME[accId] || acc.name)}</b>
-        <span class="chip ${acc.api ? "ok" : ""}">${acc.api ? "API" : "수동"}</span><span class="grow"></span>
-</div>
-      ${rows.length ? rows.map((g) => { const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id], px = (s.closes || {})[g.symbol];
-        const pnl = px && g.avg ? (Number(px) - Number(g.avg)) * g.qty : null;
-        const planQ = plan && plan.holding != null ? Number(plan.holding) * Number(plan.multiplier || 1) : null, gap = planQ != null ? planQ - Number(g.qty || 0) : 0;
-        const sub = `메리츠 ${g.qty}주${g.avg ? " · 평단 " + money(g.avg) : ""}${plan ? " · 주문표 " + planQ + "주 · T " + plan.T : vr ? " · 주문표 V " + money(vr.V) + " · " + vrCashText(g, vr) : ""}${gap > 0 ? " · 보충 " + gap + "주" : ""}`;
-        return `<button class="lrow" data-detail="${esc(g.id)}"><span class="sym num">${esc(g.symbol)}</span>
-          <span class="lmain"><b>${esc(stratName(g, plan))}</b><span class="small muted num">${esc(sub)}</span></span>
-          <span class="lval num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "$" + money(g.cash) : (pnl >= 0 ? "+" : "−") + money(Math.abs(pnl))}</span></button>`; }).join("")
-        : `<div class="empty">전략 없음</div>`}</section>`;
+// ════ 작업 ㊹ (ADR 0063, 11/21): 수익률 그래프 · 장중 분석 · 평가금 지금가 · 폰 개편 — 웹 표시만 (주문 계산·주문 경로·장부·auto 그대로) ════
+const LIVE_PHASES = ["pre", "regular", "after"];
+const signedUsd = (x) => x === null || x === undefined || x === "" || !isFinite(Number(x)) ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + "$" + money(Math.abs(Number(x)));
+const signedPct = (x, n = 1) => x === null || x === undefined || x === "" || !isFinite(Number(x)) ? "-" : (Number(x) > 0 ? "+" : Number(x) < 0 ? "−" : "") + Math.abs(Number(x)).toFixed(n) + "%";
+const pnlClass = (x) => Number(x) > 0 ? "buy" : Number(x) < 0 ? "sell" : "";
+const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+// ㊹-A: 기간 → 그래프 시작 날짜. all = 처음부터(""), year = 올해 1/1, month = 한 달 전, cycle = 주기 시작일(없으면 null = 못 그림)
+function perfFrom(period, today, cycleStart) {
+  if (period === "year") return String(today).slice(0, 4) + "-01-01";
+  if (period === "month") { const t = new Date(String(today).slice(0, 10) + "T00:00:00Z"); t.setUTCMonth(t.getUTCMonth() - 1); return t.toISOString().slice(0, 10); }
+  if (period === "cycle") return cycleStart ? String(cycleStart).slice(0, 10) : null;
+  return "";
+}
+// ㊹-A: 하루 기록(state/equity.json, 종가 기준) → [{date, v}]. unit "usd" = 평가금 합, "pct" = (평가 − 원금) ÷ 원금 × 100.
+// keys = 전략 id. 원금 = 그날 기록(prin, 원금을 더 넣은 날도 그날 값) → 없으면 지금 원금(prinNow). % 에서는 원금 없는 전략은 뺀다.
+function perfPoints(rows, keys, prinNow, unit, from) {
+  const out = [];
+  for (const r of rows || []) {
+    if (from && String(r.date) < from) continue;
+    let v = 0, p = 0, n = 0;
+    for (const k of keys || []) {
+      const x = (r.strat || {})[k];
+      if (x === null || x === undefined || x === "" || !isFinite(Number(x))) continue;
+      const pd = (r.prin || {})[k], pr = Number(pd !== undefined && pd !== null && pd !== "" ? pd : (prinNow || {})[k] || 0);
+      if (unit === "pct" && !(pr > 0)) continue;
+      v += Number(x); p += pr; n++;
+    }
+    if (!n) continue;
+    out.push({ date: r.date, v: unit === "pct" ? (v - p) / p * 100 : Math.round(v * 100) / 100 });
   }
-  if (accs) B.push(["accounts", "계좌별 전략", accs]);
-  const ns = (d.notices || []).slice(0, 3);
-  if (ns.length) B.push(["notices", "최근 알림", `<div class="card"><div class="row between"><h2>최근 알림</h2><button class="btn ghost" data-tab="board">전체 보기</button></div>
-    ${ns.map((n) => `<div class="small">${esc(n.text)}</div>`).join("")}</div>`]);
+  return out;
+}
+// ㊹-B ②: LOC 줄 — 지금가로 장이 끝나면 걸릴지 (매수: 지금가 ≤ 주문가, 매도: 지금가 ≥ 주문가). gap = 주문가 ÷ 지금가 − 1 (%). 참고만 — LOC 는 마감 값으로 정해짐
+function locExpect(side, price, now) {
+  const p = Number(price), q = Number(now);
+  if (!(p > 0) || !(q > 0)) return null;
+  const buy = String(side || "").toUpperCase() === "BUY";
+  return { hit: buy ? q <= p : q >= p, gap: (p / q - 1) * 100 };
+}
+// ㊹-B ③: 낙폭 단계 [[하락%, 누적 B], …] · base = 기준 종가 → 단계 가격(센트 반올림), 지금가가 닿았는지, 아직 안 닿은 첫 단계 = 다음, left = 그 가격까지 지금가 대비 %
+function bandSteps(bands, base, now) {
+  const b = Number(base), q = Number(now);
+  if (!(b > 0)) return [];
+  let seen = false;
+  return [...(bands || [])].sort((x, y) => Number(x[0]) - Number(y[0])).map(([pct, B]) => {
+    const px = Math.round(b * (1 - Number(pct) / 100) * 100 + 1e-9) / 100;
+    const hit = q > 0 && q <= px;
+    const next = q > 0 && !hit && !seen;
+    if (next) seen = true;
+    return { pct: Number(pct), B: Number(B), px, hit, next, left: q > 0 ? (px / q - 1) * 100 : null };
+  });
+}
+// ㊹-B ①: 전략 지금 평가손익 = 보유 × (지금가 − 평단), 평단 대비 %, 직전 종가 대비 %, 오늘(직전 종가 대비 금액)
+function stratLive(qty, avg, close, now) {
+  const q = Number(qty || 0), a = Number(avg || 0), c = Number(close || 0), x = Number(now || 0);
+  if (!(x > 0)) return null;
+  return { pnl: a > 0 && q ? (x - a) * q : null, pct: a > 0 ? (x / a - 1) * 100 : null,
+           vsClose: c > 0 ? (x / c - 1) * 100 : null, day: c > 0 && q ? (x - c) * q : null };
+}
+// ㊹-D: 평가금(메리츠) = API 계좌는 메리츠 보유 × 지금가(없으면 종가) + 달러 예수금, 원장 계좌(연결 전)는 그 값 그대로. 노트북 broker_totals 와 같은 모양
+function brokerValueNow(bk, realOrders, pxOf, closes) {
+  let v = 0, day = 0, live = false;
+  for (const [acc, a] of Object.entries((bk && bk.accounts) || {})) {
+    const pos = ((realOrders || {})[acc] || {}).positions;
+    if (a.ledger || !pos) { v += Number(a.value || 0); continue; }
+    let h = 0;
+    for (const [sym, q] of Object.entries(pos)) {
+      const c = Number((closes || {})[sym] || 0), x = Number(pxOf(sym) || 0), n = Number(q || 0);
+      if (x > 0) { live = true; h += x * n; if (c > 0) day += (x - c) * n; } else h += c * n;
+    }
+    v += h + Number(a.usd || 0);
+  }
+  return { value: Math.round(v * 100) / 100, day: Math.round(day * 100) / 100, live };
+}
+// 시세 고르기 한 곳 (시세 줄·폰 시세 칸·평가금 지금가·LOC 예상이 같이 씀): 5초 실시간이 현황보다 새로우면 그것,
+// 애프터장 Yahoo 보충은 표시값 (작업 55) — 주문 쪽 값(메리츠 quotes[].price)은 바꾸지 않음
+function quoteMap(s) {
+  const snapAt = Object.values(s.quotes || {})[0], liveNew = !!(S.live && S.live.at && (!snapAt || new Date(S.live.at) > new Date(snapAt.at || 0)));
+  const q = liveNew ? Object.fromEntries(Object.entries(S.live.quotes || {}).map(([k, v]) => [k, v && typeof v === "object" ? { price: v.price, at: S.live.at, src: v.source, srcAt: v.at } : { price: v, at: S.live.at }]))
+    : Object.fromEntries(Object.entries(s.quotes || {}).map(([k, v]) => [k, v && v.show ? { ...v, price: v.show, src: v.source, srcAt: v.show_at } : v]));
+  return { q, liveNew };
+}
+// 지금가 — 프리장·정규장·애프터장이고 값이 움직이면(또는 애프터장 Yahoo 보충) 그 값, 아니면 null (= 직전 종가 기준)
+function nowPx(s, sym) {
+  const m = s && s.market;
+  if (!m || !LIVE_PHASES.includes(m.code)) return null;
+  const v = quoteMap(s).q[sym];
+  if (!v || !(Number(v.price) > 0) || quoteFlat(s, sym, v)) return null;
+  return Number(v.price);
+}
+function liveHm(s) {
+  const v = Object.values(quoteMap(s).q)[0];
+  if (!v || !v.at) return "";
+  try { return new Date(v.at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" }); } catch (e) { return String(v.at).slice(11, 16); }
+}
+function closeLabel(s, sym) {
+  const iso = ((s && s.close_dates) || {})[sym];
+  return iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? Number(iso.slice(5, 7)) + "/" + Number(iso.slice(8, 10)) + " 종가" : "직전 종가";
+}
+function brokerNow(s, d) {
+  const bk = s.broker; if (!bk) return null;
+  const syms = Object.keys(s.closes || {});
+  if (!syms.some((x) => nowPx(s, x) != null)) return { value: Number(bk.value), day: null, live: false, basis: syms.length ? closeLabel(s, syms[0]) : "" };
+  return { ...brokerValueNow(bk, (d || {}).real_orders, (x) => nowPx(s, x), s.closes), basis: "지금가 " + liveHm(s) };
+}
+function evalNow(s) {
+  let v = Number((s.totals || {}).eval_pnl || 0), live = false;
+  for (const g of allStrategies(s)) {
+    const x = nowPx(s, g.symbol), c = Number((s.closes || {})[g.symbol] || 0);
+    if (x != null && c > 0 && g.avg) { v += (x - c) * (Number(g.qty || 0) + Number(g.excluded_qty || 0)); live = true; }
+  }
+  return { v, live };
+}
+function stratNow(s, g) {
+  const x = nowPx(s, g.symbol), c = (s.closes || {})[g.symbol], px = x != null ? x : Number(c || 0);
+  return { ...(stratLive(g.qty, g.avg, c, px) || {}), px, live: x != null };
+}
+// 장중에만 새로 그리는 작은 조각 (단추 없음): id → 그리는 함수. 화면을 그릴 때마다 새로 채운다
+var LIVE_BITS = {};
+function lv(id, fn) { LIVE_BITS[id] = fn; return fn(); }
+function liveTick() {
+  for (const [id, fn] of Object.entries(LIVE_BITS)) { const el = document.getElementById(id); if (el) { try { el.outerHTML = fn(); } catch (e) {} } }
+}
+// ㊹-B ①: PC 전략 카드·전략 화면 한 줄 — 장중만 '지금 +$123 (+1.2%) · 어제 종가 대비 +0.8%'
+function liveLine(g) {
+  return lv("lv-s-" + g.id, () => {
+    const s = S.snap.summary, n = stratNow(s, g);
+    if (!n.live || n.pnl == null) return `<span id="lv-s-${esc(g.id)}" hidden></span>`;
+    return `<span class="small lvline" id="lv-s-${esc(g.id)}">지금 <b class="num ${pnlClass(n.pnl)}">${signedUsd(n.pnl)}</b> (${signedPct(n.pct)}) · 어제 종가 대비 <span class="num ${pnlClass(n.vsClose)}">${signedPct(n.vsClose)}</span></span>`;
+  });
+}
+// ㊹-B ②: LOC 줄 체결 예상 칩 (장중·지금가 있을 때만)
+var _locN = 0;
+function locChip(sym, side, price) {
+  const id = "lv-loc-" + (++_locN);
+  return lv(id, () => {
+    const s = S.snap.summary, x = nowPx(s, sym), e = x != null ? locExpect(side, price, x) : null;
+    if (!e) return `<span id="${id}" hidden></span>`;
+    return `<span id="${id}" class="chip ${e.hit ? "exp" : ""}" title="지금가 $${money(x)} 기준 예상 — LOC 는 마감 값으로 정해집니다">지금가 기준 ${e.hit ? "걸림" : "안 걸림"} ${signedPct(e.gap)}</span>`;
+  });
+}
+function locHit(sym, l) {
+  if (!S.snap || l.kind !== "LOC") return false;
+  const x = nowPx(S.snap.summary, sym), e = x != null ? locExpect(l.side, l.price, x) : null;
+  return !!(e && e.hit);
+}
+// ㊹-B ③: 낙폭 단계 표 (기준 = 직전 종가) — 단계·가격·B · '다음 · n% 남음'
+function bandRows(g, base) {
+  return lv("lv-band-" + g.id, () => {
+    const s = S.snap.summary, steps = bandSteps(g.bands, base, nowPx(s, g.symbol));
+    return `<div id="lv-band-${esc(g.id)}" class="bandlist">${steps.map((b) => `<div class="bandrow ${b.next ? "next" : ""} ${b.hit ? "hit" : ""}"><span class="num">−${esc(b.pct)}%</span><span class="num">${money(b.px)} · ${esc(b.B)}B</span>
+      <span class="small">${b.hit ? "닿음" : b.next ? `다음 · ${Math.abs(b.left).toFixed(1)}% 남음` : ""}</span></div>`).join("")}</div>`;
+  });
+}
+// 주기 시작일: VR = 지금 주기 시작, 무한매수 = 매매 표에서 지금 싸이클 첫 날
+function cycleStart(s, d, sid) {
+  const vr = (s.vr || {})[sid];
+  if (vr && vr.start) return String(vr.start).slice(0, 10);
+  const rows = ((((d || {}).trades || {})[sid]) || {}).real || [];
+  if (!rows.length) return null;
+  const c = rows[rows.length - 1][11], f = rows.find((r) => r[11] === c);
+  return f ? String(f[0]).slice(0, 10) : null;
+}
+const PERIODS = [["all", "전체"], ["year", "올해"], ["month", "한 달"], ["cycle", "주기"]];
+function prinNow(s) { return Object.fromEntries(allStrategies(s, true).filter((g) => Number(g.principal) > 0).map((g) => [g.id, Number(g.principal)])); }
+// 선 그리기 한 곳 (자산·수익률). series = [[키, 이름, 색, {날짜: 값}]], fmt = 축 글자
+function drawLines(dates, series, fmt, label) {
+  const ok = (v) => v !== null && v !== undefined && isFinite(Number(v));
+  const pts = dates.filter((dt) => series.some(([, , , m]) => ok(m[dt])));
+  if (!pts.length) return "";
+  const vals = pts.flatMap((dt) => series.map(([, , , m]) => m[dt]).filter(ok).map(Number));
+  const narrow = window.innerWidth < 700, few = pts.length <= 3;
+  const W = narrow ? 480 : Math.max(640, Math.min(2400, Math.round(window.innerWidth - 90))), H = narrow ? 250 : 240, L = 64, R = 16, T = few ? 34 : 12, B = 30;
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.1 || Math.max(Math.abs(hi) * 0.02, fmt === "pct" ? 1 : 10); lo -= pad; hi += pad;
+  const n = pts.length, X = (i) => n === 1 ? (L + W - R) / 2 : L + i * (W - L - R) / (n - 1), Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
+  const yt = Array.from({ length: 5 }, (_, i) => lo + (hi - lo) * i / 4);
+  const ylab = (v) => fmt === "pct" ? (v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%" : "$" + money(v, 0);
+  // 작업 ㉔ C: 예전엔 점이 7개 이상이면 6개만 골라(반올림) 가운데 날짜(예 11/10)가 빠졌다 → 폭에 들어가면 모든 날짜, 넘치면 일정 간격 + 마지막 날
+  const maxLab = Math.max(2, Math.floor((W - L - R) / 46)), step = Math.ceil(n / maxLab);
+  const xi = []; for (let i = 0; i < n; i += step) xi.push(i);
+  if (xi[xi.length - 1] !== n - 1) { if (n - 1 - xi[xi.length - 1] < Math.ceil(step / 2)) xi.pop(); xi.push(n - 1); }
+  const zero = fmt === "pct" && lo < 0 && hi > 0 ? `<line x1="${L}" x2="${W - R}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/>` : "";
+  const lines = series.map(([, , c, m]) => {
+    const xy = pts.map((dt, i) => ok(m[dt]) ? [X(i), Y(Number(m[dt])), dt, Number(m[dt])] : null).filter(Boolean);
+    const last = xy[xy.length - 1];
+    const line = xy.length > 1 ? `<polyline points="${xy.map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ")}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>` : "";
+    if (few) return line + xy.map(([x, y, dt, v]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="${c}" stroke="var(--glass-strong)" stroke-width="2.5"/>
+        <text x="${x.toFixed(1)}" y="${(y - 14).toFixed(1)}" font-size="12.5" font-weight="600" text-anchor="middle" fill="var(--ink)">${esc(String(dt).slice(5).replace("-", "/"))} · ${fmt === "pct" ? signedPct(v) : "$" + money(v)}</text>`).join("");
+    return line + (last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="${c}"/>` : ""); }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${esc(label)} ${esc(pts[0])}부터 ${esc(pts[n - 1])}까지">
+    ${yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="11.5" text-anchor="end" fill="var(--muted)">${ylab(v)}</text>`).join("")}
+    <line x1="${L}" x2="${L}" y1="${T}" y2="${H - B}" stroke="var(--line)"/>${zero}
+    ${xi.map((i) => `<text x="${X(i).toFixed(1)}" y="${H - 10}" font-size="11.5" text-anchor="middle" fill="var(--muted)">${esc(String(pts[i]).slice(5).replace("-", "/"))}</text>`).join("")}
+    ${lines}</svg>`;
+}
+const segBtns = (attr, cur, opts, label) => `<div class="seg" role="tablist" aria-label="${esc(label)}">${opts.map(([k, l]) => `<button role="tab" ${attr}="${k}" class="${cur === k ? "on" : ""}" aria-selected="${cur === k}">${esc(l)}</button>`).join("")}</div>`;
+// ── 폰 현황 (㊹-C) ──
+function phTotal(s, d) {
+  return lv("lv-total", () => {
+    const t = s.totals || {}, bn = brokerNow(s, d), val = bn ? bn.value : Number(t.value), ev = evalNow(s);
+    return `<section class="card ph-sum" id="lv-total" aria-label="평가금액">
+      <div class="row between"><span class="small muted">평가금액 · ${bn ? "메리츠" : "메리츠 연결 전"}</span><span class="small muted">${esc(bn ? bn.basis : "")}</span></div>
+      <b class="num ph-big">$${money(val)}</b>${krw(val) ? `<span class="krw">${krw(val)}</span>` : ""}
+      <div class="row ph-sub">${bn && bn.live ? `<span>오늘 <b class="num ${pnlClass(bn.day)}">${signedUsd(bn.day)}</b></span>` : ""}<span>평가손익 <b class="num ${pnlClass(ev.v)}">${signedUsd(ev.v)}</b></span></div></section>`;
+  });
+}
+// 할 일이 있을 때만 주황 띠 한 줄 (보충·부족·확인 필요) — 누르면 그 화면
+function phTodo(s, d, strat) {
+  const items = [];
+  if (s.halted) items.push(["home", "자동매매 정지 — " + s.halted, null]);
+  for (const [acc, r] of Object.entries(d.real_orders || {})) {
+    if (!r || r.error) continue;
+    for (const x of r.strategies || []) {
+      const g = strat.find((y) => y.id === x.sid), nm = g ? stratName(g, (s.plans || {})[g.id]) : x.sid;
+      if (Number(x.diff) < 0 && !x.unsure) items.push(["confirm", `${nm} 보충 ${-Number(x.diff)}주`, x.sid]);
+      if (Number(x.usd_short) > 0) items.push(["confirm", `${nm} 부족 $${money(x.usd_short)}`, x.sid]);
+      const rej = (x.lines || []).filter((l) => l.collar).length;
+      if (rej) items.push(["confirm", `${nm} 거부 예상 ${rej}줄`, x.sid]);
+    }
+  }
+  const drafts = Object.keys(s.drafts || {}).length;
+  if (drafts) items.push(["upload", `사진 확인 ${drafts}건`, null]);
+  for (const [sid, gt] of Object.entries(s.cycle_gates || {})) if (gt.real || gt.mock) items.push(["mystrat", `${sid} 싸이클 ${gt.no} 끝 — 규칙 정하기`, null]);
+  if (myVoteNeeded().length) items.push(["consensus", `합의 ${myVoteNeeded().length}건`, null]);
+  if (!items.length) return "";
+  const [tab, text, sid] = items[0];
+  return `<button class="ph-todo" ${sid ? `data-ordgo="${esc(sid)}"` : `data-tab="${esc(tab)}"`}><span>${esc(text)}${items.length > 1 ? ` <span class="muted">외 ${items.length - 1}</span>` : ""}</span><span>${sid ? "주문 보기" : "보기"} ›</span></button>`;
+}
+function phQuotes(s) {
+  const { q } = quoteMap(s), m = s.market || {};
+  const basis = (s.change_closes && Object.keys(s.change_closes).length ? s.change_closes : s.closes) || {};
+  const cdays = closeDays(s, Object.keys(q));
+  if (!Object.keys(q).length) return `<section id="mkt" data-v="ph" class="phq"></section>`;
+  return `<section id="mkt" data-v="ph" class="phq" aria-label="시세">${Object.entries(q).map(([sym, v]) => {
+    const prev = Number(basis[sym] || (s.closes || {})[sym]), px = Number(v.price), ch = prev ? (px / prev - 1) * 100 : null, fl = quoteFlat(s, sym, v);
+    const ph = v.src === "yahoo_after" ? "애프터 (Yahoo)" : m.label || "";
+    return `<div class="card phq-c"><span class="small muted">${esc(sym)} · ${esc(ph)}</span><b class="num ${fl ? "muted" : ""}">${money(v.price)}</b>
+      <span class="small num ${pnlClass(ch)}">${ch !== null && isFinite(ch) ? signedPct(ch, 2) : ""} <span class="muted">${fl ? "정규장 종가" : cdays.by[sym] ? esc(cdays.by[sym]) + " 종가" : ""}</span></span></div>`; }).join("")}</section>`;
+}
+function phTonight(d) {
+  const t = (d.tonight_status || {}).total;
+  if (!t || !t.total || t.state === "none") return "";
+  const n = Number(t.placed || 0), m = Number(t.total || 0), pct = m ? Math.min(100, n / m * 100) : 0;
+  return `<button class="card ph-tn" data-tab="order"><span class="row between"><span class="small">오늘 밤 주문</span><b class="num">${t.state === "unknown" && t.placed == null ? "확인 안 됨" : `넣음 ${n} / ${m}`}</b></span>
+    <span class="ph-bar" aria-hidden="true"><i style="width:${pct.toFixed(0)}%"></i></span></button>`;
+}
+function phStratRow(s, g) {
+  const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
+  const planQ = plan && plan.holding != null ? Number(plan.holding) * Number(plan.multiplier || 1) : null, gap = planQ != null ? planQ - Number(g.qty || 0) : 0;
+  const sub = [`${g.qty}주`, g.avg ? "평단 " + money(g.avg) : "", plan ? `T ${plan.T}/${Number(plan.splits)}` : vr ? "V " + money(vr.V, 0) : "",
+    vr ? (vrCash(g, vr).left != null ? "남은 현금 $" + money(vrCash(g, vr).left) : "") : ""].filter(Boolean).join(" · ");
+  const st = gap > 0 ? `<span class="chip warn">보충 ${gap}주</span>` : g.auto_on ? '<span class="chip ok">● auto</span>' : g.active === false ? '<span class="chip">꺼짐</span>' : "";
+  const pct = lv("lv-r-" + g.id, () => { const n = stratNow(S.snap.summary, g); return `<span id="lv-r-${esc(g.id)}" class="num lval ${pnlClass(n.pct)}">${n.pct == null ? "-" : signedPct(n.pct)}</span>`; });
+  return `<button class="lrow" data-detail="${esc(g.id)}"><span class="lmain"><b>${esc(stratName(g, plan))} <span class="small muted">${esc(g.symbol)} · ${esc(ACC_NAME[g.account] || g.account)}</span></b>
+    <span class="small muted num">${esc(sub)}</span></span><span class="lright">${pct}${st}</span></button>`;
+}
+function phoneHome(s, d, strat, B) {
+  B.push(["total", "평가금액", phTotal(s, d)]);
+  const todo = phTodo(s, d, strat); if (todo) B.push(["todo", "할 일", todo]);
+  B.push(["market", "시세", phQuotes(s)]);
+  const tn = phTonight(d); if (tn) B.push(["tonight", "오늘 밤 주문", tn]);
+  if (strat.length) B.push(["strategies", "전략", `<section class="card list">${[...strat].sort((a, b) => stratRank(stratName(a, (s.plans || {})[a.id])) - stratRank(stratName(b, (s.plans || {})[b.id]))).map((g) => phStratRow(s, g)).join("")}</section>`]);
+}
+// ── 폰 전략 화면 (㊹-C) ──
+function viewStrategyPhone(s, d, g) {
+  const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
+  let out = `<div class="row ph-shead"><button class="btn ghost" data-back-home="1" aria-label="현황으로">←</button><b>${esc(stratName(g, plan))}</b>
+    <span class="small muted">${esc(g.symbol)} · ${esc(ACC_NAME[g.account] || g.account)}</span><span class="grow"></span>${g.auto_on ? '<span class="chip ok">● auto</span>' : g.active === false ? '<span class="chip">꺼짐</span>' : ""}</div>`;
+  out += lv("lv-sp-" + g.id, () => { const n = stratNow(S.snap.summary, g);
+    return `<section class="card ph-sum" id="lv-sp-${esc(g.id)}"><span class="small muted">평가손익 · ${n.live ? "지금가" : esc(closeLabel(s, g.symbol))} <span class="num">${money(n.px)}</span></span>
+      <span class="row"><b class="num ph-big ${pnlClass(n.pnl)}">${signedUsd(n.pnl)}</b><span class="num ${pnlClass(n.pct)}">${signedPct(n.pct)}</span></span>
+      <span class="small">실현 <span class="num ${pnlClass(g.realized)}">${signedUsd(g.realized)}</span>${n.live && n.vsClose != null ? ` · 어제 종가 대비 <span class="num ${pnlClass(n.vsClose)}">${signedPct(n.vsClose)}</span>` : ""}</span></section>`; });
+  const c = vr ? vrCash(g, vr) : null, [bU] = plan ? unitView(plan) : [null];
+  const facts = plan ? [["보유", g.qty + "주"], ["평단", g.avg ? money(g.avg) : "-"], ["잔금", "$" + money(g.cash)], ["1회 B", bU == null ? "-" : "$" + money(bU)], ["목표가", money(plan.target_price)], ["★지점", money(plan.star_price)]]
+    : vr ? [["보유", g.qty + "주"], ["V", money(vr.V)], ["최소", money(vr.min)], ["최대", money(vr.max)], ["주기 시작 Pool", c.start != null ? "$" + money(c.start) : "-"], ["남은 현금", c.left != null ? "$" + money(c.left) : "-"]]
+    : [["보유", g.qty + "주"], ["평단", g.avg ? money(g.avg) : "-"], ["잔금", "$" + money(g.cash)]];
+  out += `<section class="ph-facts">${facts.map(([k, v]) => `<div class="card"><span class="small muted">${esc(k)}</span><b class="num">${esc(v)}</b></div>`).join("")}</section>`;
+  if (plan) out += `<div class="card"><div class="row between"><b>${esc(plan.phase || "")}</b><span class="small muted num">T ${esc(plan.T)} / ${Number(plan.splits)}</span></div>${tBar(Number(plan.T), Number(plan.splits))}</div>`;
+  if (isPh01(g) && g.bands && g.bands.length) {
+    const base = (s.closes || {})[g.symbol] || (plan && plan.close);
+    out += `<div class="card"><div class="row between"><b>낙폭 단계</b><span class="small muted">기준 <span class="num">${money(base)}</span></span></div>${bandRows(g, base)}</div>`;
+  }
+  out += `<details class="card ph-more"><summary>자세히</summary>${viewStrategy(s, d, g.id, true)}</details>`;
+  return out;
+}
+// ── 기록 → 수익률 (㊹-A, 폰) ──
+function viewPerf(s, d) {
+  const rows = d.equity || [], P = prinNow(s), unit = S.pfUnit || "pct", period = S.pfPeriod || "all";
+  const strat = allStrategies(s).sort((a, b) => stratRank(stratName(a, (s.plans || {})[a.id])) - stratRank(stratName(b, (s.plans || {})[b.id])));
+  const sel = strat.some((g) => g.id === S.pfSid) ? S.pfSid : null;
+  const keys = sel ? [sel] : strat.map((g) => g.id);
+  const withP = keys.filter((k) => P[k] > 0);
+  const cs = sel ? cycleStart(s, d, sel) : null, from = perfFrom(period, kstToday(), cs);
+  const head = `<div class="row ph-ctl">${segBtns("data-pfperiod", period, PERIODS, "기간")}<span class="grow"></span>${segBtns("data-pfunit", unit, [["pct", "%"], ["usd", "$"]], "단위")}</div>`;
+  const last = rows.length ? rows[rows.length - 1] : null;
+  const valOf = (k) => last && last.strat && last.strat[k] != null ? Number(last.strat[k]) : null;
+  const sumV = withP.reduce((a, k) => a + (valOf(k) || 0), 0), sumP = withP.reduce((a, k) => a + P[k], 0);
+  const big = withP.length && sumP ? `<div class="row"><b class="num ph-big ${pnlClass(sumV - sumP)}">${signedPct((sumV - sumP) / sumP * 100)}</b><span class="num ${pnlClass(sumV - sumP)}">${signedUsd(sumV - sumP)}</span>
+      ${!sel && withP.length < keys.length ? `<span class="small muted">원금 있는 전략 ${withP.length}개</span>` : ""}</div>` : "";
+  let chart;
+  if (period === "cycle" && !sel) chart = `<div class="empty">전략을 하나 고르세요</div>`;
+  else if (period === "cycle" && !cs) chart = `<div class="empty">주기 시작일을 아직 모릅니다</div>`;
+  else if (unit === "pct" && !withP.length) chart = `<div class="empty">원금을 넣으면 % 가 보임</div>`;
+  else {
+    const pts = sel || unit === "pct" ? perfPoints(rows, unit === "pct" ? withP : keys, P, unit, from)
+      : rows.filter((r) => !from || String(r.date) >= from).map((r) => ({ date: r.date, v: r.broker != null ? Number(r.broker) : Number(r.value) })).filter((x) => isFinite(x.v));
+    chart = drawLines(pts.map((x) => x.date), [["v", "", EQ_COLORS[0], Object.fromEntries(pts.map((x) => [x.date, x.v]))]], unit, unit === "pct" ? "수익률" : "평가금") || `<div class="empty">이 기간 기록이 없습니다</div>`;
+  }
+  const list = strat.map((g) => { const v = valOf(g.id), p = P[g.id];
+    const amt = v == null ? "-" : p ? signedUsd(v - p) : "$" + money(v), pct = v != null && p ? signedPct((v - p) / p * 100) : "";
+    return `<button class="lrow ${sel === g.id ? "on" : ""}" data-pfsid="${esc(g.id)}" aria-pressed="${sel === g.id}"><span class="lmain"><b>${esc(stratName(g, (s.plans || {})[g.id]))}</b>${p ? "" : '<span class="small muted">원금을 넣으면 % 가 보임</span>'}</span>
+      <span class="lright"><span class="num ${p ? pnlClass(v - p) : ""}">${amt}</span><span class="num lval ${p ? pnlClass(v - p) : ""}">${pct}</span></span></button>`; }).join("");
+  return `<section class="card">${head}${big}${chart}</section><section class="card list">${list}</section>`;
 }
 // 작업 ㉘-A: '오늘 밤 주문' 카드 — 노트북이 보낸 tonight_status(㉔ E 기준 줄 vs 메리츠 주문내역)를 그대로 보여 준다.
 // 넣음 N / 남음 M, 남음 0 이면 완료, 메리츠 조회 실패면 확인 안 됨. 옛 노트북(tonight_status 없음)은 옛 건수.
@@ -1395,6 +1736,7 @@ function strategyCard(s, g) {
       <span class="muted">${metric[0]}</span><span class="num">${esc(metric[1])}</span>
       <span class="muted">평가손익 (메리츠)</span><span class="num ${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span>
     </div>
+    ${liveLine(g)}
     ${st}</div>`;
 }
 // 메리츠 · 주문표 두 줄 (ADR 0048, 11/07 사용자: 자산 화면에서 가투 줄 없앰 — 가투는 가투 메뉴에서)
@@ -1683,45 +2025,42 @@ function eqSeries(rows, kind) {
   return keys.map((k) => [k, label(k), (r) => (r[field] || {})[k]]);
 }
 function equityChart(rows) {
-  const kind = S.eqKind || "total";
-  const kinds = [["total", "합계"], ["acc", "계좌"], ["sym", "종목"], ["strat", "투자전략"]];
-  const series = eqSeries(rows, kind);
+  // 작업 ㊹-A: 단위 [금액 | %] + 기간 [전체 | 올해 | 한 달 | 주기]. % = (그날 평가 − 원금) ÷ 원금 — 원금 있는 전략만, 하루 기록(종가 기준) 그대로
+  const s = S.snap ? S.snap.summary : {}, d = S.snap ? (S.snap.detail || {}) : {};
+  const unit = S.eqUnit === "pct" ? "pct" : "usd", period = S.eqPeriod || "all";
+  const kinds = unit === "pct" ? [["total", "합계"], ["strat", "투자전략"]] : [["total", "합계"], ["acc", "계좌"], ["sym", "종목"], ["strat", "투자전략"]];
+  const kind = kinds.some(([k]) => k === S.eqKind) ? S.eqKind : "total";
+  const P = prinNow(s), withP = Object.keys(P);
+  const series = unit === "pct" && kind === "total" ? (withP.length ? [["pct_total", "합계 (원금 있는 전략)", null]] : []) : eqSeries(rows, kind);
   const sel = (S.eqSel || {})[kind];
   const on = series.filter(([k]) => !sel || sel.includes(k));
+  const noP = (k) => unit === "pct" && kind === "strat" && !(P[k] > 0);
   const head = `<div class="row" style="gap:6px;flex-wrap:wrap"><div class="seg" role="tablist" aria-label="자산 추이 종류">${kinds.map(([k, l]) => `<button role="tab" data-eqkind="${k}" class="${kind === k ? "on" : ""}" aria-selected="${kind === k}">${l}</button>`).join("")}</div>
-    <span class="grow"></span>${series.map(([k, l], i) => `<button class="chip eqchip ${on.some((x) => x[0] === k) ? "on" : ""}" data-eqsel="${esc(k)}" style="--c:${EQ_COLORS[i % EQ_COLORS.length]}"><i></i>${esc(l)}</button>`).join("")}</div>`;
-  const ok = (v) => v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
-  const pts = rows.filter((r) => on.some(([, , f]) => ok(f(r))));
-  if (!series.length || pts.length < 1) return head + `<div class="empty">${kind === "total" ? "아직 기록이 없습니다." : "이 종류는 11/07부터 기록합니다 — 내일부터 선이 그려집니다."}</div>`;
+    ${segBtns("data-equnit", unit, [["usd", "금액"], ["pct", "%"]], "단위")}${segBtns("data-eqperiod", period, PERIODS, "기간")}
+    <span class="grow"></span>${series.map(([k, l], i) => `<button class="chip eqchip ${on.some((x) => x[0] === k) ? "on" : ""}" ${k === "pct_total" ? "" : `data-eqsel="${esc(k)}"`} style="--c:${EQ_COLORS[i % EQ_COLORS.length]}"><i></i>${esc(l)}${noP(k) ? " (원금 없음)" : ""}</button>`).join("")}</div>`;
+  if (!series.length) return head + `<div class="empty">${unit === "pct" ? "원금을 넣으면 % 가 보임" : kind === "total" ? "아직 기록이 없습니다." : "이 종류는 11/07부터 기록합니다 — 내일부터 선이 그려집니다."}</div>`;
   if (!on.length) return head + `<div class="empty">위에서 그릴 선을 하나 이상 고르세요.</div>`;
-  const vals = pts.flatMap((r) => on.map(([, , f]) => f(r)).filter(ok).map(Number));
-  // 작업 ㊴: 낮게(폰·PC 모두 화면에서 약 220~250px) — 그림 폭을 화면 폭에 맞춰 글자 크기가 그대로 보이게
-  const narrow = window.innerWidth < 700, few = pts.length <= 3;
-  const W = narrow ? 480 : Math.max(640, Math.min(2400, Math.round(window.innerWidth - 90))), H = narrow ? 310 : 240, L = 64, R = 16, T = few ? 34 : 12, B = 30;
-  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.1 || Math.max(hi * 0.02, 10); lo -= pad; hi += pad;
-  const n = pts.length, X = (i) => n === 1 ? (L + W - R) / 2 : L + i * (W - L - R) / (n - 1), Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
-  const yt = Array.from({ length: 5 }, (_, i) => lo + (hi - lo) * i / 4);
-  // 작업 ㉔ C: 예전엔 점이 7개 이상이면 6개만 골라(반올림) 가운데 날짜(예 11/10)가 빠졌다 → 폭에 들어가면 모든 날짜, 넘치면 일정 간격 + 마지막 날
-  const maxLab = Math.max(2, Math.floor((W - L - R) / 46)), step = Math.ceil(n / maxLab);
-  const xi = []; for (let i = 0; i < n; i += step) xi.push(i);
-  if (xi[xi.length - 1] !== n - 1) { if (n - 1 - xi[xi.length - 1] < Math.ceil(step / 2)) xi.pop(); xi.push(n - 1); }
-  const lines = on.map(([k, , f]) => { const ci = series.findIndex((x) => x[0] === k), c = EQ_COLORS[ci % EQ_COLORS.length];
-    const xy = pts.map((r, i) => ok(f(r)) ? [X(i), Y(Number(f(r)))] : null).filter(Boolean);
-    const last = xy[xy.length - 1];
-    const line = xy.length > 1 ? `<polyline points="${xy.map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ")}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>` : "";
-    if (few) {                                     // 작업 ㊴: 점 3개 이하 → 큰 점 + 점 위에 날짜·금액
-      const dots = pts.map((r, i) => ok(f(r)) ? [X(i), Y(Number(f(r))), r.date, Number(f(r))] : null).filter(Boolean);
-      return line + dots.map(([x, y, dt, v]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="${c}" stroke="var(--glass-strong)" stroke-width="2.5"/>
-        <text x="${x.toFixed(1)}" y="${(y - 14).toFixed(1)}" font-size="12.5" font-weight="600" text-anchor="middle" fill="var(--ink)">${esc(String(dt).slice(5).replace("-", "/"))} · $${money(v)}</text>`).join("");
-    }
-    return line + (last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="${c}"/>` : ""); }).join("");
-  const lastRow = pts[n - 1];
-  return head + `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="자산 추이 ${esc(pts[0].date)}부터 ${esc(lastRow.date)}까지 (USD)">
-    ${yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="11.5" text-anchor="end" fill="var(--muted)">$${money(v, 0)}</text>`).join("")}
-    <line x1="${L}" x2="${L}" y1="${T}" y2="${H - B}" stroke="var(--line)"/>
-    ${xi.map((i) => `<text x="${X(i).toFixed(1)}" y="${H - 10}" font-size="11.5" text-anchor="middle" fill="var(--muted)">${esc(pts[i].date.slice(5).replace("-", "/"))}</text>`).join("")}
-    ${lines}</svg>
-    <div class="small">${on.map(([, l, f]) => `${esc(l)} <b class="num">${ok(f(lastRow)) ? "$" + money(f(lastRow)) : "-"}</b>`).join(" · ")}</div>`;
+  let cs = null;
+  if (period === "cycle") {
+    if (kind !== "strat" || on.length !== 1) return head + `<div class="empty">주기는 투자전략을 하나 고르세요.</div>`;
+    cs = cycleStart(s, d, on[0][0]);
+    if (!cs) return head + `<div class="empty">이 전략의 주기 시작일을 아직 모릅니다.</div>`;
+  }
+  const from = perfFrom(period, kstToday(), cs);
+  const use = rows.filter((r) => !from || String(r.date) >= from);
+  const ok = (v) => v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
+  const maps = on.map(([k, l, f]) => {
+    const ci = series.findIndex((x) => x[0] === k);
+    let m = {};
+    if (unit === "pct") m = Object.fromEntries(perfPoints(use, k === "pct_total" ? withP : [k], P, "pct", "").map((x) => [x.date, x.v]));
+    else for (const r of use) if (ok(f(r))) m[r.date] = Number(f(r));
+    return [k, l, EQ_COLORS[ci % EQ_COLORS.length], m];
+  });
+  const dates = use.map((r) => r.date);
+  const svg = drawLines(dates, maps, unit, unit === "pct" ? "수익률" : "자산(USD) 추이");
+  if (!svg) return head + `<div class="empty">${unit === "pct" ? "원금 있는 전략의 기록이 이 기간에 없습니다." : kind === "total" ? "아직 기록이 없습니다." : "이 종류는 11/07부터 기록합니다 — 내일부터 선이 그려집니다."}</div>`;
+  const lastOf = (m) => { const ks = Object.keys(m).sort(); return ks.length ? m[ks[ks.length - 1]] : null; };
+  return head + svg + `<div class="small">${maps.map(([, l, , m]) => { const v = lastOf(m); return `${esc(l)} <b class="num">${v == null ? "-" : unit === "pct" ? signedPct(v) : "$" + money(v)}</b>`; }).join(" · ")}</div>`;
 }
 // 작업 ㊻ C (11/17, R-24): 1회매수시도 B — 주문표에 값이 없으면(PH01 등) 노트북 publish.sheet_unit 과 같은 식으로 계산해 '(계산)' 표시.
 // x = {unit, unit_calc, mode, rdays, cash, splits, T}. 돌려줌 [값|null, 계산 설명('' = 주문표 값)]. 표시만 (주문 계산 그대로).
@@ -1736,12 +2075,13 @@ function unitView(x) {
   return [r2(c / (N - T)), "잔금 ÷ (분할수 − T)"];
 }
 const unitCalcTag = (note) => note ? ` <small class="muted" title="${esc(note)}">(계산)</small>` : "";
-function viewStrategy(s, d, sid) {
+function viewStrategy(s, d, sid, inner) {
   const g = allStrategies(s, true).find((x) => x.id === sid);
   if (!g) { S.detail = null; return viewHome({ summary: s, detail: d }, true); }
+  if (!inner && layout() === "phone") return viewStrategyPhone(s, d, g);   // 작업 ㊹-C: 폰은 개편안 (이 화면 전체는 '자세히' 안에)
   const plan = (s.plans || {})[sid], vr = (s.vr || {})[sid], px = (s.closes || {})[g.symbol];
-  let out = `<div class="row"><button class="btn" data-back-home="1">← 현황</button>
-    <span class="sym num">${esc(g.symbol)}</span><h2>${esc(stratName(g, plan))}</h2><span class="chip ${g.active ? "ok" : ""}">${g.active ? (g.mock_only ? "켜짐 · 가투 전용" : "켜짐") : "꺼짐"}</span></div>`;
+  let out = inner ? "" : `<div class="row"><button class="btn" data-back-home="1">← 현황</button>
+    <span class="sym num">${esc(g.symbol)}</span><h2>${esc(stratName(g, plan))}</h2><span class="chip ${g.active ? "ok" : ""}">${g.active ? (g.mock_only ? "켜짐 · 가투 전용" : "켜짐") : "꺼짐"}</span>${liveLine(g)}</div>`;
   if (plan) {
     const [bU, bNote] = unitView(plan);
     const facts = [["1회매수시도 B", bU == null ? "-" : money(bU) + unitCalcTag(bNote), esc(bNote || "잔금 ÷ (분할수 − T)")], ["현재 회차 T", plan.T, `${Number(plan.splits)}분할 · ${plan.phase}`],
@@ -1751,7 +2091,7 @@ function viewStrategy(s, d, sid) {
     out += `<section class="kpis">${facts.map(([l, v, sub]) => `<div class="card kpi"><span class="small muted">${l}</span><b class="num">${v}</b><span class="muted" style="font-size:12px">${sub}</span></div>`).join("")}</section>`;
     if (isPh01(g)) out += `<div class="card"><div class="row between"><h2>낙폭 단계</h2><span class="small muted">보기만 · 바꾸려면 세 사람 합의 뒤 ph01-bands (ADR 0037·0060)</span></div>
       <table class="small"><thead><tr><th>구간 (전날 종가 대비 하락)</th><th>누적 B</th></tr></thead><tbody>${phRowsOf(g.bands).map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</tbody></table>
-      ${g.bands && g.bands.length ? "" : `<div class="small muted">설정 없음 — 낙폭 매수 안 함 (V4.0 줄만)</div>`}</div>`;
+      ${g.bands && g.bands.length ? (inner ? "" : `<div class="small" style="margin-top:6px">기준 <span class="num">${money((s.closes || {})[g.symbol] || plan.close)}</span> (직전 종가)</div>${bandRows(g, (s.closes || {})[g.symbol] || plan.close)}`) : `<div class="small muted">설정 없음 — 낙폭 매수 안 함 (V4.0 줄만)</div>`}</div>`;
     out += `<div class="card"><div class="row between"><h2>회차 진행</h2><span class="small muted">T ${plan.T} / ${Number(plan.splits)} · 절반 넘으면 후반전, ${Number(plan.splits) - 1} 넘으면 소진(리버스모드)</span></div>${tBar(Number(plan.T), Number(plan.splits))}</div>`;
     out += `<div class="grid-2"><div class="card"><div class="row between"><h2>오늘 주문표</h2><span class="small muted">미국 ${esc(plan.trade_date)} 장 · 체크 해제 줄은 주문 안 함</span></div>
       <div class="scroll"><table><thead><tr><th>구분</th><th>유형</th><th class="n">가격</th><th class="n">수량</th><th>근거</th></tr></thead><tbody>
@@ -3488,6 +3828,13 @@ function bind() {
   bindArrange();
   bindMfa();
   document.querySelectorAll("[data-eqkind]").forEach((b) => b.onclick = () => { S.eqKind = b.dataset.eqkind; render(); });
+  // 작업 ㊹-A: 수익률 그래프 단위·기간 (PC·폰 현황), 폰 기록 → 수익률 (기간·단위·전략 고르기) — 이 화면 안에서만 기억
+  document.querySelectorAll("[data-equnit]").forEach((b) => b.onclick = () => { S.eqUnit = b.dataset.equnit; render(); });
+  document.querySelectorAll("[data-eqperiod]").forEach((b) => b.onclick = () => { S.eqPeriod = b.dataset.eqperiod; render(); });
+  document.querySelectorAll("[data-pfperiod]").forEach((b) => b.onclick = () => { S.pfPeriod = b.dataset.pfperiod; render(); });
+  document.querySelectorAll("[data-pfunit]").forEach((b) => b.onclick = () => { S.pfUnit = b.dataset.pfunit; render(); });
+  document.querySelectorAll("[data-pfsid]").forEach((b) => b.onclick = () => { S.pfSid = S.pfSid === b.dataset.pfsid ? null : b.dataset.pfsid; render(); });
+  const pm = document.getElementById("b-phmenu"); if (pm) pm.onclick = () => { S.phMenu = !S.phMenu; render(); };
   document.querySelectorAll("[data-eqsel]").forEach((b) => b.onclick = () => {
     const kind = S.eqKind || "total", all = eqSeries((S.snap && S.snap.detail.equity) || [], kind).map(([k]) => k);
     const cur = new Set(((S.eqSel || {})[kind]) || all), k = b.dataset.eqsel;
@@ -3579,7 +3926,7 @@ function bind() {
     const last = (S.lastSub || {})[want];
     S.tab = grp ? (pagesOf(grp).some(([k]) => k === last) ? last : pagesOf(grp)[0][0]) : (LEGACY_TAB[want] || want);
     (S.lastSub = S.lastSub || {})[groupOf(S.tab)[0]] = S.tab;
-    S.msg = null; S.confirm = null; S.viewing = null; S.detail = null;
+    S.msg = null; S.confirm = null; S.viewing = null; S.detail = null; S.phMenu = false;
     if (S.tab === "family") await loadFamily().catch(() => {});
     render(); });
   document.querySelectorAll("input[data-n]").forEach((cb) => cb.onchange = () =>
@@ -3784,13 +4131,14 @@ let liveTouched = 0;
 setInterval(async () => {
   if (document.visibilityState !== "visible" || !S.user || !S.snap || S.status !== "approved") return;
   const m = S.snap.summary.market; if (m && m.code === "closed") return;
-  if (!["home", "orders"].includes(S.tab)) return;
+  if (!["home", "confirm"].includes(S.tab)) return;         // 작업 ㊹: 주문 화면도 (LOC 체결 예상)
   try {
     if (Date.now() - liveTouched > 30000) { liveTouched = Date.now(); await sb.rpc("touch_live"); }
     const r = await sb.from("live_quotes").select("quotes,at").eq("id", "global").limit(1);
     const row = r.data && r.data[0]; if (!row || !row.at || (S.live && S.live.at === row.at)) return;
     S.livePrev = S.live ? S.live.quotes : null; S.live = row;
-    const el = document.getElementById("mkt"); if (el) el.outerHTML = marketStrip(S.snap.summary);
+    const el = document.getElementById("mkt"); if (el) el.outerHTML = el.dataset.v === "ph" ? phQuotes(S.snap.summary) : marketStrip(S.snap.summary);
+    liveTick();                                     // 작업 ㊹: 평가금 지금가·전략 지금 손익·LOC 예상·낙폭 단계 남은 %
   } catch (e) {}
 }, 5000);
 let _lastMode = null;
