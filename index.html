@@ -391,6 +391,46 @@ body[data-layout="phone"] .otabs button > .sym, body[data-layout="phone"] .otabs
 body[data-layout="phone"] .otabs, body[data-layout="phone"] .subnav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none } body[data-layout="phone"] .otabs button, body[data-layout="phone"] .subnav button { flex: 0 0 auto }
 body[data-layout="phone"] .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none } body[data-layout="phone"] .seg button { flex: 0 0 auto; min-height: 40px }
 body[data-layout="phone"] .eqcard .chart { max-height: 220px }
+/* 작업 58 (11/21): 통계 화면 — 9db323e 에 빠졌던 st-* 규칙 + PC 개편. 빨강 = 이익(익절), 파랑 = 손실(손절) */
+.st-grid-pc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px }
+@media (max-width: 1100px) { .st-grid-pc { grid-template-columns: 1fr } }
+.st-seed-bar { height: 10px; border-radius: 5px; background: var(--soft); overflow: hidden; margin-top: 4px }
+.st-seed-fill { height: 100%; background: var(--accent); border-radius: 5px }
+.st-cap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px }
+.st-cap-box, .st-pbox { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--line); min-width: 0 }
+.st-cap-box b, .st-pbox b { font-size: 17px; font-weight: 600; white-space: nowrap }
+.st-pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px }
+.st-pbox.prof { border-color: color-mix(in srgb, var(--buy) 35%, transparent) } .st-pbox.loss { border-color: color-mix(in srgb, var(--sell) 35%, transparent) }
+.st-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px }
+.st-cal .dow { text-align: center; font-size: 12px; color: var(--muted); padding: 2px 0 }
+.st-cal-cell { min-height: 62px; padding: 5px 6px; border-radius: 10px; border: 1px solid transparent; background: var(--soft); color: var(--ink);
+  font: 500 12px var(--sans); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; min-width: 0; overflow: hidden }
+button.st-cal-cell { cursor: pointer }
+.st-cal-cell.empty { background: transparent }
+.st-cal-cell .dnum { font-size: 12px; color: var(--muted) }
+.st-cal-cell .dpnl { font: 600 12.5px var(--mono); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis }
+.st-cal-cell .dcnt, .st-cal-cell .dkrw { font-size: 11px; color: var(--muted); white-space: nowrap }
+.st-cal-cell.prof { background: color-mix(in srgb, var(--buy) 13%, var(--glass-strong)); border-color: color-mix(in srgb, var(--buy) 35%, transparent) }
+.st-cal-cell.loss { background: color-mix(in srgb, var(--sell) 13%, var(--glass-strong)); border-color: color-mix(in srgb, var(--sell) 35%, transparent) }
+.st-cal-cell.today .dnum { color: var(--accent); font-weight: 700 } .st-cal-cell.today { border-color: var(--accent) }
+.st-cal-cell.sel { box-shadow: inset 0 0 0 2px var(--accent) }
+body[data-layout="phone"] .st-cal-cell { min-height: 50px; padding: 4px 3px } body[data-layout="phone"] .st-cal-cell .dpnl { font-size: 10.5px; letter-spacing: -0.03em }
+body[data-layout="phone"] .st-cal-cell .dcnt { display: none }
+.st-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px }
+@media (max-width: 1100px) { .st-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) } }
+.st-kpi { gap: 2px; padding: 12px 14px } .st-kpi b { font-size: clamp(17px, 1.6vw, 23px); font-weight: 600; white-space: nowrap }
+.st-bar { display: inline-block; position: relative; width: 90px; height: 8px; border-radius: 4px; background: var(--soft); overflow: hidden; vertical-align: middle }
+.st-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent) } .st-bar.warn i { background: var(--warn) }
+.st-band { display: inline-block; position: relative; width: 90px; height: 8px; border-radius: 4px; background: var(--soft); vertical-align: middle;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--buy) 25%, transparent) 0 18%, var(--soft) 18% 82%, color-mix(in srgb, var(--sell) 25%, transparent) 82%) }
+.st-band b { position: absolute; top: -3px; width: 3px; height: 14px; border-radius: 2px; background: var(--ink); transform: translateX(-1px) }
+.st-ops td { vertical-align: top } .st-ops td .small { display: block }
+.st-mon td { padding: 5px 6px } .st-mbar { width: 46%; min-width: 160px }
+.st-mbar > span { display: inline-block; width: 50%; height: 12px; vertical-align: middle; position: relative }
+.st-mbar > span.neg { border-right: 1px solid var(--muted) } .st-mbar i { position: absolute; top: 0; bottom: 0; border-radius: 3px }
+.st-mbar .neg i { right: 0; background: var(--sell) } .st-mbar .pos i { left: 0; background: var(--buy) }
+.st-mon tr.sum td { font-weight: 600; border-top: 1px solid var(--line) }
+.st-risk { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px }
 /* 설정: 계좌 한 줄 카드 */
 .accrow { display: grid; grid-template-columns: minmax(150px, 220px) 120px 150px minmax(0, 1fr); gap: 8px 14px; align-items: center;
   padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass-strong) }
@@ -3684,7 +3724,7 @@ function statsCalendarCard(scope, st, fx) {
       cells.push(`<button type="button" class="st-cal-cell ${cls} ${isToday ? "today" : ""} ${isSel ? "sel" : ""}" data-stcalday="${k}">
         <span class="dnum">${dd}</span>
         <span class="dpnl ${txtCls}">${net > 0 ? "+" : "−"}$${money(Math.abs(net), 0)}</span>
-        <span class="dkrw">${shortKrw > 0 ? `${net > 0 ? "+" : "−"}${shortKrw.toLocaleString()}만` : ""}</span>
+        <span class="dcnt">${Number(entry.profit_count || 0) + Number(entry.loss_count || 0)}건${shortKrw > 0 ? ` · ${net > 0 ? "+" : "−"}${shortKrw.toLocaleString()}만` : ""}</span>
       </button>`);
     } else {
       cells.push(`<div class="st-cal-cell ${isToday ? "today" : ""}"><span class="dnum">${dd}</span></div>`);
@@ -3716,7 +3756,7 @@ function statsCalendarCard(scope, st, fx) {
         <span><span class="sym num">${esc(it.symbol)}</span> <b>${esc(it.name)}</b> <span class="muted">(${esc(ACC_NAME[it.account] || it.account)}) · ${it.qty}주 매도 @$${money(it.sell_price)} (평단 $${money(it.avg_cost)})</span></span>
         <span class="num ${Number(it.pnl_usd) >= 0 ? "buy" : "sell"}"><b>${statsUsdSigned(it.pnl_usd)}</b> (${esc(statsKrw(it.pnl_usd, fx, true))})</span>
       </div>`).join("")}
-    </div>` : `<div class="small muted">빨간 칸 = 익절일 · 파란 칸 = 손절일 (날짜를 누르면 당일 매도 체결 상세 내역을 봅니다)</div>`}
+    </div>` : ""}
   </section>`;
 }
 
@@ -3755,20 +3795,213 @@ function statsStrategiesTableCard(scope, fx) {
   </section>`;
 }
 
+// ── 작업 58 (11/21 사용자): PC 통계 화면 — 한 줄 숫자 → 자산 추이 → 달력 · 월별 비교 → 운용 상태 → 위험 지표 → 전략별 성과표.
+//   표시만. 값은 스냅숏(summary · detail.stats · detail.equity) + 지금가(㊹-D nowPx)로 화면에서 셈 — 주문 계산·stats.py 그대로
+const ST_LINES = [["ev", "평가금", "var(--accent)"], ["prin", "투자원금", "var(--muted)"], ["cum", "누적 확정손익", "var(--ice)"]];
+function stAccOf(st) { return (S.statsAcc && S.statsAcc !== "all" && (st.by_account || {})[S.statsAcc]) ? S.statsAcc : "all"; }
+function stStrats(s, acc) {
+  return allStrategies(s).filter((g) => acc === "all" || g.account === acc)
+    .sort((a, b) => stratRank(stratName(a, (s.plans || {})[a.id])) - stratRank(stratName(b, (s.plans || {})[b.id])));
+}
+// 하루 기록(equity.json, 종가 기준) → 범위(전체 = 메리츠 평가금, 계좌 = 그 계좌) [{date, ev, prin, cum}]
+//   prin = 그 범위 전략 원금 합(그날 기록 → 없으면 지금 원금, 원금 없는 전략은 뺌), cum = 달력 확정손익을 그날까지 더한 값
+function stEquityRows(s, d, scope, acc) {
+  const rows = d.equity || [], P = prinNow(s), ids = stStrats(s, acc).map((g) => g.id);
+  const cal = Object.values((scope || {}).calendar || {}).map((c) => [String(c.date), Number(c.net_usd || 0)]).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  let ci = 0, cum = 0;
+  const ok = (v) => v !== null && v !== undefined && v !== "" && isFinite(Number(v));
+  return rows.map((r) => {
+    while (ci < cal.length && cal[ci][0] <= String(r.date)) cum += cal[ci++][1];
+    const ev = acc === "all" ? (ok(r.broker) ? Number(r.broker) : ok(r.value) ? Number(r.value) : null) : ok((r.acc || {})[acc]) ? Number(r.acc[acc]) : null;
+    let p = 0, pn = 0;
+    for (const k of ids) {
+      const pd = (r.prin || {})[k], has = ok(pd) || ok((r.strat || {})[k]);
+      const v = ok(pd) ? Number(pd) : Number(P[k] || 0);
+      if (has && v > 0) { p += v; pn++; }
+    }
+    return { date: String(r.date), ev, prin: pn ? Math.round(p * 100) / 100 : null, cum: Math.round(cum * 100) / 100 };
+  });
+}
+// 낙폭: 지금까지 최고 평가금 대비. now 가 있으면(지금가 평가금) 맨 끝 점으로 더함
+function stDrawdown(rows, now) {
+  const pts = rows.filter((r) => r.ev != null && r.ev > 0).map((r) => [r.date, r.ev]);
+  if (now != null && now > 0) pts.push(["now", now]);
+  let peak = 0, peakDate = "", mdd = 0, mddDate = "", cur = null;
+  for (const [dt, v] of pts) {
+    if (v > peak) { peak = v; peakDate = dt; }
+    const dd = (v / peak - 1) * 100;
+    if (dd < mdd) { mdd = dd; mddDate = dt; }
+    cur = dd;
+  }
+  return { mdd, mddDate, cur, peak, peakDate, n: pts.length };
+}
+// 범위 평가금 (메리츠): 장중 = 보유 × 지금가 + 달러 예수금, 그 밖 = 직전 종가 기준 (㊹-D 와 같은 함수)
+function stValueNow(s, d, acc) {
+  const bk = s.broker;
+  const live = Object.keys(s.closes || {}).some((x) => nowPx(s, x) != null);
+  const basis = live ? "지금가 " + liveHm(s) : closeLabel(s, Object.keys(s.closes || {})[0]);
+  if (bk && (acc === "all" || ((bk.accounts || {})[acc]))) {
+    const sub = acc === "all" ? bk : { accounts: { [acc]: bk.accounts[acc] } };
+    const cash = acc === "all" ? Number(bk.usd || 0) : Number(bk.accounts[acc].usd || 0);
+    if (!live) return { value: acc === "all" ? Number(bk.value) : Number(bk.accounts[acc].value || 0), cash, basis, live };
+    return { value: brokerValueNow(sub, (d || {}).real_orders, (x) => nowPx(s, x), s.closes).value, cash, basis, live };
+  }
+  let v = 0, c = 0;
+  for (const g of stStrats(s, acc)) { const n = stratNow(s, g); v += Number(g.qty || 0) * Number(n.px || 0) + Number(g.cash || 0); c += Number(g.cash || 0); }
+  return { value: Math.round(v * 100) / 100, cash: c, basis: basis + " · 프로그램 기록", live };
+}
+function stKpis(s, d, scope, acc) {
+  return lv("lv-st-kpis", () => {
+    const s2 = S.snap.summary, d2 = S.snap.detail || {}, vn = stValueNow(s2, d2, acc);
+    let pnl = 0, base = 0;
+    for (const g of stStrats(s2, acc)) { const n = stratNow(s2, g); if (n.pnl != null && g.avg) { pnl += n.pnl; base += Number(g.qty || 0) * Number(g.avg); } }
+    const real = Number((((scope || {}).periods || {}).all || {}).net_usd || 0);
+    const dd = stDrawdown(stEquityRows(s2, d2, scope, acc), vn.value);
+    const cashPct = vn.value > 0 ? vn.cash / vn.value * 100 : null;
+    const box = (l, v, sub, c = "") => `<div class="card st-kpi"><span class="small muted">${l}</span><b class="num ${c}">${v}</b><span class="small muted">${sub}</span></div>`;
+    return `<section class="st-kpis" id="lv-st-kpis" aria-label="통계 요약">
+      ${box(s2.broker ? "평가금 (메리츠)" : "평가금", "$" + money(vn.value), esc(vn.basis) + (krw(vn.value) ? " · " + krw(vn.value) : ""))}
+      ${box("평가손익", `${signedUsd(pnl)} <small class="num">${base > 0 ? signedPct(pnl / base * 100, 2) : ""}</small>`, "평단 대비 · " + (vn.live ? "지금가" : "종가"), pnlClass(pnl))}
+      ${box("누적 확정손익", signedUsd(real), `익절 ${Number((((scope || {}).periods || {}).all || {}).profit_count || 0)} · 손절 ${Number((((scope || {}).periods || {}).all || {}).loss_count || 0)}건`, pnlClass(real))}
+      ${box("현금 비중", cashPct == null ? "-" : cashPct.toFixed(1) + "%", "달러 예수금 $" + money(vn.cash))}
+      ${box("낙폭 (지금 / 최대)", dd.n ? `${signedPct(dd.cur, 1)} <small class="muted">/ ${signedPct(dd.mdd, 1)}</small>` : "-", dd.n ? `최고 $${money(dd.peak, 0)}${dd.peakDate && dd.peakDate !== "now" ? " · " + esc(dd.peakDate.slice(5).replace("-", "/")) : ""}` : "기록 없음", dd.cur < 0 ? "sell" : "")}
+    </section>`;
+  });
+}
+function stEquityCard(s, d, scope, acc) {
+  const period = ["all", "year", "month"].includes(S.stEqPeriod) ? S.stEqPeriod : "all";
+  const on = ST_LINES.filter(([k]) => !(S.stEqOff || {})[k]);
+  const from = perfFrom(period, kstToday(), null);
+  const rows = stEquityRows(s, d, scope, acc).filter((r) => !from || r.date >= from);
+  const maps = on.map(([k, l, c]) => [k, l, c, Object.fromEntries(rows.filter((r) => r[k] != null).map((r) => [r.date, r[k]]))]);
+  const svg = maps.length ? drawLines(rows.map((r) => r.date), maps, "usd", "자산 추이") : "";
+  const last = (k) => { for (let i = rows.length - 1; i >= 0; i--) if (rows[i][k] != null) return rows[i][k]; return null; };
+  return `<section class="card eqcard" aria-label="자산 추이"><div class="row between"><h2>자산 추이</h2>
+      <div class="row" style="gap:6px">${ST_LINES.map(([k, l, c]) => `<button class="chip eqchip ${on.some((x) => x[0] === k) ? "on" : ""}" data-steqline="${k}" style="--c:${c}"><i></i>${esc(l)}</button>`).join("")}
+      ${segBtns("data-steqp", period, [["all", "전체"], ["year", "올해"], ["month", "한 달"]], "기간")}</div></div>
+    ${svg || `<div class="empty">${on.length ? "이 기간 기록이 없습니다." : "그릴 선을 하나 이상 고르세요."}</div>`}
+    <div class="small">${ST_LINES.map(([k, l]) => { const v = last(k); return `${esc(l)} <b class="num ${k === "cum" ? pnlClass(v) : ""}">${v == null ? "-" : k === "cum" ? signedUsd(v) : "$" + money(v)}</b>`; }).join(" · ")} <span class="muted">· 하루 기록(종가)</span></div>
+  </section>`;
+}
+// 운용 상태: 전략마다 한 줄 — 지금가(또는 종가) · 평단 대비 · 다음 지점까지 · 소진 · 현금 비중 · 회차
+function stNextPoint(s, g, px) {
+  const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
+  const pc = (p) => p > 0 && px > 0 ? (p / px - 1) * 100 : null;
+  if (isPh01(g) && g.bands && g.bands.length) {
+    const base = (s.closes || {})[g.symbol] || (plan && plan.close), steps = bandSteps(g.bands, base, px), nx = steps.find((b) => b.next);
+    if (!steps.length) return "-";
+    return nx ? `다음 −${esc(nx.pct)}% <span class="num">${money(nx.px)}</span><span class="small muted">${Math.abs(nx.left).toFixed(1)}% 남음 · ${esc(nx.B)}B</span>` : `<span class="small">모든 단계 닿음</span>`;
+  }
+  if (plan && (plan.star_price || plan.target_price)) {
+    const a = pc(Number(plan.star_price)), b = pc(Number(plan.target_price));
+    return `★ <span class="num">${money(plan.star_price)}</span> <span class="num ${pnlClass(a)}">${a == null ? "" : signedPct(a)}</span>
+      <span class="small muted">목표 <span class="num">${money(plan.target_price)}</span> ${b == null ? "" : signedPct(b)}</span>`;
+  }
+  if (vr && Number(vr.max) > Number(vr.min)) {
+    const E = Number(g.qty || 0) * px, lo = Number(vr.min), hi = Number(vr.max), f = (E - lo) / (hi - lo);
+    const pos = Math.min(100, Math.max(0, 18 + f * 64));
+    const t = f < 0 ? "최소 아래" : f > 1 ? "최대 위" : `밴드 안 ${(f * 100).toFixed(0)}%`;
+    return `<span class="st-band" title="최소 $${money(lo)} ~ 최대 $${money(hi)}"><b style="left:${pos.toFixed(1)}%"></b></span> <span class="small">${t}</span>
+      <span class="small muted num">E $${money(E, 0)} · $${money(lo, 0)}~$${money(hi, 0)}</span>`;
+  }
+  return "-";
+}
+function stUse(s, g, stRow) {
+  const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
+  const bar = (p, txt) => `<span class="st-bar ${p >= 75 ? "warn" : ""}"><i style="width:${Math.min(100, Math.max(0, p)).toFixed(1)}%"></i></span> <span class="small num">${txt}</span>`;
+  if (plan && Number(plan.splits) > 0) return bar(Number(plan.T) / Number(plan.splits) * 100, `T ${esc(plan.T)} / ${Number(plan.splits)}`);
+  if (vr) { const c = vrCash(g, vr); if (c.start > 0 && c.left != null) return bar(100 - c.left / c.start * 100, `Pool 남음 ${(c.left / c.start * 100).toFixed(0)}%`); }
+  if (stRow && stRow.exhaustion_pct != null) return bar(Number(stRow.exhaustion_pct), `${Number(stRow.exhaustion_pct).toFixed(0)}% 사용`);
+  return "-";
+}
+function stOpsCard(s, d, scope, acc) {
+  const strat = stStrats(s, acc);
+  if (!strat.length) return `<section class="card"><h2>운용 상태</h2><div class="empty">운용 중인 전략이 없습니다.</div></section>`;
+  const sRows = Object.fromEntries(((scope || {}).strategies || []).map((r) => [r.sid, r]));
+  return lv("lv-st-ops", () => {
+    const s2 = S.snap.summary;
+    return `<section class="card" id="lv-st-ops" aria-label="운용 상태"><h2>운용 상태</h2><div class="scroll"><table class="st-ops">
+      <thead><tr><th>전략</th><th class="n">보유 · 평단</th><th class="n">지금가 · 평단 대비</th><th>다음 지점까지</th><th>소진</th><th class="n">현금 비중</th><th class="n">회차</th></tr></thead><tbody>
+      ${strat.map((g) => {
+        const plan = (s2.plans || {})[g.id], vr = (s2.vr || {})[g.id], n = stratNow(s2, g), px = Number(n.px || 0);
+        const cash = vr ? (vrCash(g, vr).left != null ? Number(vrCash(g, vr).left) : Number(g.cash || 0)) : Number(g.cash || 0);
+        const tot = Number(g.qty || 0) * px + cash, cp = tot > 0 ? cash / tot * 100 : null;
+        return `<tr><td><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(stratName(g, plan))}</b></button> <span class="sym num">${esc(g.symbol)}</span><span class="small muted">${esc(ACC_NAME[g.account] || g.account)}${g.auto_on ? " · ● auto" : g.active === false ? " · 꺼짐" : ""}</span></td>
+          <td class="n num">${esc(g.qty)}주<span class="small muted">${g.avg ? "평단 " + money(g.avg) : "-"}</span></td>
+          <td class="n num">${px > 0 ? money(px) : "-"} <span class="${pnlClass(n.pct)}">${n.pct == null ? "" : signedPct(n.pct, 2)}</span><span class="small muted">${n.live ? "지금가 " + esc(liveHm(s2)) : esc(closeLabel(s2, g.symbol))}${n.pnl != null ? ` · <span class="${pnlClass(n.pnl)}">${signedUsd(n.pnl)}</span>` : ""}</span></td>
+          <td>${stNextPoint(s2, g, px)}</td>
+          <td>${stUse(s2, g, sRows[g.id])}</td>
+          <td class="n num">${cp == null ? "-" : cp.toFixed(1) + "%"}<span class="small muted">$${money(cash)}</span></td>
+          <td class="n num">${g.cycle != null ? esc(g.cycle) + "회" : "-"}</td></tr>`;
+      }).join("")}</tbody></table></div></section>`;
+  });
+}
+// 월별 비교: 최근 12달 확정손익 막대(0 가운데) + 익절·손절 건수 · 승률
+function stMonthlyCard(scope) {
+  const rows = (((scope || {}).series || {}).monthly || []).slice(-12);
+  if (!rows.length) return `<section class="card"><h2>월별 비교</h2><div class="empty">아직 확정 손익이 없습니다.</div></section>`;
+  const mx = Math.max(1, ...rows.map((r) => Math.abs(Number(r.net_usd || 0))));
+  const wr = (p, l) => p + l > 0 ? (p / (p + l) * 100).toFixed(0) + "%" : "-";
+  let tn = 0, tp = 0, tl = 0;
+  const body = rows.map((r) => {
+    const net = Number(r.net_usd || 0), p = Number(r.profit_count || 0), l = Number(r.loss_count || 0), w = Math.abs(net) / mx * 100;
+    tn += net; tp += p; tl += l;
+    return `<tr><td>${esc(String(r.bucket).slice(0, 4))}.${esc(String(r.bucket).slice(5, 7))}</td>
+      <td class="st-mbar"><span class="neg">${net < 0 ? `<i style="width:${w.toFixed(1)}%"></i>` : ""}</span><span class="pos">${net > 0 ? `<i style="width:${w.toFixed(1)}%"></i>` : ""}</span></td>
+      <td class="n num ${pnlClass(net)}">${signedUsd(net)}</td><td class="n num"><span class="buy">${p}</span> / <span class="sell">${l}</span></td><td class="n num">${wr(p, l)}</td></tr>`;
+  }).join("");
+  return `<section class="card" aria-label="월별 비교"><div class="row between"><h2>월별 비교</h2><span class="small muted">최근 ${rows.length}달</span></div>
+    <div class="scroll"><table class="st-mon"><thead><tr><th>달</th><th>확정손익</th><th class="n">금액</th><th class="n">익절 / 손절</th><th class="n">승률</th></tr></thead>
+    <tbody>${body}<tr class="sum"><td>합계</td><td></td><td class="n num ${pnlClass(tn)}">${signedUsd(tn)}</td><td class="n num"><span class="buy">${tp}</span> / <span class="sell">${tl}</span></td><td class="n num">${wr(tp, tl)}</td></tr></tbody></table></div></section>`;
+}
+// 위험 지표: 계좌별·전체 낙폭(하루 기록), 8Buy 남은 매수 횟수, VR Pool 남은 %. 원칙 엔진(ADR 0070) 알림 자리는 비워 둠
+function stRiskCard(s, d, scope, acc, st) {
+  const rows = d.equity || [];
+  const accs = acc === "all" ? ["all", ...new Set(rows.flatMap((r) => Object.keys(r.acc || {})))] : [acc];
+  const ddRows = accs.map((a) => {
+    const sc = a === "all" ? st.all : (st.by_account || {})[a] || { calendar: {} };
+    const dd = stDrawdown(stEquityRows(s, d, sc, a), null);
+    return `<tr><td>${a === "all" ? "전체" : esc(ACC_NAME[a] || a)}</td><td class="n num ${dd.cur < 0 ? "sell" : ""}">${dd.n ? signedPct(dd.cur, 1) : "-"}</td>
+      <td class="n num ${dd.mdd < 0 ? "sell" : ""}">${dd.n ? signedPct(dd.mdd, 1) : "-"}<span class="small muted">${dd.mddDate ? esc(dd.mddDate.slice(5).replace("-", "/")) : ""}</span></td>
+      <td class="n num">${dd.n ? "$" + money(dd.peak, 0) : "-"}<span class="small muted">${dd.peakDate ? esc(dd.peakDate.slice(5).replace("-", "/")) : ""}</span></td></tr>`;
+  }).join("");
+  const boxes = stStrats(s, acc).map((g) => {
+    const plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id], nm = esc(stratName(g, plan));
+    if (plan && !isPh01(g)) {
+      const [B] = unitView(plan), mult = Number(plan.multiplier || 1);
+      const cash = plan.cash != null ? Number(plan.cash) * mult : Number(g.cash || 0), b = B != null ? Number(B) * mult : null;
+      const left = b > 0 ? Math.floor(cash / b + 1e-9) : null, tl = Number(plan.splits) > 0 ? Number(plan.splits) - Number(plan.T || 0) : null;
+      return `<div class="st-cap-box"><span class="small muted">${nm} 남은 매수</span><b class="num ${left != null && left <= 3 ? "sell" : ""}">${left == null ? "-" : left + "회"}</b>
+        <span class="small muted num">잔금 $${money(cash)} ÷ 1회 ${b ? "$" + money(b) : "-"}${tl != null ? ` · 남은 T ${Math.round(tl * 10) / 10}` : ""}</span></div>`;
+    }
+    if (vr) {
+      const c = vrCash(g, vr), p = c.start > 0 && c.left != null ? c.left / c.start * 100 : null;
+      return `<div class="st-cap-box"><span class="small muted">${nm} Pool 남음</span><b class="num ${p != null && p < 25 ? "sell" : ""}">${p == null ? "-" : p.toFixed(0) + "%"}</b>
+        <span class="small muted num">${c.left != null ? "$" + money(c.left) : "-"} / 시작 ${c.start != null ? "$" + money(c.start) : "-"}</span></div>`;
+    }
+    return "";
+  }).join("");
+  return `<section class="card" aria-label="위험 지표"><h2>위험 지표</h2>
+    <div class="scroll"><table class="st-ops"><thead><tr><th>계좌</th><th class="n">지금 낙폭</th><th class="n">최대 낙폭 (MDD)</th><th class="n">최고 평가금</th></tr></thead><tbody>${ddRows}</tbody></table></div>
+    ${boxes ? `<div class="st-risk">${boxes}</div>` : ""}
+    <div id="st-rules" hidden></div>
+  </section>`;
+}
 function viewStats(s) {
   const d = (S.snap && S.snap.detail) || {};
   const st = resolveStatsData(s, d);
-  const curAcc = (S.statsAcc && S.statsAcc !== "all" && (st.by_account || {})[S.statsAcc]) ? S.statsAcc : "all";
-  const scope = curAcc === "all" ? st.all : st.by_account[curAcc];
+  const acc = stAccOf(st);
+  const scope = acc === "all" ? st.all : st.by_account[acc];
   const fx = st.usdkrw || 1350;
-
   return `${statsAccountFilterBar(st)}
+    ${stKpis(s, d, scope, acc)}
+    ${stEquityCard(s, d, scope, acc)}
     <div class="st-grid-pc">
-      ${statsCapitalCard(scope, fx)}
-      ${statsPeriodCard(scope, fx)}
-      ${statsSeriesChartCard(scope, fx)}
       ${statsCalendarCard(scope, st, fx)}
+      ${stMonthlyCard(scope)}
     </div>
+    ${stOpsCard(s, d, scope, acc)}
+    ${stRiskCard(s, d, scope, acc, st)}
     ${statsStrategiesTableCard(scope, fx)}`;
 }
 
@@ -3949,6 +4182,8 @@ function bind() {
   document.querySelectorAll("[data-stperiod]").forEach((b) => b.onclick = () => { S.statsPeriod = b.dataset.stperiod; render(); });
   document.querySelectorAll("[data-stseries]").forEach((b) => b.onclick = () => { S.statsSeriesMode = b.dataset.stseries; render(); });
   document.querySelectorAll("[data-stcalm]").forEach((b) => b.onclick = () => { S.statsMonth = b.dataset.stcalm; S.statsCalDay = null; render(); });
+  document.querySelectorAll("[data-steqp]").forEach((b) => b.onclick = () => { S.stEqPeriod = b.dataset.steqp; render(); });
+  document.querySelectorAll("[data-steqline]").forEach((b) => b.onclick = () => { S.stEqOff = { ...(S.stEqOff || {}), [b.dataset.steqline]: !(S.stEqOff || {})[b.dataset.steqline] }; render(); });
   document.querySelectorAll("[data-stcalday]").forEach((b) => b.onclick = () => { S.statsCalDay = S.statsCalDay === b.dataset.stcalday ? null : b.dataset.stcalday; render(); });
   document.querySelectorAll("[data-detail]").forEach((b) => b.onclick = (e) => { e.preventDefault(); S.tab = "home"; S.detail = b.dataset.detail; render(); window.scrollTo(0, 0); });
   document.querySelectorAll("[data-back-home]").forEach((b) => b.onclick = () => { S.detail = null; render(); });
