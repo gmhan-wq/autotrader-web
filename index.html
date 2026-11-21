@@ -621,7 +621,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-21a";
+const APP_VERSION = "2026-11-21b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1419,6 +1419,34 @@ function bandSteps(bands, base, now) {
     return { pct: Number(pct), B: Number(B), px, hit, next, left: q > 0 ? (px / q - 1) * 100 : null };
   });
 }
+// ㊹-B ③ (11/21 사용자: 동적 분할매수 다시 하는 중): 매수 단계 = 기준가 × (1 − 하락%), 손절 = 평단 × (1 − %), 익절 = 평단 × (1 + %).
+// 그룹마다 아직 안 닿은 첫 단계 = 다음, left = 그 가격까지 지금가 대비 % (매수·손절은 음수, 익절은 양수)
+function dynSteps(rules, stops, tp, base, avg, now) {
+  const b = Number(base), a = Number(avg), q = Number(now), r2 = (x) => Math.round(x * 100 + 1e-9) / 100, out = [];
+  const grp = (kind, list, ref, up) => {
+    let seen = false;
+    for (const [pct, w] of [...(list || [])].sort((x, y) => Number(x[0]) - Number(y[0]))) {
+      const px = r2(ref * (up ? 1 + Number(pct) / 100 : 1 - Number(pct) / 100)), hit = q > 0 && (up ? q >= px : q <= px), next = q > 0 && !hit && !seen;
+      if (next) seen = true;
+      out.push({ kind, pct: Number(pct), w: Number(w), px, hit, next, left: q > 0 ? (px / q - 1) * 100 : null });
+    }
+  };
+  if (b > 0) grp("매수", rules, b, false);
+  if (a > 0) grp("손절", stops, a, false);
+  if (a > 0 && Number(tp) > 0) grp("익절", [[tp, null]], a, true);
+  return out;
+}
+function dynCard(s, g) {
+  const p = g.params || {}, dt = g.dyn_today || {};
+  if (g.kind !== "dynamic" || !(p.rules || []).length) return "";
+  const base = dt.base || (s.closes || {})[g.symbol];
+  return lv("lv-dyn-" + g.id, () => {
+    const st = dynSteps(p.rules, p.stops, p.tp_pct, base, g.avg, nowPx(S.snap.summary, g.symbol));
+    return `<div id="lv-dyn-${esc(g.id)}" class="bandlist"><div class="row between small muted"><span>기준 <span class="num">${money(base)}</span>${dt.base ? "" : " (직전 종가)"}</span>${dt.date ? `<span>오늘 매수 ${Number(dt.buys || 0)} · 매도 ${Number(dt.sells || 0)}</span>` : ""}</div>
+      ${st.map((x) => `<div class="bandrow ${x.next ? "next" : ""} ${x.hit ? "hit" : ""}"><span class="${x.kind === "매수" ? "buy" : "sell"}">${x.kind} ${x.kind === "익절" ? "+" : "−"}${esc(x.pct)}%</span>
+        <span class="num">${money(x.px)}${x.w != null ? ` · ${esc(x.w)}%` : ""}</span><span class="small">${x.hit ? "닿음" : x.next ? `다음 · ${Math.abs(x.left).toFixed(1)}% 남음` : ""}</span></div>`).join("")}</div>`;
+  });
+}
 // ㊹-B ①: 전략 지금 평가손익 = 보유 × (지금가 − 평단), 평단 대비 %, 직전 종가 대비 %, 오늘(직전 종가 대비 금액)
 function stratLive(qty, avg, close, now) {
   const q = Number(qty || 0), a = Number(avg || 0), c = Number(close || 0), x = Number(now || 0);
@@ -1649,6 +1677,7 @@ function viewStrategyPhone(s, d, g) {
     const base = (s.closes || {})[g.symbol] || (plan && plan.close);
     out += `<div class="card"><div class="row between"><b>낙폭 단계</b><span class="small muted">기준 <span class="num">${money(base)}</span></span></div>${bandRows(g, base)}</div>`;
   }
+  if (g.kind === "dynamic") out += `<div class="card"><b>단계</b>${dynCard(s, g)}</div>`;
   out += `<details class="card ph-more"><summary>자세히</summary>${viewStrategy(s, d, g.id, true)}</details>`;
   return out;
 }
@@ -1806,6 +1835,7 @@ function viewMock(s) {
         <span class="muted">가투 평가금액</span><span class="num">$${money(val)}</span>
         <span class="muted">평가손익 · 실현</span><span class="num"><span class="${pnl > 0 ? "buy" : pnl < 0 ? "sell" : ""}">${pnl === null ? "-" : (pnl >= 0 ? "+" : "−") + "$" + money(Math.abs(pnl))}</span> · ${m.realized != null ? "$" + money(m.realized) : "-"}</span>
       </div>
+      ${g.kind === "dynamic" ? dynCard(s, g) : ""}
       ${tn.length ? (() => { const gl = (o) => `<div class="oline"><span class="${sideCls(o.side)}">${sideKo(o.side)}</span><span class="small muted num">${esc(KIND_KO[o.kind] || o.kind)}</span><b class="num">${o.price ? money(o.price) : "종가"} × ${o.qty}</b></div>`;
         const [sh, hd] = foldBuys(tn);                   // 작업 ㉔ E: −20% 아래 매수 줄 접기 (가투 주문은 그대로)
         return `<details><summary class="small muted">오늘 밤 가상 주문 ${tn.length}건</summary>${sh.map(gl).join("")}${foldBox("gatu:" + g.id, hd, hd.map(gl).join(""))}</details>`; })() : ""}
@@ -2112,7 +2142,8 @@ function viewStrategy(s, d, sid, inner) {
       ${levels.map((l) => `<tr><td class="${l.kind === "buy" ? "buy" : "sell"}">${l.kind === "buy" ? "매수" : "매도"} ${l.tag.split("_")[2]}단계</td><td class="n">${money(l.p)}</td><td class="n">${l.q}주</td>
         <td>${(vr.filled_tags || []).includes(l.tag) ? '<span class="chip ok">체결</span>' : '<span class="chip">대기</span>'}</td></tr>`).join("")}</tbody></table></div></div>`;
   } else {
-    out += `<div class="card"><div class="empty">이 전략은 아직 자세한 화면이 없습니다. 보유 ${g.qty}주 · 잔금 $${money(g.cash)}</div></div>`;
+    out += g.kind === "dynamic" ? `<div class="card"><div class="row between"><h2>단계</h2><span class="small muted">보유 ${g.qty}주 · 잔금 $${money(g.cash)}</span></div>${inner ? "" : dynCard(s, g)}</div>`
+      : `<div class="card"><div class="empty">이 전략은 아직 자세한 화면이 없습니다. 보유 ${g.qty}주 · 잔금 $${money(g.cash)}</div></div>`;
   }
   return out;
 }
@@ -4131,7 +4162,7 @@ let liveTouched = 0;
 setInterval(async () => {
   if (document.visibilityState !== "visible" || !S.user || !S.snap || S.status !== "approved") return;
   const m = S.snap.summary.market; if (m && m.code === "closed") return;
-  if (!["home", "confirm"].includes(S.tab)) return;         // 작업 ㊹: 주문 화면도 (LOC 체결 예상)
+  if (!["home", "confirm", "mockstat"].includes(S.tab)) return;         // 작업 ㊹: 주문 화면도 (LOC 체결 예상)
   try {
     if (Date.now() - liveTouched > 30000) { liveTouched = Date.now(); await sb.rpc("touch_live"); }
     const r = await sb.from("live_quotes").select("quotes,at").eq("id", "global").limit(1);
