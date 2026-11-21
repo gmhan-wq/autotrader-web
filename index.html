@@ -662,7 +662,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-21e";
+const APP_VERSION = "2026-11-21f";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -3843,7 +3843,7 @@ function statsStrategiesTableCard(scope, fx) {
 
 // ── 작업 58 (11/21 사용자): PC 통계 화면 — 한 줄 숫자 → 자산 추이 → 달력 · 월별 비교 → 운용 상태 → 위험 지표 → 전략별 성과표.
 //   표시만. 값은 스냅숏(summary · detail.stats · detail.equity) + 지금가(㊹-D nowPx)로 화면에서 셈 — 주문 계산·stats.py 그대로
-const ST_LINES = [["ev", "평가금", "var(--accent)"], ["prin", "투자원금", "var(--muted)"], ["cum", "누적 확정손익", "var(--ice)"]];
+const ST_LINES = [["ev", "평가금", "var(--accent)"], ["prin", "투자원금 (메리츠 총 매입금액)", "var(--muted)"], ["cum", "누적 확정손익", "var(--ice)"]];
 function stAccOf(st) { return (S.statsAcc && S.statsAcc !== "all" && (st.by_account || {})[S.statsAcc]) ? S.statsAcc : "all"; }
 function stStrats(s, acc) {
   return allStrategies(s).filter((g) => acc === "all" || g.account === acc)
@@ -3851,8 +3851,16 @@ function stStrats(s, acc) {
 }
 // 하루 기록(equity.json, 종가 기준) → 범위(전체 = 메리츠 평가금, 계좌 = 그 계좌) [{date, ev, prin, cum}]
 //   prin = 그 범위 전략 원금 합(그날 기록 → 없으면 지금 원금, 원금 없는 전략은 뺌), cum = 달력 확정손익을 그날까지 더한 값
+// 11/21 사용자: 투자원금 = 메리츠 앱 계좌의 '총 매입금액' — 노트북이 매일 10:00 받는 메리츠 잔고(보유 × 평균가) 합 (detail.meritz_cost).
+//   그 기록이 없을 때만 예전처럼 전략 원금 합.
+function costAt(hist, day) {
+  let best = null, v = null;
+  for (const [k, x] of Object.entries(hist || {})) if (k <= day && (best === null || k > best)) { best = k; v = Number(x); }
+  return best === null || !isFinite(v) ? null : v;
+}
 function stEquityRows(s, d, scope, acc) {
   const rows = d.equity || [], P = prinNow(s), ids = stStrats(s, acc).map((g) => g.id);
+  const mc = d.meritz_cost || {}, mcAccs = Object.keys(mc).filter((a) => acc === "all" || a === acc), useMc = mcAccs.length > 0;
   const cal = Object.values((scope || {}).calendar || {}).map((c) => [String(c.date), Number(c.net_usd || 0)]).sort((a, b) => a[0] < b[0] ? -1 : 1);
   let ci = 0, cum = 0;
   const ok = (v) => v !== null && v !== undefined && v !== "" && isFinite(Number(v));
@@ -3860,7 +3868,9 @@ function stEquityRows(s, d, scope, acc) {
     while (ci < cal.length && cal[ci][0] <= String(r.date)) cum += cal[ci++][1];
     const ev = acc === "all" ? (ok(r.broker) ? Number(r.broker) : ok(r.value) ? Number(r.value) : null) : ok((r.acc || {})[acc]) ? Number(r.acc[acc]) : null;
     let p = 0, pn = 0;
-    for (const k of ids) {
+    if (useMc) {                                        // 메리츠 총 매입금액 (그날까지 가장 최근 잔고 기준점)
+      for (const a of mcAccs) { const v = costAt(mc[a], String(r.date)); if (v != null) { p += v; pn++; } }
+    } else for (const k of ids) {
       const pd = (r.prin || {})[k], has = ok(pd) || ok((r.strat || {})[k]);
       const v = ok(pd) ? Number(pd) : Number(P[k] || 0);
       if (has && v > 0) { p += v; pn++; }
