@@ -195,6 +195,7 @@ button.btn.primary { background: linear-gradient(135deg, var(--accent), var(--ic
 button.btn.danger { color: var(--bad) }
 .l3 { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 2px 8px; font-size: 12.5px; margin: 6px 0; text-align: right } .l3 .l3n { text-align: left; font-weight: 600 }
 .warn-t { color: var(--warn, #b26b00) }
+.btchip { cursor: pointer; border: 1px solid var(--line); background: transparent } .btchip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600 }   /* 백테스트 종목·전략 고르기 (11/21) */
 .eqchip { cursor: pointer; border: 1px solid var(--line); background: transparent; opacity: .55 } .eqchip.on { opacity: 1; font-weight: 600 } .eqchip i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; background: var(--c); margin-right: 5px; vertical-align: 3px }
 .modal-bg { position: fixed; inset: 0; background: rgba(10, 14, 30, .55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px }
 /* 제보 #5: 흐림(blur) 효과가 있으면 글자를 칠 때마다 아래 화면 전체를 다시 그려 느려진다 → 제보 창과 그 뒤는 흐림 없이 */
@@ -661,7 +662,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-21d";
+const APP_VERSION = "2026-11-21e";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -723,7 +724,7 @@ const GROUPS = [
   ["record", "기록", [["trades", "매매 표"], ["orderlog", "주문 이력"], ["calendar", "주문표 달력"], ["upload", "사진 올리기"], ["board", "알림"]]],   // 주문 이력: 11/14 작업 ⑱ (ADR 0056 ⑥)   // 사진 올리기: 11/09 작업 ⑪ (주문과 별개)   // 오류제보·기능개선은 11/07 사용자 요청으로 없앰
   // 모의 (11/07 사용자): 모의는 투자 분석용 — 진행 중 전략의 모의·새 전략 시험·프라이버시를 여기서 자동으로
   // 11/07 저녁: 이름 '모의' → '가투'(가상 투자), '투자 전략 추가' → '투자 전략 연구'(가투 전용 전략)
-  ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["privacy", "프라이버시"]]],
+  ["mock", "가투", [["mockstat", "가투 현황"], ["mocktrades", "가투 매매 기록"], ["research", "투자 전략 연구"], ["backtest", "백테스트"], ["privacy", "프라이버시"]]],   // 백테스트: 11/21 사용자 (ADR 0069)
   ["settings", "설정", [["accounts", "계좌·API 키"], ["telegram", "텔레그램"], ["security", "2단계 인증"], ["family", "가족·공동 운영"], ["admin", "회원 관리"]]],
 ];
 const LEGACY_TAB = { settings: "accounts", more: "accounts", orders: "confirm", approve: "confirm", fb_bug: "board", fb_idea: "board" };      // 예전 이름 → 새 화면
@@ -765,6 +766,7 @@ function currentView() {
       + uploadCard() + `<div class="small muted">텔레그램으로 보내도 됩니다 — 사진 밑 [무한매수][VR][프라이버시] 버튼으로 종류를 고릅니다 (설명에 soxl·tqqq·vr 을 적으면 바로). 판독 결과는 기록 → 주문표 달력의 '사진 판독 기록'.</div>` + cmdList("photo"); break;
     case "mystrat": v = need(myStrategies); break;
     case "research": S.addMock = true; v = need(addStrategy); break;
+    case "backtest": v = need((s) => viewBacktest(s, S.snap.detail || {})); break;
     case "addstrat": S.addMock = false; v = need(addStrategy); break;
     case "consensus": v = viewConsensus(); break;
     case "privacy": v = need(privacyCard) + privacyLog(); break;   // 올리기는 기록 → 사진 올리기 (작업 ⑪)
@@ -1423,9 +1425,13 @@ function perfFrom(period, today, cycleStart) {
 // ㊹-A: 하루 기록(state/equity.json, 종가 기준) → [{date, v}]. unit "usd" = 평가금 합, "pct" = (평가 − 원금) ÷ 원금 × 100.
 // keys = 전략 id. 원금 = 그날 기록(prin, 원금을 더 넣은 날도 그날 값) → 없으면 지금 원금(prinNow). % 에서는 원금 없는 전략은 뺀다.
 // ㊹ 보충 (11/21 사용자): 원금이 없는 전략(PH01·8Buy)은 % 기준 = 매입금액 — 메리츠 앱 수익률과 같은 식
-//   (종가 × 보유 − 매입금액) ÷ 매입금액. 값은 매매 표(실제, 메리츠 원가)의 날마다 줄 → 기록이 있는 날부터 그려짐. VR 은 원금(vr-principal) 그대로.
+//   (종가 × 보유 − 매입금액) ÷ 매입금액. 값은 매매 표(실제)의 날마다 줄 → 기록이 있는 날부터 그려짐. VR 은 원금(vr-principal) 그대로.
+//   매입금액 = 메리츠 앱 금액만 (11/21 사용자): 매매 표가 메리츠 잔고 기준점(매일 10:00 맞춤의 메리츠 평균가 × 보유)으로 셈한 전략만 (cost_basis "meritz").
+//   기준점이 없어 장부 평단으로 셈한 전략(cost_basis "ledger")은 % 를 보이지 않음 — 지어내지 않음.
 function costPoints(trades, sid, from) {
-  const rows = (((trades || {})[sid]) || {}).real || [];
+  const e = ((trades || {})[sid]) || {};
+  if (e.cost_basis !== "meritz") return [];
+  const rows = e.real || [];
   return rows.filter((r) => (!from || String(r[0]) >= from) && Number(r[8]) > 0 && Number(r[6]) > 0 && Number(r[1]) > 0)
     .map((r) => { const hold = Number(r[1]) * Number(r[6]), cost = Number(r[8]);
       return { date: String(r[0]).slice(0, 10), v: (hold - cost) / cost * 100, hold: Math.round(hold * 100) / 100, cost }; });
@@ -4027,6 +4033,106 @@ function stRiskCard(s, d, scope, acc, st) {
     <div id="st-rules" hidden></div>
   </section>`;
 }
+// ── 가투 → 백테스트 (11/21 사용자: '에이전트에게 매번 시키지 않고 시스템에서 종목·조건을 골라 돌리기', ADR 0069) ──
+// [돌리기] → 웹 명령(refresh + backtest 설정) → 노트북이 값 검사 뒤 `autotrader backtest` 를 따로 돌림(봇·주문과 별개) → 결과가 여기 표로.
+// 주문·장부와 무관. 같은 칸에 쉼표로 여럿(예: 목표 5,10,15)을 넣으면 하나씩 따로 돌려 나란히 비교.
+const BT_STRATS = [["hold", "한 번에 사서 보유"], ["dca", "DCA 매달 같은 돈"], ["va", "VA 목표 경로"], ["va_nosell", "VA 매도 없음"], ["v4", "8Buy V4.0"], ["vr", "VR"]];
+const BT_SYMS = ["TQQQ", "SOXL", "QQQ", "SOXX", "SPY", "UPRO"];
+const BT_DEF = { symbols: ["TQQQ", "SOXL"], strategies: ["hold", "dca", "v4", "vr"], years: 3, capital: 10000, step_months: 3, max_runs: "",
+  v4_target: "", v4_splits: "20", vr_start: "50", vr_g: "10", vr_band: "15", vr_pool_limit: "50", va_r: "0.01", va_g: "0.005" };
+const BT_FIELDS = [["years", "bt-years"], ["capital", "bt-capital"], ["step_months", "bt-step"], ["max_runs", "bt-maxruns"], ["v4_target", "bt-v4t"],
+  ["v4_splits", "bt-v4s"], ["vr_start", "bt-vrs"], ["vr_g", "bt-vrg"], ["vr_band", "bt-vrband"], ["vr_pool_limit", "bt-vrpool"], ["va_r", "bt-var"], ["va_g", "bt-vag"]];
+function btParams(d) { const b = (d || {}).backtest; return { ...BT_DEF, ...((b && b.params) || {}), ...(S.btForm || {}) }; }
+function btRead() {          // 칸에 적은 값을 기억 (칩을 눌러 화면을 다시 그려도 남게)
+  const f = { ...(S.btForm || {}) };
+  for (const [k, id] of BT_FIELDS) { const el = document.getElementById(id); if (el) f[k] = el.value.trim(); }
+  const more = document.getElementById("bt-more");
+  if (more) f.more = more.value.trim();
+  S.btForm = f; return f;
+}
+const btPct = (x) => x === null || x === undefined ? "-" : signedPct(Number(x) * 100);
+const btTime = (x) => { try { return new Date(x).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return String(x || ""); } };
+function btTable(summary) {
+  if (!summary || !summary.length) return `<div class="empty">결과가 없습니다.</div>`;
+  const best = {};
+  for (const r of summary) if (r.irr_avg != null && (best[r.symbol] == null || r.irr_avg > best[r.symbol])) best[r.symbol] = r.irr_avg;
+  return `<div class="scroll"><table class="tbl"><thead><tr><th>종목</th><th>전략</th><th class="r">횟수</th><th class="r">IRR 평균</th><th class="r">최악</th><th class="r">최고</th>
+    <th class="r">G (연)</th><th class="r">최종 평가금</th><th class="r">MDD 최악</th><th class="r">현금 바닥 날</th><th class="r">사이클</th><th class="r">DCA 보다 높음</th></tr></thead><tbody>${summary.map((r) => `<tr>
+    <td><b>${esc(r.symbol)}</b></td><td>${esc(r.label)}${r.irr_avg != null && r.irr_avg === best[r.symbol] ? ' <span class="chip">이 종목 1등</span>' : ""}</td><td class="r num">${r.runs}</td>
+    <td class="r num ${pnlClass(r.irr_avg)}"><b>${btPct(r.irr_avg)}</b></td><td class="r num ${pnlClass(r.irr_min)}">${btPct(r.irr_min)}</td><td class="r num ${pnlClass(r.irr_max)}">${btPct(r.irr_max)}</td>
+    <td class="r num">${btPct(r.G_avg)}</td><td class="r num">$${money(r.final_avg, 0)}<div class="small muted">넣은 돈 $${money(r.invested_avg, 0)}</div></td>
+    <td class="r num sell">${btPct(r.mdd_worst)}</td><td class="r num">${Number(r.cash_short_avg || 0).toFixed(1)}</td><td class="r num">${Number(r.cycles_avg || 0).toFixed(1)}</td>
+    <td class="r num">${r.beat_dca == null ? "-" : `${r.beat_dca}/${r.runs}`}</td></tr>`).join("")}</tbody></table></div>
+    <div class="small muted">IRR = 넣은 돈 기준 연 수익률 · G = 연 로그 성장률(켈리) · MDD = 최고점 대비 가장 크게 떨어진 % · 현금 바닥 날 = 돈이 모자라 못 산 날(평균) · 과거 일봉 근사이며 미래 수익을 보장하지 않습니다.</div>`;
+}
+function btSetLine(p) {
+  if (!p) return "";
+  return `${esc((p.symbols || []).join(", "))} · ${esc((p.strategies || []).map((k) => (BT_STRATS.find((x) => x[0] === k) || [k, k])[1]).join(" · "))} · $${money(p.capital, 0)} · ${esc(p.years)}년 · 시작일 ${esc(p.step_months)}달씩`
+    + ((p.strategies || []).includes("v4") ? ` · 8Buy 목표 ${esc(p.v4_target || "종목 기본")}% · ${esc(p.v4_splits)}분할` : "")
+    + ((p.strategies || []).includes("vr") ? ` · VR 첫날 ${esc(p.vr_start)}% · G ${esc(p.vr_g)} · 밴드 ${esc(p.vr_band)}% · Pool ${esc(p.vr_pool_limit)}%` : "");
+}
+function viewBacktest(s, d) {
+  const b = d.backtest || null, p = btParams(d), run = b && b.status === "running";
+  const syms = [...new Set([...BT_SYMS, ...(p.symbols || [])])];
+  const inp = (id, k, ph, w) => `<input type="text" inputmode="decimal" id="${id}" class="num" value="${esc(p[k] == null ? "" : p[k])}" placeholder="${esc(ph || "")}" style="width:${w || 110}px">`;
+  const lab = (t, x) => `<label class="small muted" style="display:flex;flex-direction:column;gap:4px">${t}${x}</label>`;
+  const form = `<section class="card" aria-label="백테스트 설정"><div class="row between"><h2>백테스트 설정</h2><span class="small muted">주문·장부와 무관 · 노트북이 계산</span></div>
+    <div class="small muted" style="margin:6px 0 4px">종목 (누르면 고름 · 야후 기호면 아무거나)</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${syms.map((x) => `<button class="chip btchip ${(p.symbols || []).includes(x) ? "on" : ""}" data-btsym="${esc(x)}" aria-pressed="${(p.symbols || []).includes(x)}">${esc(x)}</button>`).join("")}
+      <input type="text" id="bt-more" placeholder="다른 종목 (쉼표 — 예: TECL, SPXL)" value="${esc((S.btForm || {}).more || "")}" style="width:240px"></div>
+    <div class="small muted" style="margin:10px 0 4px">전략</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${BT_STRATS.map(([k, l]) => `<button class="chip btchip ${(p.strategies || []).includes(k) ? "on" : ""}" data-btst="${k}" aria-pressed="${(p.strategies || []).includes(k)}">${esc(l)}</button>`).join("")}</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:10px">
+      ${lab("투자금 $", inp("bt-capital", "capital", "10000"))}${lab("한 번 기간 (년)", inp("bt-years", "years", "3", 80))}
+      ${lab("시작일 간격 (달)", inp("bt-step", "step_months", "3", 80))}${lab("최근 몇 번만 (비우면 전부)", inp("bt-maxruns", "max_runs", "", 80))}</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:10px">
+      ${lab("8Buy 목표 % (쉼표로 여럿)", inp("bt-v4t", "v4_target", "비우면 종목 기본 (SOXL·SOXX 20, 그 밖 15)", 260))}${lab("8Buy 분할 수", inp("bt-v4s", "v4_splits", "20", 90))}</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:10px">
+      ${lab("VR 첫날 주식 % (쉼표로 여럿)", inp("bt-vrs", "vr_start", "50", 150))}${lab("VR G", inp("bt-vrg", "vr_g", "10", 70))}
+      ${lab("VR 밴드 %", inp("bt-vrband", "vr_band", "15", 70))}${lab("VR Pool 한도 %", inp("bt-vrpool", "vr_pool_limit", "50", 80))}
+      ${lab("VA r (달)", inp("bt-var", "va_r", "0.01", 80))}${lab("VA g (달)", inp("bt-vag", "va_g", "0.005", 80))}</div>
+    <div class="row" style="gap:8px;margin-top:12px"><button class="btn primary" id="bt-go" ${run || S.busy ? "disabled" : ""}>${run ? "계산 중…" : "돌리기"}</button>
+      <button class="btn" id="bt-reset">기본값으로</button>
+      <span class="small muted">처음 종목은 야후에서 일봉을 받습니다. 노트북이 느리면 몇 분~수십 분 — 시작일 간격을 늘리면 빨라집니다.</span></div>
+  </section>`;
+  const lc = (S.cmds || []).find((c) => c.payload && c.payload.backtest);      // 방금 보낸 [돌리기] — 노트북이 받았는지·거절 이유
+  const cmdNote = !lc ? "" : lc.status === "pending" ? `<div class="msg">노트북이 받기를 기다리는 중 (20초 안)</div>`
+    : lc.status === "failed" ? `<div class="msg bad">❌ ${esc(lc.result || "노트북이 거절했습니다")}</div>` : "";
+  let res = cmdNote;
+  if (!b) res += `<section class="card"><div class="empty">아직 돌린 백테스트가 없습니다 — 위에서 고르고 [돌리기].</div></section>`;
+  else {
+    const head = b.status === "running" ? `⏳ 노트북에서 계산 중 · ${btTime(b.started)} 시작` : b.status === "done" ? `✅ ${btTime(b.finished)} 끝 · 한 번씩 ${money(b.runs, 0)}번`
+      : b.status === "stopped" ? "⚠ 멈춘 것 같습니다 (3시간 넘음 또는 봇 다시 시작) — 다시 [돌리기]" : `❌ 실패 · ${esc(b.error || "")}`;
+    res += `<section class="card" aria-label="백테스트 결과"><div class="row between"><h2>결과</h2><span class="small">${head}</span></div>
+      <div class="small muted" style="margin-bottom:8px">${btSetLine(b.params)}</div>
+      ${(b.warnings || []).map((w) => `<div class="small warn-t">⚠ ${esc(w)}</div>`).join("")}
+      ${b.status === "done" ? btTable(b.summary) : b.status === "failed" && b.log_tail ? `<details><summary class="small muted">노트북 기록 끝부분</summary><pre class="small">${esc(b.log_tail)}</pre></details>` : ""}
+    </section>`;
+    if (b.status !== "done" && b.prev && b.prev.summary) res += `<section class="card"><div class="row between"><h2>지난 결과</h2><span class="small muted">${btTime(b.prev.finished)}</span></div>
+      <div class="small muted" style="margin-bottom:8px">${btSetLine(b.prev.params)}</div>${btTable(b.prev.summary)}</section>`;
+  }
+  return form + res;
+}
+function bindBacktest() {
+  document.querySelectorAll("[data-btsym]").forEach((x) => x.onclick = () => { const f = btRead(), p = btParams(S.snap && S.snap.detail);
+    const cur = new Set(p.symbols || []); cur.has(x.dataset.btsym) ? cur.delete(x.dataset.btsym) : cur.add(x.dataset.btsym); f.symbols = [...cur]; S.btForm = f; render(); });
+  document.querySelectorAll("[data-btst]").forEach((x) => x.onclick = () => { const f = btRead(), p = btParams(S.snap && S.snap.detail);
+    const cur = new Set(p.strategies || []); cur.has(x.dataset.btst) ? cur.delete(x.dataset.btst) : cur.add(x.dataset.btst);
+    f.strategies = BT_STRATS.map(([k]) => k).filter((k) => cur.has(k)); S.btForm = f; render(); });
+  for (const [, id] of [...BT_FIELDS, [null, "bt-more"]]) { const el = document.getElementById(id); if (el) el.oninput = () => btRead(); }
+  const rs = document.getElementById("bt-reset");
+  if (rs) rs.onclick = () => { S.btForm = { ...BT_DEF, more: "" }; render(); };
+  const go = document.getElementById("bt-go");
+  if (go) go.onclick = () => { const f = btRead(), p = btParams(S.snap && S.snap.detail);
+    const more = String(f.more || "").toUpperCase().split(/[\s,]+/).filter(Boolean);
+    const syms = [...new Set([...(p.symbols || []), ...more])];
+    if (!syms.length) { S.msg = { bad: true, text: "종목을 하나 이상 고르세요" }; render(); return; }
+    if (!(p.strategies || []).length) { S.msg = { bad: true, text: "전략을 하나 이상 고르세요" }; render(); return; }
+    const out = { symbols: syms, strategies: p.strategies };
+    for (const [k] of BT_FIELDS) out[k] = String(p[k] == null ? "" : p[k]).trim();     // 값 검사는 노트북이 (틀리면 이유를 돌려줌)
+    S.btForm = { ...f, symbols: syms, more: "" };
+    send("refresh", { backtest: out, brief: "백테스트 돌리기 · " + syms.join(", ") }); };
+}
 function viewStats(s) {
   const d = (S.snap && S.snap.detail) || {};
   const st = resolveStatsData(s, d);
@@ -4323,6 +4429,7 @@ function bind() {
   document.querySelectorAll("[data-confirm-go]").forEach((b) => b.onclick = () => sendOrders(S.confirmPlan, (document.getElementById("cf-pass") || {}).value));
   document.querySelectorAll("[data-cycle-same]").forEach((b) => b.onclick = () => send("set_strategy", { id: b.dataset.cycleSame, cycle: "same" }));
   if (S.snap) bindAutoWindow();
+  if (document.getElementById("bt-go")) bindBacktest();
   document.querySelectorAll("[data-stop]").forEach((b) => b.onclick = () => { S.stopAsk = null; send("set_strategy", { id: b.dataset.stop, active: false }); });
   document.querySelectorAll("[data-privacy]").forEach((b) => b.onclick = () => b.dataset.privacy === "1"
     ? send("add_strategy", { kind: "privacy", id: "privacy" }) : send("set_strategy", { id: "privacy", active: false }));
