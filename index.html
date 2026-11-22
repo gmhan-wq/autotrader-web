@@ -367,6 +367,7 @@ button.cp:hover { background: var(--soft) } button.cp:focus-visible { outline: 2
   .otable tr.done td.c-amt { text-decoration: line-through }
 }
 .chip.wrap { white-space: normal; display: inline-block; border-radius: 12px }
+.bt-more { margin-top: 10px } .bt-more > summary { cursor: pointer; color: var(--accent) } .bt-notes { margin: 10px 0 0; padding-left: 18px }   /* 56-2a 백테스트 자세히 */
 /* 작업 ㊹ (11/21): 수익률 그래프 · 장중 분석 · 폰 개편 (현황 · 주문 · 전략 · 기록) — PC 배치는 그대로 */
 .chip.exp { color: var(--accent); border-color: currentColor }
 .lvline { display: block; margin-top: 2px } .kpi-basis { display: block; font-size: 11.5px; font-weight: 400; font-family: var(--sans) }
@@ -662,7 +663,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-21f";
+const APP_VERSION = "2026-11-22a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -4049,9 +4050,11 @@ function stRiskCard(s, d, scope, acc, st) {
 const BT_STRATS = [["hold", "한 번에 사서 보유"], ["dca", "DCA 매달 같은 돈"], ["va", "VA 목표 경로"], ["va_nosell", "VA 매도 없음"], ["v4", "8Buy V4.0"], ["vr", "VR"]];
 const BT_SYMS = ["TQQQ", "SOXL", "QQQ", "SOXX", "SPY", "UPRO"];
 const BT_DEF = { symbols: ["TQQQ", "SOXL"], strategies: ["hold", "dca", "v4", "vr"], years: 3, capital: 10000, step_months: 3, max_runs: "",
-  v4_target: "", v4_splits: "20", vr_start: "50", vr_g: "10", vr_band: "15", vr_pool_limit: "50", va_r: "0.01", va_g: "0.005" };
+  v4_target: "", v4_splits: "20", vr_start: "50", vr_g: "10", vr_band: "15", vr_pool_limit: "50", va_r: "0.01", va_g: "0.005",
+  slippage: "0.05", tax: "22", tax_deduct: "", baseline: "", split_test: false, sweep: "" };      // 56-2a 비용·비교 대상·앞뒤 반·흔들기 (ADR 0069 보충 2)
 const BT_FIELDS = [["years", "bt-years"], ["capital", "bt-capital"], ["step_months", "bt-step"], ["max_runs", "bt-maxruns"], ["v4_target", "bt-v4t"],
-  ["v4_splits", "bt-v4s"], ["vr_start", "bt-vrs"], ["vr_g", "bt-vrg"], ["vr_band", "bt-vrband"], ["vr_pool_limit", "bt-vrpool"], ["va_r", "bt-var"], ["va_g", "bt-vag"]];
+  ["v4_splits", "bt-v4s"], ["vr_start", "bt-vrs"], ["vr_g", "bt-vrg"], ["vr_band", "bt-vrband"], ["vr_pool_limit", "bt-vrpool"], ["va_r", "bt-var"], ["va_g", "bt-vag"],
+  ["slippage", "bt-slip"], ["tax", "bt-tax"], ["tax_deduct", "bt-taxded"], ["baseline", "bt-base"], ["sweep", "bt-sweep"]];
 function btParams(d) { const b = (d || {}).backtest; return { ...BT_DEF, ...((b && b.params) || {}), ...(S.btForm || {}) }; }
 function btRead() {          // 칸에 적은 값을 기억 (칩을 눌러 화면을 다시 그려도 남게)
   const f = { ...(S.btForm || {}) };
@@ -4062,24 +4065,61 @@ function btRead() {          // 칸에 적은 값을 기억 (칩을 눌러 화�
 }
 const btPct = (x) => x === null || x === undefined ? "-" : signedPct(Number(x) * 100);
 const btTime = (x) => { try { return new Date(x).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return String(x || ""); } };
-function btTable(summary) {
+const btN = (x, n = 1) => x === null || x === undefined || !isFinite(Number(x)) ? "-" : Number(x).toLocaleString("ko-KR", { minimumFractionDigits: n, maximumFractionDigits: n });
+// 56-2a '자세히' 표 — 물속 기간·12개월·상승/하락장·샤프 등 (ADR 0069 보충 2)
+function btMore(summary) {
+  const cols = [["비교 대상", (r) => esc(r.baseline || "-")], ["비교 대상 승률", (r) => r.win_rate == null ? "-" : btN(r.win_rate, 0) + "%"],
+    ["이길 때 차이", (r) => r.win_pp == null ? "-" : btN(r.win_pp) + "%p"], ["질 때 차이", (r) => r.lose_pp == null ? "-" : btN(r.lose_pp) + "%p"],
+    ["최장 열세", (r) => r.lag_months_max == null ? "-" : btN(r.lag_months_max) + "달"],
+    ["고점 회복 최장", (r) => r.uw_peak_days_max == null ? "-" : `${btN(r.uw_peak_days_max, 0)}일 · ${btN(r.uw_peak_months_max)}달`],
+    ["원금 회복 최장", (r) => r.uw_prin_months_max == null ? "-" : btN(r.uw_prin_months_max) + "달"],
+    ["원금 아래 (평균)", (r) => r.below_prin_months_avg == null ? "-" : btN(r.below_prin_months_avg) + "달"],
+    ["연속 손실 달", (r) => btN(r.loss_streak_max, 0)], ["최악 12개월", (r) => btPct(r.r12_worst)], ["최고 12개월", (r) => btPct(r.r12_best)],
+    ["손실 난 12개월", (r) => r.r12_n_avg == null ? "-" : `${btN(r.r12_neg_avg)}/${btN(r.r12_n_avg, 0)}`], ["−20%보다 나쁜 12개월", (r) => btN(r.r12_bad_avg)],
+    ["최악 연도", (r) => r.year_worst == null ? "-" : `${r.year_worst} ${btPct(r.year_worst_ret)}`],
+    ["상승장 수익", (r) => btPct(r.bull_avg)], ["하락장 수익", (r) => btPct(r.bear_avg)],
+    ["샤프", (r) => btN(r.sharpe_avg, 2)], ["소르티노", (r) => btN(r.sortino_avg, 2)], ["연 변동성", (r) => btPct(r.vol_avg)], ["변동성 손실", (r) => btPct(r.vol_drag_avg)],
+    ["3배 실현 배수", (r) => btN(r.lev_ratio_avg, 2)], ["슬리피지", (r) => r.slippage_avg == null ? "-" : "$" + money(r.slippage_avg, 0)],
+    ["세금", (r) => r.tax_avg == null ? "-" : "$" + money(r.tax_avg, 0)],
+    ["앞뒤 반", (r) => !r.split ? "-" : r.split === "불안정" ? `<span class="chip warn">불안정</span><div class="small muted">${esc(r.split_why || "")}</div>` : esc(r.split)]];
+  return `<details class="bt-more"><summary class="small">자세히 — 물속 기간 · 12개월 · 상승장/하락장 · 샤프 · 앞뒤 반 (${cols.length}칸)</summary>
+    <div class="scroll"><table class="tbl"><thead><tr><th>종목</th><th>전략</th>${cols.map(([h]) => `<th class="r">${h}</th>`).join("")}</tr></thead><tbody>${summary.map((r) => `<tr>
+    <td><b>${esc(r.symbol)}</b></td><td>${esc(r.label)}</td>${cols.map(([, f]) => `<td class="r num">${f(r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="small muted">물속 기간 = 최고점(또는 넣은 돈)을 되찾기까지 걸린 가장 긴 기간 · 12개월 = 달마다 시작한 1년 수익 · 하락장 = 기초지수(TQQQ→QQQ, SOXL→SOXX)가 고점 대비 −20% 이하인 날 · 샤프·소르티노 = 무위험 0 · 3배 실현 배수 = 보유 수익 ÷ 기초지수 수익 · 앞뒤 반 = 기간을 반으로 나눠 순위·우위가 뒤집히면 '불안정'.</div></details>`;
+}
+function btSweep(rows) {
+  if (!rows || !rows.length) return "";
+  const vals = rows[0].points.map((p) => p.value);
+  return `<h3 style="margin-top:14px">매개변수 흔들기 — ${esc(rows[0].name)} (IRR 평균)</h3><div class="scroll"><table class="tbl"><thead><tr><th>종목</th><th>전략</th>${vals.map((v) => `<th class="r">${esc(v)}</th>`).join("")}
+    <th class="r">흩어짐</th><th class="r">가운데 대비 이웃</th><th class="r">가장 좋은 값</th><th></th></tr></thead><tbody>${rows.map((r) => `<tr><td><b>${esc(r.symbol)}</b></td><td>${esc(r.strategy)}</td>
+    ${r.points.map((p) => `<td class="r num ${pnlClass(p.irr_avg)}">${btPct(p.irr_avg)}</td>`).join("")}<td class="r num">${r.spread == null ? "-" : btN(r.spread * 100) + "%p"}</td><td class="r num">${r.mid_diff == null ? "-" : btN(r.mid_diff * 100) + "%p"}</td>
+    <td class="r num">${esc(r.best_value)}</td><td>${r.spiky ? '<span class="chip warn">⚠ 뾰족 — 한 값만 튐</span>' : '<span class="small muted">고름</span>'}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function btTable(summary, b) {
   if (!summary || !summary.length) return `<div class="empty">결과가 없습니다.</div>`;
   const best = {};
   for (const r of summary) if (r.irr_avg != null && (best[r.symbol] == null || r.irr_avg > best[r.symbol])) best[r.symbol] = r.irr_avg;
   return `<div class="scroll"><table class="tbl"><thead><tr><th>종목</th><th>전략</th><th class="r">횟수</th><th class="r">IRR 평균</th><th class="r">최악</th><th class="r">최고</th>
-    <th class="r">G (연)</th><th class="r">최종 평가금</th><th class="r">MDD 최악</th><th class="r">현금 바닥 날</th><th class="r">사이클</th><th class="r">DCA 보다 높음</th></tr></thead><tbody>${summary.map((r) => `<tr>
-    <td><b>${esc(r.symbol)}</b></td><td>${esc(r.label)}${r.irr_avg != null && r.irr_avg === best[r.symbol] ? ' <span class="chip">이 종목 1등</span>' : ""}</td><td class="r num">${r.runs}</td>
+    <th class="r">G (연)</th><th class="r">최종 평가금</th><th class="r">MDD 최악</th><th class="r">현금 바닥 날</th><th class="r">사이클</th><th class="r">DCA 보다 높음</th>
+    <th class="r">비교 대상 승률</th><th class="r">세후 IRR</th><th class="r">보수적 기대치 (어림)</th></tr></thead><tbody>${summary.map((r) => `<tr>
+    <td><b>${esc(r.symbol)}</b></td><td>${esc(r.label)}${r.irr_avg != null && r.irr_avg === best[r.symbol] ? ' <span class="chip">이 종목 1등</span>' : ""}${r.gamble ? ' <span class="chip warn" title="IRR 평균이 단기금리보다 낮음">도박</span>' : ""}${r.split === "불안정" ? ' <span class="chip warn" title="앞뒤 반에서 뒤집힘">불안정</span>' : ""}</td><td class="r num">${r.runs}</td>
     <td class="r num ${pnlClass(r.irr_avg)}"><b>${btPct(r.irr_avg)}</b></td><td class="r num ${pnlClass(r.irr_min)}">${btPct(r.irr_min)}</td><td class="r num ${pnlClass(r.irr_max)}">${btPct(r.irr_max)}</td>
     <td class="r num">${btPct(r.G_avg)}</td><td class="r num">$${money(r.final_avg, 0)}<div class="small muted">넣은 돈 $${money(r.invested_avg, 0)}</div></td>
     <td class="r num sell">${btPct(r.mdd_worst)}</td><td class="r num">${Number(r.cash_short_avg || 0).toFixed(1)}</td><td class="r num">${Number(r.cycles_avg || 0).toFixed(1)}</td>
-    <td class="r num">${r.beat_dca == null ? "-" : `${r.beat_dca}/${r.runs}`}</td></tr>`).join("")}</tbody></table></div>
-    <div class="small muted">IRR = 넣은 돈 기준 연 수익률 · G = 연 로그 성장률(켈리) · MDD = 최고점 대비 가장 크게 떨어진 % · 현금 바닥 날 = 돈이 모자라 못 산 날(평균) · 과거 일봉 근사이며 미래 수익을 보장하지 않습니다.</div>`;
+    <td class="r num">${r.beat_dca == null ? "-" : `${r.beat_dca}/${r.runs}`}</td>
+    <td class="r num">${r.win_rate == null ? "-" : btN(r.win_rate, 0) + "%"}</td><td class="r num ${pnlClass(r.irr_after_tax_avg)}">${btPct(r.irr_after_tax_avg)}</td>
+    <td class="r num small">${r.irr_half == null ? "-" : `연 ${btPct(r.irr_half)}`}<div class="muted">MDD ${btPct(r.mdd_x2)} ~ ${btPct(r.mdd_x3)}</div></td></tr>`).join("")}</tbody></table></div>
+    <div class="small muted">IRR = 넣은 돈 기준 연 수익률 · G = 연 로그 성장률(켈리) · MDD = 최고점 대비 가장 크게 떨어진 % · 현금 바닥 날 = 돈이 모자라 못 산 날(평균) · 비교 대상 승률 = 같은 시작일에 비교 대상(기본 그 종목 보유)보다 최종 평가금이 큰 비율 · 보수적 기대치 = 연복리 ½, MDD ×2~×3 (어림) · 과거 일봉 근사이며 미래 수익을 보장하지 않습니다.</div>
+    ${btMore(summary)}${btSweep(b && b.sweep)}
+    ${b && b.notes && b.notes.length ? `<ul class="small muted bt-notes">${b.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}`;
 }
 function btSetLine(p) {
   if (!p) return "";
   return `${esc((p.symbols || []).join(", "))} · ${esc((p.strategies || []).map((k) => (BT_STRATS.find((x) => x[0] === k) || [k, k])[1]).join(" · "))} · $${money(p.capital, 0)} · ${esc(p.years)}년 · 시작일 ${esc(p.step_months)}달씩`
     + ((p.strategies || []).includes("v4") ? ` · 8Buy 목표 ${esc(p.v4_target || "종목 기본")}% · ${esc(p.v4_splits)}분할` : "")
-    + ((p.strategies || []).includes("vr") ? ` · VR 첫날 ${esc(p.vr_start)}% · G ${esc(p.vr_g)} · 밴드 ${esc(p.vr_band)}% · Pool ${esc(p.vr_pool_limit)}%` : "");
+    + ((p.strategies || []).includes("vr") ? ` · VR 첫날 ${esc(p.vr_start)}% · G ${esc(p.vr_g)} · 밴드 ${esc(p.vr_band)}% · Pool ${esc(p.vr_pool_limit)}%` : "")
+    + (p.slippage != null ? ` · 슬리피지 ${esc(p.slippage)}% · 세금 ${esc(p.tax || 0)}%` : "")
+    + (p.baseline ? ` · 비교 대상 ${esc(p.baseline)} 보유` : "") + (p.split_test ? " · 앞뒤 반 확인" : "") + (p.sweep ? ` · 흔들기 ${esc(p.sweep)}` : "");
 }
 function viewBacktest(s, d) {
   const b = d.backtest || null, p = btParams(d), run = b && b.status === "running";
@@ -4101,6 +4141,13 @@ function viewBacktest(s, d) {
       ${lab("VR 첫날 주식 % (쉼표로 여럿)", inp("bt-vrs", "vr_start", "50", 150))}${lab("VR G", inp("bt-vrg", "vr_g", "10", 70))}
       ${lab("VR 밴드 %", inp("bt-vrband", "vr_band", "15", 70))}${lab("VR Pool 한도 %", inp("bt-vrpool", "vr_pool_limit", "50", 80))}
       ${lab("VA r (달)", inp("bt-var", "va_r", "0.01", 80))}${lab("VA g (달)", inp("bt-vag", "va_g", "0.005", 80))}</div>
+    <div class="small muted" style="margin:12px 0 4px">비용·검증 (서재 정독 — 백테스트는 실전보다 좋게 나오므로)</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
+      ${lab("슬리피지 %", inp("bt-slip", "slippage", "0.05", 70))}${lab("양도세 % (0 = 안 셈)", inp("bt-tax", "tax", "22", 80))}
+      ${lab("기본공제 $ (비우면 1,852)", inp("bt-taxded", "tax_deduct", "1852", 110))}
+      <label class="small muted" style="display:flex;flex-direction:column;gap:4px">비교 대상 (비우면 그 종목 보유)<input type="text" id="bt-base" value="${esc(p.baseline || "")}" placeholder="예: QQQ" style="width:120px"></label>
+      <label class="small muted" style="display:flex;flex-direction:column;gap:4px">매개변수 흔들기 (이름=값,값)<input type="text" id="bt-sweep" value="${esc(p.sweep || "")}" placeholder="예: v4-splits=30,40,50 · vr-band=10,15,20" style="width:280px"></label>
+      <button class="chip btchip ${p.split_test ? "on" : ""}" id="bt-split" aria-pressed="${!!p.split_test}" title="기간을 앞·뒤 반으로 나눠 순위·우위가 뒤집히면 '불안정' (계산 약 2배)">앞뒤 반 확인</button></div>
     <div class="row" style="gap:8px;margin-top:12px"><button class="btn primary" id="bt-go" ${run || S.busy ? "disabled" : ""}>${run ? "계산 중…" : "돌리기"}</button>
       <button class="btn" id="bt-reset">기본값으로</button>
       <span class="small muted">처음 종목은 야후에서 일봉을 받습니다. 노트북이 느리면 몇 분~수십 분 — 시작일 간격을 늘리면 빨라집니다.</span></div>
@@ -4116,7 +4163,7 @@ function viewBacktest(s, d) {
     res += `<section class="card" aria-label="백테스트 결과"><div class="row between"><h2>결과</h2><span class="small">${head}</span></div>
       <div class="small muted" style="margin-bottom:8px">${btSetLine(b.params)}</div>
       ${(b.warnings || []).map((w) => `<div class="small warn-t">⚠ ${esc(w)}</div>`).join("")}
-      ${b.status === "done" ? btTable(b.summary) : b.status === "failed" && b.log_tail ? `<details><summary class="small muted">노트북 기록 끝부분</summary><pre class="small">${esc(b.log_tail)}</pre></details>` : ""}
+      ${b.status === "done" ? btTable(b.summary, b) : b.status === "failed" && b.log_tail ? `<details><summary class="small muted">노트북 기록 끝부분</summary><pre class="small">${esc(b.log_tail)}</pre></details>` : ""}
     </section>`;
     if (b.status !== "done" && b.prev && b.prev.summary) res += `<section class="card"><div class="row between"><h2>지난 결과</h2><span class="small muted">${btTime(b.prev.finished)}</span></div>
       <div class="small muted" style="margin-bottom:8px">${btSetLine(b.prev.params)}</div>${btTable(b.prev.summary)}</section>`;
@@ -4130,6 +4177,8 @@ function bindBacktest() {
     const cur = new Set(p.strategies || []); cur.has(x.dataset.btst) ? cur.delete(x.dataset.btst) : cur.add(x.dataset.btst);
     f.strategies = BT_STRATS.map(([k]) => k).filter((k) => cur.has(k)); S.btForm = f; render(); });
   for (const [, id] of [...BT_FIELDS, [null, "bt-more"]]) { const el = document.getElementById(id); if (el) el.oninput = () => btRead(); }
+  const sp = document.getElementById("bt-split");
+  if (sp) sp.onclick = () => { const f = btRead(), p = btParams(S.snap && S.snap.detail); f.split_test = !p.split_test; S.btForm = f; render(); };
   const rs = document.getElementById("bt-reset");
   if (rs) rs.onclick = () => { S.btForm = { ...BT_DEF, more: "" }; render(); };
   const go = document.getElementById("bt-go");
@@ -4138,7 +4187,7 @@ function bindBacktest() {
     const syms = [...new Set([...(p.symbols || []), ...more])];
     if (!syms.length) { S.msg = { bad: true, text: "종목을 하나 이상 고르세요" }; render(); return; }
     if (!(p.strategies || []).length) { S.msg = { bad: true, text: "전략을 하나 이상 고르세요" }; render(); return; }
-    const out = { symbols: syms, strategies: p.strategies };
+    const out = { symbols: syms, strategies: p.strategies, split_test: !!p.split_test };
     for (const [k] of BT_FIELDS) out[k] = String(p[k] == null ? "" : p[k]).trim();     // 값 검사는 노트북이 (틀리면 이유를 돌려줌)
     S.btForm = { ...f, symbols: syms, more: "" };
     send("refresh", { backtest: out, brief: "백테스트 돌리기 · " + syms.join(", ") }); };
