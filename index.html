@@ -427,6 +427,7 @@ body[data-layout="phone"] .st-cal-cell .dcnt { display: none }
   background: linear-gradient(90deg, color-mix(in srgb, var(--buy) 25%, transparent) 0 18%, var(--soft) 18% 82%, color-mix(in srgb, var(--sell) 25%, transparent) 82%) }
 .st-band b { position: absolute; top: -3px; width: 3px; height: 14px; border-radius: 2px; background: var(--ink); transform: translateX(-1px) }
 .st-ops td { vertical-align: top } .st-ops td .small { display: block }
+.st-outside td { background: var(--soft); border-top: 0 }
 .st-mon td { padding: 5px 6px } .st-mbar { width: 46%; min-width: 160px }
 .st-mbar > span { display: inline-block; width: 50%; height: 12px; vertical-align: middle; position: relative }
 .st-mbar > span.neg { border-right: 1px solid var(--muted) } .st-mbar i { position: absolute; top: 0; bottom: 0; border-radius: 3px }
@@ -663,7 +664,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-22a";
+const APP_VERSION = "2026-11-22b";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1560,13 +1561,15 @@ function brokerNow(s, d) {
   if (!syms.some((x) => nowPx(s, x) != null)) return { value: Number(bk.value), day: null, live: false, basis: syms.length ? closeLabel(s, syms[0]) : "" };
   return { ...brokerValueNow(bk, (d || {}).real_orders, (x) => nowPx(s, x), s.closes), basis: "지금가 " + liveHm(s) };
 }
+// 작업 62 ② (ADR 0057): 합계 v = 전략 합 strat + 전략 밖 outside (VR 아닌 따로 수량 — 전략 숫자에는 빼고 자산 합계에는 포함)
 function evalNow(s) {
-  let v = Number((s.totals || {}).eval_pnl || 0), live = false;
+  const t = s.totals || {}, v0 = Number(t.eval_pnl || 0);
+  let out = (t.outside || []).reduce((n, o) => n + Number(o.eval_pnl || 0), 0), strat = v0 - out, live = false;
   for (const g of allStrategies(s)) {
     const x = nowPx(s, g.symbol), c = Number((s.closes || {})[g.symbol] || 0);
-    if (x != null && c > 0 && g.avg) { v += (x - c) * (Number(g.qty || 0) + Number(g.excluded_qty || 0)); live = true; }
+    if (x != null && c > 0 && g.avg) { strat += (x - c) * Number(g.qty || 0); out += (x - c) * Number(g.excluded_qty || 0); live = true; }
   }
-  return { v, live };
+  return { v: strat + out, strat, outside: out, live };
 }
 function stratNow(s, g) {
   const x = nowPx(s, g.symbol), c = (s.closes || {})[g.symbol], px = x != null ? x : Number(c || 0);
@@ -3251,12 +3254,21 @@ function bDay(r, label, cls, chk) {
 function bDiffDays(rows, chk) {
   return chk ? rows.filter((r) => chk[r[0]] && !chk[r[0]].same).length : 0;
 }
+// 작업 62 ① (11/22 사용자): 싸이클 실현 수익률 = 실현 ÷ 판 주식의 매입금액(= 매도 금액 − 실현). 매도가 없거나 분모 ≤ 0 이면 안 보임.
+//   (예전 분모 '로그 기간 안 새 매수 금액'은 로그 시작 전 보유분이 빠져 몇 배 과장됐음)
+function cycleRate(rz, sa) {
+  if (rz === null || rz === undefined || !Number(sa)) return "";
+  const base = Number(sa) - Number(rz);
+  if (!(base > 0)) return "";
+  const p = Number(rz) / base * 100;
+  return ` (판 주식 기준 ${p >= 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%)`;
+}
 function bookTable(g, e, book, lastWeek, recent, chk) {
   const cycles = [...new Set(book.map((r) => r[23]))];
   let body = "";
   for (const c of cycles) {
     const cr = book.filter((r) => r[23] === c), a = bAgg(cr), done = Number(cr[cr.length - 1][10]) === 0;
-    const rz = a[17], rate = rz !== null && a[24] ? ` (${(rz / a[24] * 100).toFixed(1)}%)` : "";
+    const rz = a[17], rate = cycleRate(rz, a[25]);
     body += `<tr class="t-cycle"><td colspan="${BCOLS.length}"><span class="t-cyc"><b>싸이클 ${c}</b> · ${esc(cr[0][0].slice(5))} ~ ${esc(cr[cr.length - 1][0].slice(5))}${done ? " 끝" : " 진행 중"}
       ${e.cycles && e.cycles[c] ? ` · 규칙 ${esc(e.cycles[c])}` : ""} · 매수 $${money(a[24] || 0)} · 매도 $${money(a[25] || 0)} · 수익 ${rz === null ? "-" : (rz >= 0 ? "+" : "−") + "$" + money(Math.abs(rz)) + rate}</span></td></tr>`;
     for (const [key, name, gr, daily] of tGroups(cr, lastWeek, recent)) {
@@ -3337,7 +3349,7 @@ function viewTrades(s) {
     const cr = rows.filter((r) => r[11] === c);
     if (isInf || cycles.length > 1) {
       const a = tAgg(cr), done = cr[cr.length - 1][6] === 0;
-      const rate = a.rz !== null && a.ba ? ` (${(a.rz / a.ba * 100).toFixed(1)}%)` : "";
+      const rate = cycleRate(a.rz, a.sa);
       body += `<tr class="t-cycle"><td colspan="${TCOLS.length}"><span class="t-cyc"><b>싸이클 ${c}</b> · ${esc(cr[0][0].slice(5))} ~ ${esc(cr[cr.length - 1][0].slice(5))}${done ? " 끝" : " 진행 중"}
         ${e.cycles && e.cycles[c] ? ` · 규칙 ${esc(e.cycles[c])}` : ""} · 매수 $${money(a.ba)} · 매도 $${money(a.sa)} · 실현 ${a.rz === null ? "-" : (a.rz >= 0 ? "+" : "−") + "$" + money(Math.abs(a.rz)) + rate}</span></td></tr>`;
     }
@@ -3817,7 +3829,7 @@ function statsStrategiesTableCard(scope, fx) {
         <th>전략 (계좌)</th>
         <th class="n">현재 투자원금</th>
         <th class="n">가용 예수금</th>
-        <th class="n">시드 소진율</th>
+        <th class="n" title="돈 기준: 지금 매입금액 ÷ 시드(설정 원금 · 주문표 원금 · 역산). 운용 상태의 '분할 소진율'(T ÷ 분할)과 다름">시드 소진율</th>
         <th class="n">현재 평가손익</th>
         <th class="n">이번 달 손익</th>
         <th class="n">누적 확정손익 (수익률)</th>
@@ -3830,16 +3842,24 @@ function statsStrategiesTableCard(scope, fx) {
             <td><button type="button" class="linkbtn" data-detail="${esc(r.sid)}"><b>${esc(r.name)}</b></button> <span class="sym num">${esc(r.symbol)}</span> <span class="small muted">${esc(r.account_label)} · ${r.qty}주</span></td>
             <td class="n num"><b>$${money(r.invested_usd)}</b><div class="small muted">${esc(statsKrw(r.invested_usd, fx))}</div></td>
             <td class="n num">$${money(r.cash_usd)}</td>
-            <td class="n num">${Number(r.exhaustion_pct || 0).toFixed(1)}%</td>
+            <td class="n num" title="돈 기준 = 매입금액 ÷ 시드 $${money(r.seed_usd)}">${Number(r.exhaustion_pct || 0).toFixed(1)}%${r.seed_basis ? `<div class="small muted">${esc(r.seed_basis)} $${money(r.seed_usd, 0)}</div>` : ""}</td>
             <td class="n num ${evPnl > 0 ? "buy" : evPnl < 0 ? "sell" : ""}">${statsUsdSigned(evPnl)}<div class="small">${statsPctSigned(r.eval_pnl_pct)}</div></td>
             <td class="n num ${mNet > 0 ? "buy" : mNet < 0 ? "sell" : ""}">${statsUsdSigned(mNet)}<div class="small muted">${esc(statsKrw(mNet, fx, true))}</div></td>
             <td class="n num ${net > 0 ? "buy" : net < 0 ? "sell" : ""}"><b>${statsUsdSigned(net)}</b> (${statsPctSigned(r.return_pct)})<div class="small muted">${esc(statsKrw(net, fx, true))}</div></td>
             <td class="n num"><span class="buy">+${r.profit_count}건($${money(r.profit_usd, 0)})</span> / <span class="sell">−${r.loss_count}건($${money(Math.abs(Number(r.loss_usd || 0)), 0)})</span></td>
-          </tr>`;
+          </tr>${statsOutsideRows(scope, r.sid, fx)}`;
         }).join("")}
       </tbody>
     </table></div>
+    ${(scope.outside || []).length ? `<div class="small muted" style="margin-top:4px">전략 밖 보유 = 메리츠 보유 중 전략 계산에서 뺀 수량 (ADR 0057). 전략 줄 숫자에는 없고, 위 합계(자본 현황)에는 들어 있습니다.</div>` : ""}
   </section>`;
+}
+// 작업 62 ② (ADR 0057): 전략 줄 아래 '전략 밖 보유' 한 줄 — 전략 숫자에는 빼고 합계에는 포함
+function statsOutsideRows(scope, sid, fx) {
+  return (scope.outside || []).filter((o) => o.parent === sid).map((o) => {
+    const p = Number(o.eval_pnl_usd || 0);
+    return `<tr class="st-outside"><td colspan="8" class="small">↳ 전략 밖 보유: <span class="sym num">${esc(o.symbol)}</span> <b class="num">${o.qty}주</b> (VR 아님) <span class="num">$${money(o.eval_usd)}</span> · 손익 <span class="num ${p > 0 ? "buy" : p < 0 ? "sell" : ""}">${statsUsdSigned(p)}</span>${o.excluded_cost != null ? ` <span class="muted">· 산 값 $${money(o.excluded_cost)}</span>` : ""} <span class="muted">· 합계에 포함</span></td></tr>`;
+  }).join("");
 }
 
 // ── 작업 58 (11/21 사용자): PC 통계 화면 — 한 줄 숫자 → 자산 추이 → 달력 · 월별 비교 → 운용 상태 → 위험 지표 → 전략별 성과표.
@@ -3968,7 +3988,7 @@ function stUse(s, g, stRow) {
   const bar = (p, txt) => `<span class="st-bar ${p >= 75 ? "warn" : ""}"><i style="width:${Math.min(100, Math.max(0, p)).toFixed(1)}%"></i></span> <span class="small num">${txt}</span>`;
   if (plan && Number(plan.splits) > 0) return bar(Number(plan.T) / Number(plan.splits) * 100, `T ${esc(plan.T)} / ${Number(plan.splits)}`);
   if (vr) { const c = vrCash(g, vr); if (c.start > 0 && c.left != null) return bar(100 - c.left / c.start * 100, `Pool 남음 ${(c.left / c.start * 100).toFixed(0)}%`); }
-  if (stRow && stRow.exhaustion_pct != null) return bar(Number(stRow.exhaustion_pct), `${Number(stRow.exhaustion_pct).toFixed(0)}% 사용`);
+  if (stRow && stRow.exhaustion_pct != null) return bar(Number(stRow.exhaustion_pct), `시드 ${Number(stRow.exhaustion_pct).toFixed(0)}% 사용`);
   return "-";
 }
 function stOpsCard(s, d, scope, acc) {
@@ -3978,7 +3998,7 @@ function stOpsCard(s, d, scope, acc) {
   return lv("lv-st-ops", () => {
     const s2 = S.snap.summary;
     return `<section class="card" id="lv-st-ops" aria-label="운용 상태"><h2>운용 상태</h2><div class="scroll"><table class="st-ops">
-      <thead><tr><th>전략</th><th class="n">보유 · 평단</th><th class="n">지금가 · 평단 대비</th><th>다음 지점까지</th><th>소진</th><th class="n">현금 비중</th><th class="n">회차</th></tr></thead><tbody>
+      <thead><tr><th>전략</th><th class="n">보유 · 평단</th><th class="n">지금가 · 평단 대비</th><th>다음 지점까지</th><th title="회차 기준: T ÷ 분할 (VR 은 Pool 쓴 비율). 통계 표 '시드 소진율'(돈 기준)과 다름">분할 소진율</th><th class="n">현금 비중</th><th class="n">회차</th></tr></thead><tbody>
       ${strat.map((g) => {
         const plan = (s2.plans || {})[g.id], vr = (s2.vr || {})[g.id], n = stratNow(s2, g), px = Number(n.px || 0);
         const cash = vr ? (vrCash(g, vr).left != null ? Number(vrCash(g, vr).left) : Number(g.cash || 0)) : Number(g.cash || 0);
