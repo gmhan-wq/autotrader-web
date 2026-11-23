@@ -153,10 +153,22 @@ tr.offrow td { opacity: .45 } tr.offrow td.n { text-decoration: line-through }
 .cal button.empty { background: transparent; cursor: default; opacity: .35 }
 .cal button.nodata { cursor: default; opacity: .5 }
 .cal button.has { background: var(--glass-strong); border-color: var(--glass-edge) }
+@keyframes swL { from { transform: translateX(36px); opacity: .35 } to { transform: none; opacity: 1 } }
+@keyframes swR { from { transform: translateX(-36px); opacity: .35 } to { transform: none; opacity: 1 } }
+#view.sw-l { animation: swL .18s ease-out } #view.sw-r { animation: swR .18s ease-out }   /* 작업 69: 좌우 밀기 */
+@media (prefers-reduced-motion: reduce) { #view.sw-l, #view.sw-r { animation: none } }
+.cal button.mtemp { border-style: dashed; border-color: var(--warn) }
 .cal button.sel { box-shadow: inset 0 0 0 2px var(--accent) }
 .cal button.today b { color: var(--accent) }
 .cal .tags { display: flex; flex-wrap: wrap; gap: 2px }
 .cal .tags i { font: 600 10px var(--mono); font-style: normal; padding: 0 4px; border-radius: 6px; background: var(--soft); color: var(--muted) }
+.cal button.mclosed { background: color-mix(in srgb, var(--muted) 22%, var(--soft)); border-color: var(--line) }   /* 작업 67: 휴장 */
+.cal .mk { font-size: 10.5px; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted) }
+.cal .mk b { font-weight: 700; color: var(--ink) } .cal .mk.early { color: var(--warn); font-weight: 600 }
+@media (max-width: 520px) { .cal .mk { white-space: normal; font-size: 9.5px; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: keep-all } }
+.mk-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted) } .mk-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; font-style: normal }
+.mk-line { padding: 8px 12px; border-radius: 12px; background: var(--soft); font-size: 13.5px } .mk-line.early { color: var(--warn) }
+.mc-list .row { padding: 6px 0; border-top: 1px solid var(--line) }
 .cal .res { font-size: 11px } .cal .res.ok { color: var(--ok) } .cal .res.warn { color: var(--warn) }
 @media (max-width: 520px) { .cal button { min-height: 48px; font-size: 12px } .cal .tags i { font-size: 9px; padding: 0 2px } }
 .card { border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
@@ -168,6 +180,12 @@ tr.offrow td { opacity: .45 } tr.offrow td.n { text-decoration: line-through }
 .chip.ok { color: var(--ok); border-color: currentColor } .chip.warn { color: var(--warn); border-color: currentColor }
 .chip.bad { color: var(--bad); border-color: currentColor }
 .scroll { overflow-x: auto }
+/* 작업 70 (11/23 사용자 '표를 내리면 열 이름이 안 보임'): 표 상자 = 가로·세로 스크롤 상자 (높이 = 화면 − 위 머리·아래 탭 줄) → 머리줄 위 고정 · 매매 표 날짜 열 왼쪽 고정.
+   표가 짧으면 상자도 짧다 (max-height 만 — 빈 높이 없음). 사이클 요약 줄(tbody 안)은 고정하지 않음. */
+.scroll { overflow: auto; max-height: calc(100dvh - 160px); overscroll-behavior-x: contain }
+body[data-layout="phone"] .scroll { max-height: calc(100dvh - 150px - env(safe-area-inset-bottom, 0px)) }
+.scroll > table > thead th { position: sticky; top: 0; z-index: 2; background: var(--bg); box-shadow: inset 0 -1px 0 var(--line) }
+.ttable > table > thead th:first-child { left: 0; z-index: 3 }
 .cal .pmark { font-size: 11px; line-height: 1 } .cal .pmark.done { opacity: .45 } .cal .pmark.wait { filter: drop-shadow(0 0 2px var(--warn)) }
 .ttable td, .ttable th { padding: 6px 8px } .ttable td:first-child, .ttable th:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1 }
 .ttable tr.t-total td { background: var(--soft); font-weight: 600 } .ttable tr.t-cycle td { background: var(--soft); font-size: 13px; position: static } .ttable .t-cyc { position: sticky; left: 8px; display: inline-block; white-space: normal; max-width: min(860px, calc(100vw - 96px)) }
@@ -690,7 +708,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-23b";
+const APP_VERSION = "2026-11-23c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -721,7 +739,61 @@ async function refresh(auto) {
     if (S.admin) { S.stage = "현황: 회원 관리"; await withTimeout(loadAdmin(), 8000, "회원 관리").catch((e) => { S.jsErrors = [...S.jsErrors, e.message].slice(-5); }); S.stage = ""; }
   } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message + (S.stage ? " (단계: " + S.stage + ")" : "") }; }
   if (auto === true && typing()) { S.renderLater = true; return; }
+  if (auto === true) {                       // 작업 68: 자동 갱신에서 화면에 쓰는 값이 그대로면 다시 그리지 않는다 (보던 자리 그대로)
+    const sig = viewSig();
+    if (sig === S.lastViewSig && !S.renderLater) { tickAgo(); return; }
+  }
   render();
+}
+// 작업 68 (11/23 사용자 '스크롤해서 보고 있으면 처음 화면으로 돌아감'): 자동 갱신(30초·화면 다시 볼 때)이 화면 전체를 다시 그리며
+// 페이지·가로 표·안쪽 상자 스크롤과 열린 '자세히'가 처음으로 돌아가던 문제 — ① 바뀐 게 없으면 다시 그리지 않음 ② 다시 그리면 자리 되돌림.
+function viewSig() {
+  const c = (S.cmds || []).map((x) => [x.id, x.status]), m = (S.members || []).map((x) => [x.user_id, x.status, x.role]);
+  const ch = (S.changes || []).map((x) => [x.id, x.status, Object.keys(x.approvals || {}).length]);
+  return JSON.stringify([S.snap ? S.snap.taken_at : null, c, m, ch, S.msg ? S.msg.text : null, (S.jsErrors || []).length, S.tab === "family" ? JSON.stringify(S.family || null).length : 0]);
+}
+function tickAgo() {                           // 다시 그리지 않을 때 '노트북 n분 전'만 고침
+  if (!S.snap) return;
+  document.querySelectorAll(".chip.live").forEach((el) => { const i = el.querySelector("i");
+    el.textContent = (document.body.dataset.layout === "pc" ? "노트북 " + ago(S.snap.taken_at) + " 갱신" : "노트북 " + ago(S.snap.taken_at));
+    if (i) el.prepend(i); });
+}
+function elKeys(el) {                          // 다시 그린 뒤 같은 상자를 찾을 '안정 키' [정확한 길, 느슨한 이름]
+  if (el.id) return ["#" + el.id, "#" + el.id];
+  const exact = [], loose = [];
+  for (let e = el; e && e.id !== "app" && exact.length < 8; e = e.parentElement) {
+    if (e.id) { exact.unshift("#" + e.id); loose.unshift("#" + e.id); break; }
+    const lab = e.getAttribute("aria-label") || (e.dataset && (e.dataset.calopen || e.dataset.foldopen || e.dataset.key)) || "";
+    const cls = typeof e.className === "string" ? e.className.trim().split(/\s+/).filter((c) => !["on", "sel", "today"].includes(c)).slice(0, 2).join(".") : "";
+    const nm = e.tagName.toLowerCase() + (lab ? `[${lab}]` : cls ? "." + cls : "");
+    const sib = e.parentElement ? [...e.parentElement.children].filter((x) => x.tagName === e.tagName) : [e];
+    exact.unshift(nm + ":" + sib.indexOf(e)); loose.unshift(nm);
+  }
+  return [exact.join(">"), loose.join(">")];
+}
+function keepScroll() {
+  const app = document.getElementById("app"), out = { view: S.renderedView || "", x: window.scrollX, y: window.scrollY, boxes: [], details: [] };
+  if (!app) return out;
+  const n = {};
+  for (const el of app.querySelectorAll("*")) {
+    if (el.scrollLeft || el.scrollTop) { const [k, l] = elKeys(el); n[l] = (n[l] || 0) + 1; out.boxes.push({ k, l: l + "#" + n[l], left: el.scrollLeft, top: el.scrollTop }); }
+  }
+  const nd = {};
+  for (const d of app.querySelectorAll("details")) { const [k, l] = elKeys(d); nd[l] = (nd[l] || 0) + 1; out.details.push({ k, l: l + "#" + nd[l], open: d.open }); }
+  out.h = app.offsetHeight;
+  return out;
+}
+function restoreScroll(kept) {
+  const app = document.getElementById("app");
+  if (!app || !kept || kept.view !== S.tab + "|" + (S.detail || "")) {      // 다른 화면(탭·메뉴·자세히로 들어감)이면 맨 위에서
+    if (app) app.style.minHeight = ""; if (kept && kept.view) window.scrollTo(0, 0); return; }
+  const byK = {}, byL = {}, n = {}, nd = {};
+  for (const el of app.querySelectorAll("*")) { const [k, l] = elKeys(el); byK[k] = byK[k] || el; if (el.tagName === "DETAILS") { nd[l] = (nd[l] || 0) + 1; byL["d" + l + "#" + nd[l]] = el; } }
+  for (const el of app.querySelectorAll("*")) { if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) { const l = elKeys(el)[1]; n[l] = (n[l] || 0) + 1; byL["b" + l + "#" + n[l]] = byL["b" + l + "#" + n[l]] || el; } }
+  for (const d of kept.details) { const el = (byK[d.k] && byK[d.k].tagName === "DETAILS") ? byK[d.k] : byL["d" + d.l]; if (el && el.open !== d.open) el.open = d.open; }
+  for (const b of kept.boxes) { const el = byK[b.k] || byL["b" + b.l]; if (el) { el.scrollLeft = b.left; el.scrollTop = b.top; } }
+  window.scrollTo(kept.x, kept.y);
+  requestAnimationFrame(() => { app.style.minHeight = ""; });
 }
 document.addEventListener("focusout", () => setTimeout(() => { if (S.renderLater && !typing()) { S.renderLater = false; render(); } }, 300));
 async function send(command, payload) {
@@ -981,9 +1053,15 @@ function restoreForm(kept) {
     if (el) { el.focus({ preventScroll: true }); try { if (kept.focus.s !== null) el.setSelectionRange(kept.focus.s, kept.focus.e); } catch (e) {} } }
 }
 function render() {
-  const kept = keepForm();
+  const kept = keepForm(), sk = keepScroll();
+  const app = document.getElementById("app");
+  if (app && sk.h) app.style.minHeight = sk.h + "px";     // 다시 그리는 동안 높이가 줄었다 늘며 위로 튀지 않게 (작업 68)
   renderInner();
   restoreForm(kept);
+  restoreScroll(sk);
+  S.renderedView = S.tab + "|" + (S.detail || "");
+  S.lastViewSig = viewSig();
+  const mc = document.getElementById("mc-date"); if (mc) mc.dispatchEvent(new Event("input"));   // 작업 67: 되살린 칸으로 [넣기] 막음 다시 확인
 }
 function renderInner() {
   LIVE_BITS = {}; _locN = 0;                      // 작업 ㊹: 장중에 새로 그릴 작은 조각 목록
@@ -3240,6 +3318,97 @@ function calData() {
     (days[td] = days[td] || { sheets: [], checks: {} }).checks[acc] = r; }
   return days;
 }
+// ── 작업 67 (11/23 사용자): 주문표 달력에 휴장·조기 마감 표시 (폰·PC) + PC 관리자만 임시 휴장·조기 마감 넣기·지우기 ──
+//    값은 노트북 스냅숏 detail.market_days (작업 64 달력 한 곳). 넣기·지우기 = set_strategy + market_closure (노트북이 관리자·날짜를 다시 확인).
+const mktDays = () => ((S.snap && S.snap.detail) || {}).market_days || {};
+function mktText(m, short) {
+  if (!m) return "";
+  if (m.kind === "closed") return m.rule ? `휴장 · ${m.reason || ""}` : `임시 휴장 · ${m.reason || ""}`;
+  return short ? `조기 마감 한국 ${m.close_kst || ""}` : `${m.rule ? "" : "임시 "}조기 마감 · 뉴욕 ${m.close_ny || "13:00"} = 한국 ${String(m.close_kst_day || "").slice(5).replace("-", "/")} ${m.close_kst || ""}${m.reason ? " (" + m.reason + ")" : ""}`;
+}
+function mktCell(m) {
+  if (!m) return "";
+  if (m.kind === "closed") return `<span class="mk"><b>${m.rule ? "휴장" : "임시 휴장"}</b></span><span class="mk" title="${esc(mktText(m))}">${esc(m.reason || "")}</span>`;
+  return `<span class="mk early" title="${esc(mktText(m))}">조기 마감</span><span class="mk early" title="조기 마감 한국 ${esc(m.close_kst || "")}">한국 ${esc(m.close_kst || "")}</span>`;
+}
+function mktLine(td) {
+  const m = mktDays()[td];
+  if (!m) return "";
+  return `<div class="mk-line ${m.kind}">${m.kind === "closed" ? "🛑" : "⏰"} ${esc(mktText(m))}${m.kind === "closed" ? " — 그날 자동 주문 시간 없음" : " — LOC 는 그 전에 접수"}</div>`;
+}
+const MK_LEGEND = `<div class="mk-legend" aria-label="달력 표시"><span><i style="background:color-mix(in srgb, var(--muted) 22%, var(--soft));border:1px solid var(--line)"></i>휴장 (규칙 — 이름)</span>
+  <span><i style="background:color-mix(in srgb, var(--muted) 22%, var(--soft));border:1px dashed var(--warn)"></i>임시 휴장 · 이유</span><span><i style="background:var(--warn)"></i>조기 마감 (한국 마감 시각)</span></div>`;
+function nyOffsetH(ds) {                       // 그날 뉴욕 UTC 차이 (서머타임 −4, 겨울 −5)
+  try { const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "shortOffset" }).formatToParts(new Date(ds + "T17:00:00Z")).find((x) => x.type === "timeZoneName");
+    const m = /GMT([+-]\d+)/.exec(p ? p.value : ""); return m ? Number(m[1]) : -5; } catch (e) { return -5; }
+}
+function nyToKst(ds, hm) {                     // 뉴욕 'HH:MM' → 한국 [MM/DD, HH:MM]
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds || "") || !/^\d{1,2}:\d{2}$/.test(hm || "")) return null;
+  const [h, mi] = hm.split(":").map(Number), t = new Date(Date.parse(ds + "T00:00:00Z") + ((h - nyOffsetH(ds) + 9) * 60 + mi) * 60000);
+  return [t.toISOString().slice(5, 10).replace("-", "/"), t.toISOString().slice(11, 16)];
+}
+const wdKo = (ds) => { const [y, m, d] = ds.split("-").map(Number); return DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]; };
+function closureBlock(ds, kind, hm) {          // 웹 막음 (편의 — 노트북이 다시 확인): 막을 이유 또는 ""
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds || "")) return "날짜를 고르세요";
+  if (ds < kstToday()) return "지난 날짜는 넣을 수 없습니다";
+  const w = new Date(ds + "T12:00:00Z").getUTCDay();
+  if (w === 0 || w === 6) return `${wdKo(ds)}요일 — 주말은 원래 장이 없습니다`;
+  const m = mktDays()[ds];
+  if (m && m.kind === "closed" && m.rule) return `이미 규칙 휴장입니다 (${m.reason})`;
+  if (kind === "early") { if (!/^\d{1,2}:\d{2}$/.test(hm || "")) return "뉴욕 마감 시각을 넣으세요 (예: 13:00)";
+    const [h, mi] = hm.split(":").map(Number), x = h * 60 + mi; if (!(x > 570 && x < 960)) return "조기 마감 시각은 뉴욕 09:30~16:00 사이여야 합니다"; }
+  return "";
+}
+function closureCard() {
+  if (!S.admin || layout() === "phone") return "";           // 관리자 + PC 화면에서만 (폰은 보기만, 작업 ㉟와 같게)
+  const temp = Object.entries(mktDays()).filter(([, m]) => !m.rule).sort(([a], [b]) => a.localeCompare(b)), today = kstToday();
+  const sent = (S.cmds || []).filter((c) => (c.payload || {}).market_closure).slice(0, 4);
+  return `<section class="card mc-card" aria-label="임시 휴장·조기 마감 넣기"><div class="row between"><h2>임시 휴장·조기 마감 넣기</h2><span class="chip">관리자 · PC</span></div>
+    <div class="small muted">국장일처럼 규칙에 없는 휴장·조기 마감만 넣습니다. 넣으면 그날 자동 주문 시간이 없어지고 주문표는 다음 거래일 몫이 됩니다. 이미 넣어 둔 주문은 지우지 않고 알림만 갑니다 (메리츠 앱에서 확인). 주문 계산·전략 값은 그대로.</div>
+    <div class="row">
+      <label class="small">날짜<input type="date" id="mc-date" min="${today}"></label>
+      <label class="small">종류<select id="mc-kind"><option value="closed">휴장</option><option value="early">조기 마감</option></select></label>
+      <label class="small" id="mc-time-l" hidden>뉴욕 마감<input type="time" id="mc-time" value="13:00" step="300"></label>
+      <span class="small muted num" id="mc-kst"></span>
+      <label class="small grow">이유<input type="text" id="mc-reason" maxlength="60" placeholder="예: 국장일"></label>
+      <button class="btn primary" id="mc-add" disabled>넣기</button></div>
+    <div class="small warn-t" id="mc-why" role="status">날짜를 고르세요</div>
+    <div class="mc-list"><b class="small">넣은 임시 휴장·조기 마감</b>${temp.length ? temp.map(([d, m]) => `<div class="row between"><span class="small"><b class="num">${esc(d)}(${wdKo(d)})</b> ${esc(mktText(m))}${d < today ? ' <span class="muted">(지난 날)</span>' : ""}</span>
+      ${m.source === "config" ? `<span class="chip" title="저장소 config/market_closures.json — 웹에서 못 고침">저장소</span>` : `<button class="btn ghost" data-mcdel="${esc(d)}">지우기</button>`}</div>`).join("")
+      : `<div class="small muted" style="padding:6px 0">없음 — 규칙 휴장·조기 마감은 달력에 자동으로 보입니다.</div>`}</div>
+    ${sent.length ? `<div class="small muted">최근 보낸 것: ${sent.map((c) => `${esc(((c.payload || {}).market_closure || {}).action === "remove" ? "지움" : "넣기")} ${esc(((c.payload || {}).market_closure || {}).date || "")} <span class="chip ${c.status === "done" ? "ok" : c.status === "failed" ? "bad" : "warn"}">${c.status === "pending" ? "대기" : c.status === "done" ? "완료" : "실패"}</span>${c.result && c.status === "failed" ? " " + esc(String(c.result).slice(0, 80)) : ""}`).join(" · ")}</div>` : ""}
+  </section>`;
+}
+function bindClosure() {
+  const $ = (id) => document.getElementById(id), btn = $("mc-add");
+  if (!btn) return;
+  const upd = () => {
+    const ds = $("mc-date").value, kind = $("mc-kind").value, hm = $("mc-time").value;
+    $("mc-time-l").hidden = kind !== "early";
+    const k = kind === "early" ? nyToKst(ds, hm) : null;
+    $("mc-kst").textContent = k ? `= 한국 ${k[0]} ${k[1]}` : "";
+    const why = S.busy ? "보내는 중…" : closureBlock(ds, kind, hm);
+    $("mc-why").textContent = why; btn.disabled = !!why;
+  };
+  ["mc-date", "mc-kind", "mc-time"].forEach((id) => { $(id).oninput = upd; $(id).onchange = upd; });
+  upd();
+  btn.onclick = () => {
+    const ds = $("mc-date").value, kind = $("mc-kind").value, hm = $("mc-time").value, reason = $("mc-reason").value.trim();
+    if (closureBlock(ds, kind, hm)) return upd();
+    const k = nyToKst(ds, hm);
+    const q = kind === "early" ? `${ds}(${wdKo(ds)}) 임시 조기 마감 뉴욕 ${hm} = 한국 ${k ? k[0] + " " + k[1] : ""} — 그날 정규장이 일찍 끝납니다. 넣을까요?`
+      : `${ds}(${wdKo(ds)}) 임시 휴장 — 그날 자동 주문 시간 없음. 넣을까요?`;
+    if (!confirm(q + (reason ? `\n이유: ${reason}` : ""))) return;
+    S.clearForm = ["mc-date", "mc-reason"];
+    send("set_strategy", { market_closure: { action: "add", date: ds, early: kind === "early" ? hm : null, reason, by: S.name },
+      brief: `${kind === "early" ? "임시 조기 마감" : "임시 휴장"} 넣기 ${ds}` });
+  };
+  document.querySelectorAll("[data-mcdel]").forEach((b) => b.onclick = () => {
+    const ds = b.dataset.mcdel;
+    if (!confirm(`${ds}(${wdKo(ds)}) 임시 휴장·조기 마감을 지울까요? 그날은 규칙 달력대로 돌아갑니다.`)) return;
+    send("set_strategy", { market_closure: { action: "remove", date: ds, by: S.name }, brief: `임시 휴장 지우기 ${ds}` });
+  });
+}
 // ── 투자헌법 (사용자 11/03): 자동매매 전략의 절대 원칙. 수정은 매년 1월, 전원 합의 (ADR 0040) ──
 function viewConstitution(s) {
   const c = (S.snap.detail || {}).constitution;
@@ -3472,7 +3641,8 @@ function viewCalendar() {
   if (!keys.length && !PL) return `<div class="card"><h2>주문표 달력</h2><div class="empty">아직 기록이 없습니다. 노트북을 업데이트하면 승인한 주문표가 날짜별로 쌓입니다.</div></div>`;
   const plans = Object.values(S.snap.summary.plans || {}).map((p) => p.trade_date).sort();
   const nextTd = plans[plans.length - 1] || keys[keys.length - 1];
-  const sel = S.calDay && (days[S.calDay] || pdays[S.calDay]) ? S.calDay : (days[nextTd] ? nextTd : keys[keys.length - 1] || Object.keys(pdays).sort()[0]);
+  const MD = mktDays();
+  const sel = S.calDay && (days[S.calDay] || pdays[S.calDay] || MD[S.calDay]) ? S.calDay : (days[nextTd] ? nextTd : keys[keys.length - 1] || Object.keys(pdays).sort()[0]);
   const ym = S.calMonth || sel.slice(0, 7);
   const [Y, M] = ym.split("-").map(Number);
   const first = new Date(Date.UTC(Y, M - 1, 1)).getUTCDay(), last = new Date(Date.UTC(Y, M, 0)).getUTCDate();
@@ -3480,14 +3650,15 @@ function viewCalendar() {
   const cells = [];
   for (let i = 0; i < first; i++) cells.push(`<button class="empty" tabindex="-1" aria-hidden="true"></button>`);
   for (let dd = 1; dd <= last; dd++) {
-    const k = ymd(Y, M, dd), v = days[k], pl = pdays[k];
+    const k = ymd(Y, M, dd), v = days[k], pl = pdays[k], md = MD[k];
     const checks = v ? Object.values(v.checks) : [];
     const res = checks.length ? (checks.every((c) => c.ok) ? `<span class="res ok">일치</span>` : `<span class="res warn">차이</span>`)
       : (k === nextTd ? `<span class="res">다음 장</span>` : "");
     const pmark = pl ? `<span class="pmark ${pl.every((x) => x.status === "done") ? "done" : pl.some((x) => x.status === "waiting") ? "wait" : ""}" title="${esc(pl.map((x) => x.title).join(" / "))}">${pl.some((x) => x.kind === "deploy") ? "🚀" : pl.some((x) => x.kind === "decide") ? "🗳" : "📌"}</span>` : "";
-    cells.push(`<button class="${v || pl ? "has" : "nodata"} ${k === sel ? "sel" : ""} ${k === today ? "today" : ""}" ${v || pl ? `data-calday="${k}"` : 'tabindex="-1"'}
-      aria-label="${M}월 ${dd}일${v ? " 주문표 " + v.sheets.length + "건" : ""}${pl ? " 개발 계획 " + pl.length + "건" : ""}"><b class="num">${dd}</b>${pmark}
-      ${v ? `<span class="tags">${v.sheets.map((x) => `<i>${esc(x.symbol)}</i>`).join("")}</span>${res}` : ""}</button>`);
+    const can = v || pl || md;
+    cells.push(`<button class="${v || pl ? "has" : md ? "" : "nodata"} ${md && md.kind === "closed" ? "mclosed" : ""} ${md && md.kind === "closed" && !md.rule ? "mtemp" : ""} ${k === sel ? "sel" : ""} ${k === today ? "today" : ""}" ${can ? `data-calday="${k}"` : 'tabindex="-1"'}
+      aria-label="${M}월 ${dd}일${md ? " " + esc(mktText(md)) : ""}${v ? " 주문표 " + v.sheets.length + "건" : ""}${pl ? " 개발 계획 " + pl.length + "건" : ""}"><b class="num">${dd}</b>${pmark}
+      ${mktCell(md)}${v ? `<span class="tags">${v.sheets.map((x) => `<i>${esc(x.symbol)}</i>`).join("")}</span>${res}` : ""}</button>`);
   }
   const shift = (n) => { const t = new Date(Date.UTC(Y, M - 1 + n, 1)); return t.toISOString().slice(0, 7); };
   let out = `<section class="card"><div class="row between"><h2>주문표 달력</h2>
@@ -3495,8 +3666,8 @@ function viewCalendar() {
       <button class="btn" data-calm="${shift(1)}" aria-label="다음 달">›</button></div></div>
     <div class="small muted">주문표 날짜 = 미국 장 날짜(실행일), 한국 시간으로는 그날 밤~다음 날 새벽. 🚀 배포 · 🗳 결정 · 📌 점검 = 개발 완료 계획(한국 날짜, 그날 아침 자동 실행).</div>
     ${PL ? planSummary(PL, today) : ""}
-    <div class="cal" style="margin-top:8px">${DOW.map((w) => `<span class="dow">${w}</span>`).join("")}${cells.join("")}</div></section>`;
-  return out + planDay(sel, pdays[sel]) + calDay(sel, days[sel]) + readLogCard(sel);
+    <div class="cal" style="margin-top:8px">${DOW.map((w) => `<span class="dow">${w}</span>`).join("")}${cells.join("")}</div>${MK_LEGEND}</section>`;
+  return out + closureCard() + planDay(sel, pdays[sel]) + (calDay(sel, days[sel]) || (MD[sel] ? `<h2 style="margin:6px 2px">${Number(sel.slice(5, 7))}/${Number(sel.slice(8))}(${wdKo(sel)}) 미국 장</h2>` + mktLine(sel) : "")) + readLogCard(sel);
 }
 // 사진 판독 기록 (작업 ⑪): 사진은 지우고 판독 숫자·시스템 비교·선택만 (노트북 state/photo_reads)
 const READ_ST = { same: ["시스템과 같음 ✓", "ok"], diff: ["다름 ⚠", "warn"], draft: ["판독 (확인 대기)", ""], read: ["판독", ""], fail: ["판독 실패", "bad"],
@@ -3607,7 +3778,7 @@ function calDay(td, v) {
   const vrs = allStrategies(s).filter((g) => g.kind === "vr" && (s.vr || {})[g.id] && s.vr[g.id].start <= td && td <= vrCycleEnd(s.vr[g.id].start));
   if (!v && !vrs.length) return "";
   const [y, m, d] = td.split("-").map(Number), w = DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  return `<h2 style="margin:6px 2px">${m}/${d}(${w}) 미국 장</h2>` + (v ? v.sheets : []).map((x) => calSheetCard(td, x)).join("")
+  return `<h2 style="margin:6px 2px">${m}/${d}(${w}) 미국 장</h2>` + mktLine(td) + (v ? v.sheets : []).map((x) => calSheetCard(td, x)).join("")
     + vrs.map((g) => calVrCard(td, g, s.vr[g.id])).join("");
 }
 
@@ -4494,6 +4665,7 @@ function bind() {
     render(); });
   document.querySelectorAll("[data-calday]").forEach((b) => b.onclick = () => { S.calDay = b.dataset.calday; S.calMonth = S.calDay.slice(0, 7); render(); });
   document.querySelectorAll("[data-calm]").forEach((b) => b.onclick = () => { S.calMonth = b.dataset.calm; render(); });
+  bindClosure();                                                   // 작업 67: PC 관리자 임시 휴장 입력
   document.querySelectorAll("[data-stacc]").forEach((b) => b.onclick = () => { S.statsAcc = b.dataset.stacc; S.statsCalDay = null; render(); });
   document.querySelectorAll("[data-stperiod]").forEach((b) => b.onclick = () => { S.statsPeriod = b.dataset.stperiod; render(); });
   document.querySelectorAll("[data-stseries]").forEach((b) => b.onclick = () => { S.statsSeriesMode = b.dataset.stseries; render(); });
@@ -4707,6 +4879,60 @@ withTimeout(sb.auth.getSession(), 10000, "로그인 확인").then(({ data }) => 
   try { Object.keys(localStorage).filter((k) => k.startsWith("sb-") && k.endsWith("-auth-token")).forEach((k) => localStorage.removeItem(k)); } catch (x) {}
   S.user = null; S.msg = { bad: true, text: "로그인 확인이 멈춰 저장된 로그인을 지웠습니다 — 다시 로그인해 주세요 (" + (e.message || e) + ")" }; render();
 });
+// ── 작업 69 (11/23 사용자 '폰 화면에서 좌우로 슬라이딩으로 넘기기'): 폰에서 빈 곳을 왼쪽으로 밀면 다음 화면, 오른쪽이면 이전 화면 ──
+//    순서 = 아래 탭(현황·주문·전략·기록)의 작은 탭(seg)을 차례로 이은 줄 — 작은 탭 끝에 닿으면 다음 큰 탭의 첫 작은 탭. 처음·끝에서는 멈춤(돌지 않음).
+//    넘기지 않음: 가로로 더 밀리는 상자(표·그래프·달력) 안에서 시작, 입력칸·선택칸·작은 버튼·링크 위(현황의 전략 줄·할 일 카드처럼 화면 폭 60% 넘는 버튼은 밀기 허용 — 폰 현황 대부분이 그런 줄이라), 세로가 더 큰 움직임, 두 손가락, 열린 메뉴·확인창·전략 자세히.
+function swipeOrder() {
+  return PH_TABS.flatMap(([k]) => { const g = GROUPS.find((x) => x[0] === k); return g ? pagesOf(g).map(([p]) => p) : []; });
+}
+function swipeScroller(el, dx) {               // 손가락 방향으로 아직 더 밀리는 가로 상자가 있으면 그 상자
+  for (let e = el; e && e !== document.body; e = e.parentElement) {
+    if (e.scrollWidth > e.clientWidth + 1) {
+      const ox = getComputedStyle(e).overflowX;
+      if (ox === "auto" || ox === "scroll") {
+        const max = e.scrollWidth - e.clientWidth;
+        if (dx === undefined || (dx < 0 ? e.scrollLeft < max - 1 : e.scrollLeft > 1)) return e;
+      }
+    }
+  }
+  return null;
+}
+const SW = { on: false };
+document.addEventListener("touchstart", (ev) => {
+  SW.on = false;
+  if (layout() !== "phone" || !S.user || ev.touches.length !== 1) return;
+  const t = ev.target;
+  if (!t.closest || !t.closest("#app") || t.closest("input, select, textarea, a, label, summary, [contenteditable], .dial, svg.chart, .ph-nav, .ph-menu")) return;
+  const btn = t.closest("button");                                  // 작은 버튼(칩·탭·[넣기] 등) 위는 넘기지 않음. 화면 폭 60% 넘는 줄·카드 버튼은 밀기 허용
+  if (btn && btn.getBoundingClientRect().width < window.innerWidth * 0.6) return;
+  if (S.phMenu || S.confirm || S.detail || document.querySelector("dialog[open]")) return;
+  const p = ev.touches[0];
+  SW.on = true; SW.x = p.clientX; SW.y = p.clientY; SW.t = t; SW.at = Date.now();
+  SW.box = { l: swipeScroller(t, -1), r: swipeScroller(t, 1) };   // 시작할 때 왼쪽·오른쪽으로 더 밀리는 상자
+}, { passive: true });
+document.addEventListener("touchmove", (ev) => { if (SW.on && ev.touches.length !== 1) SW.on = false; }, { passive: true });
+document.addEventListener("touchcancel", () => { SW.on = false; }, { passive: true });
+document.addEventListener("touchend", (ev) => {
+  if (!SW.on) return;
+  SW.on = false;
+  const p = ev.changedTouches[0], dx = p.clientX - SW.x, dy = p.clientY - SW.y;
+  if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy) || Date.now() - SW.at > 1200) return;
+  if (dx < 0 ? SW.box.l : SW.box.r) return;                       // 상자 스크롤이 먼저
+  swipeTab(dx < 0 ? 1 : -1);
+}, { passive: true });
+function swipeTab(step) {
+  const order = swipeOrder(), i = order.indexOf(S.tab);
+  if (i < 0) return false;
+  const j = i + step;
+  if (j < 0 || j >= order.length) return false;                    // 처음·끝에서는 그대로
+  S.tab = order[j]; (S.lastSub = S.lastSub || {})[groupOf(S.tab)[0]] = S.tab;
+  S.msg = null; S.confirm = null; S.viewing = null; S.detail = null; S.phMenu = false;
+  render(); window.scrollTo(0, 0);                                  // 새 화면은 맨 위에서 (작업 68 과 같게)
+  const v = document.getElementById("view");
+  if (v && !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    v.classList.remove("sw-l", "sw-r"); void v.offsetWidth; v.classList.add(step > 0 ? "sw-l" : "sw-r"); }
+  return true;
+}
 setInterval(() => { if (document.visibilityState === "visible") refresh(true); }, 30000);
 // 실시간 시세: 화면을 보고 있고 장 시간이면 5초마다 가져와 시세 줄만 바꾼다 (화면 전체를 다시 그리지 않음).
 // 30초마다 '보고 있음'을 알려야 관리자 노트북이 5초 시세를 올린다 (아무도 안 보면 메리츠를 부르지 않음).
