@@ -708,7 +708,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-23c";
+const APP_VERSION = "2026-11-24c";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -1292,6 +1292,8 @@ function realOrders(s, d, g, acc) {
             auto: l.auto_done ? "auto 가 이미 메리츠에 넣은 줄" : !folded && ts && ts.state === "done" ? "메리츠 주문내역에서 확인됨" : "",
             note: (l.auto_done ? '<span class="chip ok" title="auto 가 이미 메리츠에 넣은 줄 (작업 ㉗)">자동 주문됨</span>' : l.auto ? '<span class="chip ok" title="auto 가 켜져 있어 노트북이 이 줄을 냅니다 — manual 로 넣지 않음 (작업 ㊸)">auto 가 냄</span>' : l.collar ? `<span class="chip bad" title="그 순간 시세 대비 30% 넘게 벗어나면 증권사가 거부">거부 예상 → ${money(l.collar)}${l.side === "BUY" ? " 이하" : " 이상"}</span>` : l.catchup ? '<span class="chip warn">보충 (별도)</span>' : l.catchup_add ? `<span class="chip warn" title="메리츠 보유가 계산보다 적어 이 LOC 매수 줄에 부족분을 더함 (작업 ㊾)">부족분 ${l.catchup_add}주 포함</span>` : l.market_skip ? `<span class="chip" title="${esc(l.market_skip)}">시장가 안 냄</span>` : l.market_wait ? `<span class="chip" title="${esc(l.market_wait)}">마감 1분 전 · 조건 ${money(l.cond_price)}</span>` : l.method_note ? `<span class="chip warn">${esc(l.method_note)}</span>` : l.near ? '<span class="chip warn" title="현재가가 이 줄 근처 — 종가가 여기 이하면 체결되니 마감 전에 걸기 (주문가능금액 확인)">마감 전 걸기</span>' : l.later ? '<span class="chip" title="현재가보다 기준(3~6%)보다 더 낮음 — LOC 는 주문가능금액을 묶으니 급락할 때 마감 전에 걸기">마감 전 확인</span>' : "")
               + (l.kind === "LOC" && l.price ? locChip(row.symbol, l.side, l.price) : "")        // 작업 ㊹-B ②: 지금가 기준 체결 예상 (참고만)
+              + (l.rule_price && l.capped ? ` <span class="chip warn" title="별지점 원칙 가격이 지금 현재가 기준 메리츠 범위 밖 — 거부를 피하려 큰수로 낮춰 보임. auto 는 범위 안이 되면 원칙 가격 LOC, 끝내 못 걸면 마감 2분 전 시장가 — 현재가 ≤ 원칙 가격일 때 (작업 74, 8Buy 규칙)">원칙 ${money(l.rule_price)} — 거부 피하려 낮춤</span>`
+                 : l.rule_price ? ` <span class="chip ok" title="별지점 원칙 가격 그대로 (큰수 ${money(l.low_price)} 위지만 지금 범위 안, 작업 74)">원칙 가격</span>` : "")
               + (l.auto_wait ? ` <span class="chip ok" title="auto 가 켜져 있어 해당 장 시간·시세 조건이 되면 노트북이 자동으로 넣습니다">${esc(l.auto_wait)}</span>` : row.auto_now && !l.auto && !l.auto_done ? ' <span class="chip" title="auto 가 켜져 있어도 이 줄은 노트북이 내지 않음 — 필요하면 manual 로 (작업 ㊸)">이 줄은 auto 가 내지 않음</span>' : ""),
             admin: adm && (l.price || PRICELESS_KINDS.includes(l.kind)) ? `<input type="checkbox" class="cline" data-acc="${esc(cur)}" data-l="${esc(lk)}" ${cfChecked(lk, !folded && !l.later && !l.near && !l.catchup && !l.collar && !l.auto_done && !l.auto_wait) && !l.collar && !l.auto_done && !l.auto ? "checked" : ""} ${l.collar || l.auto_done || l.auto ? "disabled" : ""} aria-label="관리자 주문 — 이 줄 고르기">` : "" }; };
         const [show, hide] = foldBuys(row.lines);       // 작업 ㉔ E: 첫 매수점 −20% 아래 매수 줄은 접기 (펼치면 체크해 주문 가능)
@@ -3183,7 +3185,7 @@ function addStrategy(s) {
 }
 // ── 운용 장 · 주문 방법 (ADR 0053, 작업 ⑬) — 전략 칸 sessions 는 표시·기록용 (엔진의 주문 시각은 바꾸지 않음) ──
 // SESS_RULES 는 src/autotrader/order_sessions.py 의 rules_for_web() 와 같아야 한다 (tests/test_order_sessions.py 가 맞춰 봄)
-const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC(장마감지정가)", "MOC": "MOC(장마감시장가)", "LIMIT": "보통(지정가)", "MARKET": "시장가", "LOO": "LOO(장개시지정가)", "MOO": "MOO(장개시시장가)", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"], "accept": {"LOC": ["pre", "regular"], "MOC": ["pre", "regular"], "LIMIT": ["day", "pre", "regular", "after"]}};
+const SESS_RULES = {"sessions": ["day", "pre", "regular", "after"], "session_ko": {"day": "데이장", "pre": "프리장", "regular": "정규장", "after": "애프터장"}, "order_types": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "order_ko": {"LOC": "LOC(장마감지정가)", "MOC": "MOC(장마감시장가)", "LIMIT": "보통(지정가)", "MARKET": "시장가", "LOO": "LOO(장개시지정가)", "MOO": "MOO(장개시시장가)", "VWAP": "VWAP", "TWAP": "TWAP", "RESERVE": "예약주문(기간잔량)"}, "allowed": {"day": ["LIMIT"], "pre": ["LIMIT"], "regular": ["LOC", "MOC", "LIMIT", "MARKET", "LOO", "MOO", "VWAP", "TWAP", "RESERVE"], "after": ["LIMIT"]}, "defaults": {"infinite": {"regular": ["LOC", "MOC", "LIMIT"], "after": ["LIMIT"]}, "vr": {"regular": ["RESERVE"]}, "ph01": {"regular": ["LOC", "MOC", "MARKET"]}, "dynamic": {"regular": ["MARKET"]}, "privacy": {}}, "watch": ["dynamic", "ph01"], "accept": {"LOC": ["pre", "regular"], "MOC": ["pre", "regular"], "LIMIT": ["day", "pre", "regular", "after"], "RESERVE": ["day", "pre"]}, "accept_cutoff_min": {"RESERVE": 60}};
 // 장 시간 (뉴욕 시간, 서머타임과 상관없이 같음 — market_calendar.market_phase 와 같은 기준). [시, 분, 날짜 차이]
 const SESS_NY = { day: [[20, 0, -1], [3, 50, 0]], pre: [[4, 0, 0], [9, 30, 0]], regular: [[9, 30, 0], [16, 0, 0]], after: [[16, 0, 0], [19, 50, 0]] };
 const sessFamily = (g) => (g && g.sessions_family) || ({ vr: "vr", dynamic: "dynamic", ph01: "ph01", privacy: "privacy" }[g && g.kind] || "infinite");
@@ -3250,9 +3252,18 @@ function acceptNote(kind, now = new Date()) {
   const ok = (SESS_RULES.accept || {})[kind];
   if (!ok) return "";
   const { W, t, kst } = sessWindows(now), cur = W.find((w) => w[0] <= t && t < w[1]);
-  if (cur && ok.includes(cur[2])) return "";
+  const cutMin = (SESS_RULES.accept_cutoff_min || {})[kind];   // 작업 71: 예약주문은 본장 시작 1시간 전까지
+  let late = false;
+  if (cur && ok.includes(cur[2])) {
+    if (!cutMin) return "";
+    const reg = W.find((w) => w[2] === "regular" && w[1] > t);
+    if (!reg || t < reg[0] - cutMin * 60000) return "";
+    late = true;
+  }
+  const where = cutMin ? "주간거래·프리장(본장 시작 1시간 전까지)" : "프리장(18:00, 서머 17:00)부터 정규장 마감 전까지";
+  const nowTxt = late ? "본장 시작 1시간 전이 지남" : (cur ? SESS_RULES.session_ko[cur[2]] : "쉬는 시간");
   const nx = W.find((w) => w[0] > t && ok.includes(w[2])), at = nx ? kst(nx[0]) : "";
-  return `${SESS_RULES.order_ko[kind]} 는 프리장(18:00, 서머 17:00)부터 정규장 마감 전까지만 받습니다 — 지금 ${cur ? SESS_RULES.session_ko[cur[2]] : "쉬는 시간"}${at ? ` · 다음 가능 ${at.slice(5, 7)}/${at.slice(8, 10)} ${at.slice(11, 16)}` : ""}`;
+  return `${SESS_RULES.order_ko[kind]} 는 ${where}만 받습니다 — 지금 ${nowTxt}${at ? ` · 다음 가능 ${at.slice(5, 7)}/${at.slice(8, 10)} ${at.slice(11, 16)}` : ""}`;
 }
 // 전략 추가·수정 제안에서 쓰는 '운용 장' 고르기 칸. pf = add | ch, S.sessSel[pf] = { fam, sel }
 function sessEditor(pf) {
