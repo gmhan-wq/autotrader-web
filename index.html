@@ -384,6 +384,28 @@ button.cp:hover { background: var(--soft) } button.cp:focus-visible { outline: 2
   padding: 9px 16px; border-radius: 999px; background: var(--ink); color: var(--bg); font: 600 14px var(--sans); opacity: 0; box-shadow: var(--shadow) }
 .toast.on { opacity: 1; transform: translate(-50%, 0) }
 @media (prefers-reduced-motion: no-preference) { .toast { transition: opacity .18s, transform .18s } }
+.sync-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 12%, var(--glass-strong)); color: var(--accent); white-space: nowrap }
+.sync-badge i.spin { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: syncspin .7s linear infinite }
+@keyframes syncspin { to { transform: rotate(360deg) } }
+/* ADR 0076: 주봉 지지선 나침반 — PC 2D 차트 / 폰 수평 게이지 (표시만) */
+.wc-tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
+.wc-tabs .on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.wc-chart { width: 100%; height: 300px; margin-top: 8px }
+.wc-rsi { width: 100%; height: 110px; margin-top: 2px }
+.wc-tip { font-size: 12px; min-height: 18px; color: var(--muted); font-variant-numeric: tabular-nums }
+.wc-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted) }
+.wc-legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px }
+.wc-legend i.dash { border-top-style: dashed }
+.wc-gauge { position: relative; height: 96px; margin: 10px 4px 4px }
+.wc-gauge .bar { position: absolute; left: 0; right: 0; top: 44px; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 45%, transparent), color-mix(in srgb, var(--warn) 45%, transparent), color-mix(in srgb, var(--ok) 45%, transparent)) }
+.wc-gauge .mk { position: absolute; top: 38px; width: 2px; height: 18px; background: var(--muted); transform: translateX(-1px) }
+.wc-gauge .mk.now { width: 14px; height: 14px; top: 40px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg, #fff); transform: translateX(-7px) }
+.wc-gauge .lb { position: absolute; transform: translateX(-50%); font-size: 11px; line-height: 1.25; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums }
+.wc-gauge .lb.up { top: 0 } .wc-gauge .lb.dn { top: 60px }
+.wc-gauge .lb.now { font-weight: 700; color: var(--accent) }
+.wc-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; margin-top: 4px }
 /* 매매 표: 숫자 칸 머리·값 오른쪽 + 고정폭, VR 핵심 칸 강조 */
 .ttable th.n, .ttable td.n { text-align: right; font-variant-numeric: tabular-nums }
 .ttable th.n { font-family: var(--sans) }
@@ -561,7 +583,8 @@ function captchaReady() {
 }
 const $app = document.getElementById("app");
 const S = { user: null, name: "", tab: "home", snap: null, cmds: [], owners: [], grants: [], viewing: null,
-            viewSnap: null, confirm: null, msg: null, busy: false, sessSel: {} };
+            viewSnap: null, confirm: null, msg: null, busy: false, sessSel: {},
+            optCtrl: {}, fastPollTimer: null, fastPollUntil: 0, refreshing: false };
 S.tab = "home";   // 첫 화면은 늘 대시보드 (마지막에 보던 화면으로 열리지 않게)
 
 // 다른 사람이 올린 현황(가족 보기)에 화면을 깨거나 스크립트를 넣는 글자가 섞여 있어도 안전하게: 받자마자 걸러 낸다
@@ -632,6 +655,7 @@ async function loadMine() {
       .eq("user_id", owner()).order("id", { ascending: false }).limit(8), 8000, "보낸 명령");
     S.cmds = clean(c.data || []);
   } catch (e) { S.cmds = S.cmds || []; S.jsErrors = [...S.jsErrors, e.message].slice(-5); }
+  reconcileOptimistic();
   S.stage = "";
 }
 function actSwitch() {
@@ -708,7 +732,7 @@ async function loadFamily() {
 Object.assign(S, { flags: { feedback: true }, fbForm: null, fbList: {}, jsErrors: [] });
 window.addEventListener("error", (e) => { S.jsErrors = [...S.jsErrors, String(e.message || e).slice(0, 200)].slice(-5); });
 window.addEventListener("unhandledrejection", (e) => { S.jsErrors = [...S.jsErrors, String((e.reason && e.reason.message) || e.reason).slice(0, 200)].slice(-5); });
-const APP_VERSION = "2026-11-24c";
+const APP_VERSION = "2026-11-28a";
 
 // ── 오류제보·기능개선 (ADR 0028) ──
 async function loadFlags() {
@@ -735,9 +759,12 @@ function typing() {
 }
 async function refresh(auto) {
   if (!S.user) return;
+  if (auto === true && S.refreshing) return;
+  S.refreshing = true;
   try { await loadMine(); if (S.tab === "family") await loadFamily();
     if (S.admin) { S.stage = "현황: 회원 관리"; await withTimeout(loadAdmin(), 8000, "회원 관리").catch((e) => { S.jsErrors = [...S.jsErrors, e.message].slice(-5); }); S.stage = ""; }
   } catch (e) { S.msg = { bad: true, text: "불러오지 못했습니다: " + e.message + (S.stage ? " (단계: " + S.stage + ")" : "") }; }
+  finally { S.refreshing = false; }
   if (auto === true && typing()) { S.renderLater = true; return; }
   if (auto === true) {                       // 작업 68: 자동 갱신에서 화면에 쓰는 값이 그대로면 다시 그리지 않는다 (보던 자리 그대로)
     const sig = viewSig();
@@ -750,7 +777,8 @@ async function refresh(auto) {
 function viewSig() {
   const c = (S.cmds || []).map((x) => [x.id, x.status]), m = (S.members || []).map((x) => [x.user_id, x.status, x.role]);
   const ch = (S.changes || []).map((x) => [x.id, x.status, Object.keys(x.approvals || {}).length]);
-  return JSON.stringify([S.snap ? S.snap.taken_at : null, c, m, ch, S.msg ? S.msg.text : null, (S.jsErrors || []).length, S.tab === "family" ? JSON.stringify(S.family || null).length : 0]);
+  const opt = Object.keys(S.optCtrl || {});
+  return JSON.stringify([S.snap ? S.snap.taken_at : null, c, m, ch, opt, S.msg ? S.msg.text : null, (S.jsErrors || []).length, S.tab === "family" ? JSON.stringify(S.family || null).length : 0]);
 }
 function tickAgo() {                           // 다시 그리지 않을 때 '노트북 n분 전'만 고침
   if (!S.snap) return;
@@ -796,16 +824,117 @@ function restoreScroll(kept) {
   requestAnimationFrame(() => { app.style.minHeight = ""; });
 }
 document.addEventListener("focusout", () => setTimeout(() => { if (S.renderLater && !typing()) { S.renderLater = false; render(); } }, 300));
+// ── 즉시 반응(Optimistic UI) · 중복 클릭 방지 · 명령 직후 2초 집중 폴링(Fast-Poll) ──
+function optKeyOf(command, payload) {
+  const p = payload || {};
+  if (command === "set_strategy" && p.id) return "strat:" + p.id;
+  if (command === "toggle_line" && p.sid) return "line:" + p.sid + ":" + (p.trade_date || "") + ":" + p.n;
+  if ((command === "approve" || command === "discard") && p.sid) return "draft:" + p.sid;
+  return "cmd:" + command + ":" + (p.id || p.sid || (p.market_closure && p.market_closure.date) || "global");
+}
+function optPatchOf(command, payload) {
+  const p = payload || {};
+  if (command === "set_strategy" && p.id) {
+    // 11/27: 미리 보여 주는 것은 '끄기' 쪽만 — ON·넓히기는 주인·관리자 확인이 필요해 바로 켜진 것처럼 보이면 안 됨 (ADR 0059)
+    if (p.auto_on === false) return { auto_on: false, auto_on_pending: null };
+    if ("auto_window" in p && p.auto_window === null) return { auto_window: null, auto_on: false, auto_window_text: "auto 대상 아님" };
+    if (p.active === false) return { active: false };
+  }
+  if (command === "toggle_line" && p.sid) return { toggleLine: { sid: p.sid, trade_date: p.trade_date, n: Number(p.n) } };
+  return {};
+}
+function isSyncing(key) { return !!(S.optCtrl && S.optCtrl[key]); }
+function syncBadge(key) {
+  return isSyncing(key) ? `<span class="chip sync-badge" role="status" aria-live="polite"><i class="spin" aria-hidden="true"></i>동기화 중...</span>` : "";
+}
+function optStrat(g) {
+  if (!g || !g.id || !S.optCtrl) return g;
+  const item = S.optCtrl["strat:" + g.id];
+  if (!item || !item.patch) return g;
+  return { ...g, ...item.patch };
+}
+function startFastPoll() {
+  S.fastPollUntil = Date.now() + 30000;
+  if (S.fastPollTimer) return;
+  S.fastPollTimer = setInterval(() => {
+    if (Date.now() >= S.fastPollUntil || !Object.keys(S.optCtrl || {}).length) {
+      stopFastPoll();
+      return;
+    }
+    if (document.visibilityState === "visible" && !S.refreshing) refresh(true);
+  }, 2000);
+}
+function stopFastPoll() {
+  if (S.fastPollTimer) { clearInterval(S.fastPollTimer); S.fastPollTimer = null; }
+  S.fastPollUntil = 0;
+}
+function reconcileOptimistic() {
+  const keys = Object.keys(S.optCtrl || {});
+  if (!keys.length) return;
+  const snapAt = S.snap ? S.snap.taken_at : null;
+  let anyDone = false, doneNote = "";
+  for (const k of keys) {
+    const it = S.optCtrl[k];
+    if (!it || it.sending) continue;
+    const cmd = (S.cmds || []).find((c) => (it.cmdId && c.id === it.cmdId) || (!it.cmdId && Number(c.id) > it.maxCmdId && c.command === it.command));
+    if (cmd && !it.cmdId) it.cmdId = cmd.id;
+    if (cmd && cmd.status === "failed") {
+      clearTimeout(it.timerId);
+      delete S.optCtrl[k];
+      S.msg = { bad: true, text: "⚠️ 반영 실패" + (cmd.result ? ": " + cmd.result : "") };
+      toast("⚠️ 반영 실패", 3500);
+      continue;
+    }
+    const snapUpdated = !!(snapAt && snapAt !== it.prevSnapAt);
+    const cmdDone = !!(cmd && cmd.status === "done");
+    if ((snapUpdated && (!cmd || cmdDone)) || (cmdDone && (snapUpdated || it.cmdDoneSeen))) {
+      clearTimeout(it.timerId);
+      delete S.optCtrl[k];
+      anyDone = true;
+      if (cmd && cmd.result) doneNote = cmd.result;
+    } else if (cmdDone) {
+      it.cmdDoneSeen = true;
+    }
+  }
+  if (anyDone) {
+    S.msg = { text: "✅ 반영 완료" + (doneNote ? " — " + doneNote : "") };
+    toast("✅ 반영 완료", 2400);
+  }
+  if (!Object.keys(S.optCtrl || {}).length) stopFastPoll();
+}
 async function send(command, payload) {
-  S.busy = true; render();
+  const ctrlKey = optKeyOf(command, payload);
+  if (isSyncing(ctrlKey)) return;                  // 동기화 중 중복 클릭 방지
+  const prevSnapAt = S.snap ? S.snap.taken_at : null;
+  const maxCmdId = Math.max(0, ...(S.cmds || []).map((x) => Number(x.id || 0)));
+  const patch = optPatchOf(command, payload);
+  const timerId = setTimeout(() => {
+    if (!S.optCtrl || !S.optCtrl[ctrlKey]) return;
+    delete S.optCtrl[ctrlKey];
+    if (!Object.keys(S.optCtrl).length) stopFastPoll();
+    S.msg = { bad: true, text: "⚠️ 응답 지연: 30초 안에 노트북 반영이 확인되지 않았습니다. 명령은 보내졌고 노트북이 처리하면 반영됩니다 — 지금 화면은 노트북이 마지막으로 올린 상태입니다." };
+    toast("⚠️ 응답 지연", 3500);
+    render();
+  }, 30000);
+  S.optCtrl[ctrlKey] = { key: ctrlKey, command, payload, patch, prevSnapAt, maxCmdId, cmdId: null, cmdDoneSeen: false, sending: true, sentAt: Date.now(), timerId };
+  S.busy = true; render();                         // 클릭 즉시 Optimistic UI 반영 및 버튼 비활성화
   const { error } = await sb.from("web_commands").insert({ command, payload: { ...payload, by: S.name },
     user_id: owner(), acted_by: S.user.id });
   S.busy = false;
-  if (!error) S.clearForm = ["a-id", "a-name", "s-id", "g-email"];   // 보낸 칸은 비운다
-  S.msg = error ? { bad: true, text: "보내지 못했습니다: " + ko(error.message) }
-                : { text: "노트북에 보냈습니다. 20초 안에 반영됩니다." };
+  if (error) {
+    clearTimeout(timerId);
+    delete S.optCtrl[ctrlKey];
+    if (!Object.keys(S.optCtrl).length) stopFastPoll();
+    S.msg = { bad: true, text: "보내지 못했습니다: " + ko(error.message) };
+    toast("⚠️ 전송 실패", 3000);
+    render();
+    return;
+  }
+  if (S.optCtrl[ctrlKey]) S.optCtrl[ctrlKey].sending = false;
+  S.clearForm = ["a-id", "a-name", "s-id", "g-email"];   // 보낸 칸은 비운다
+  S.msg = { text: "노트북과 동기화 중... (약 3초 안에 반영됩니다)" };
+  startFastPoll();                                 // 명령 직후 30초 동안 2초 주기 집중 폴링
   await refresh();
-  setTimeout(refresh, 22000);
 }
 
 // ── 화면 ──
@@ -1139,11 +1268,12 @@ function phOrderHead(d) {
 }
 // auto 켜진 전략만 한 줄 — 폰은 끄기만 (작업 ㉟, ADR 0059)
 function phAutoLine(g) {
-  if (!g.auto_on) return "";
+  const sync = isSyncing("strat:" + g.id);
+  if (!g.auto_on && !sync) return "";
   const w = g.auto_window || {}, ko = (SESS_RULES.session_ko || {});
   const ss = (w.sessions || []).map((x) => ko[x] || x).join("·"), end = w.end ? String(w.end).slice(5).replace("-", "/") + "까지" : "";
-  return `<div class="card ph-auto row"><span class="chip ok">● auto</span><span class="small">${esc([ss, end].filter(Boolean).join(" · "))}</span><span class="grow"></span>
-    ${autoButtons(g).includes("off") ? `<button class="btn" data-ao-off="${esc(g.id)}">끄기</button>` : ""}</div>`;
+  return `<div class="card ph-auto row"><span class="chip ${g.auto_on ? "ok" : ""}">${g.auto_on ? "● auto" : "auto OFF"}</span><span class="small">${esc([ss, end].filter(Boolean).join(" · "))}</span><span class="grow"></span>
+    ${autoButtons(g).includes("off") ? `<button class="btn" data-ao-off="${esc(g.id)}" ${sync ? "disabled" : ""}>끄기</button>` : ""}${syncBadge("strat:" + g.id)}</div>`;
 }
 // ── 작업 ㊴ (R-18): 주문 화면 편의 — 표시·이 기기 기억만 (주문·계산·노트북과 상관없음) ──
 function ordBadges(s, d, g) {
@@ -1177,10 +1307,10 @@ async function copyText(t) {
       document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove(); } catch (e2) {} }
   toast(ok ? `복사됨! ${t}` : "복사하지 못했습니다 — 숫자를 길게 눌러 복사하세요");
 }
-function toast(text) {
+function toast(text, ms = 1400) {
   let el = document.getElementById("toast");
   if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
-  el.textContent = text; el.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("on"), 1400);
+  el.textContent = text; el.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove("on"), ms);
 }
 const kindCell = (t) => { const s = String(t || ""), i = s.indexOf("("); return i > 0 ? `${esc(s.slice(0, i))}<span class="kk">${esc(s.slice(i))}</span>` : esc(s); };
 // 주문 줄 표: [관리자 주문] | 구분 | 주문유형 | 주문단가 | 수량 | 예상금액 | 비고·상태 | 넣음
@@ -1371,6 +1501,114 @@ function staleNote() {
   return `<div class="msg warn-note">노트북 마지막 갱신 ${ago} 전 — 꺼져 있거나 잠자기 중일 수 있습니다.${waiting ? ` 웹에서 보낸 명령 ${waiting}건은 노트북이 켜지면 반영됩니다.` : ""}</div>`;
 }
 
+// ── ADR 0076: 주봉 지지선 나침반 (SOXX·QQQ 120·200주선·수평 지지선·주봉 RSI14·VIX) — 표시만, 주문과 상관없음 ──
+const WC_COLORS = { ma120: "#8b5cf6", ma200: "#eab308", sup: "#ef4444" };
+function wcStatusCls(t) { return /200주선 터치|200주선 아래/.test(t) ? "bad" : /근접|120~200/.test(t) ? "warn" : /120주선 위/.test(t) ? "ok" : ""; }
+function wcRsiTag(v) { return v == null ? "" : v >= 70 ? ["과매수", "bad"] : v <= 30 ? ["과매도", "ok"] : ["중립", ""]; }
+function wcVixCls(l) { return l === "공포" ? "bad" : l === "주의" ? "warn" : "ok"; }
+function wcAge(iso) {                             // 24시간 넘으면 '최종 갱신: n일 전'
+  if (!iso) return "";
+  const h = (Date.now() - new Date(iso).getTime()) / 3600000;
+  return h >= 24 ? `최종 갱신: ${Math.floor(h / 24)}일 전` : "";
+}
+const wcPct = (v) => v == null ? "-" : (v > 0 ? "+" : "") + Number(v).toFixed(1) + "%";
+function weeklyCard(d) {
+  const W = d.weekly_charts, V = d.vix;
+  if (!W || !W.symbols || !Object.keys(W.symbols).length) {
+    return `<div class="card"><h2>🧭 주봉 지지선 나침반</h2><div class="empty small">아직 주봉 자료가 없습니다 — 노트북이 아침 브리핑 때 하루 한 번 받습니다 (명령: weekly-chart --refresh)</div></div>`;
+  }
+  const order = (W.order || Object.keys(W.symbols)).filter((k) => W.symbols[k]);
+  const sym = order.includes(S.wcSym) ? S.wcSym : order[0], x = W.symbols[sym];
+  const rt = wcRsiTag(x.rsi14), age = wcAge(W.updated), vage = V ? wcAge(V.updated || null) : "";
+  const vixB = V ? `<span class="chip ${wcVixCls(V.label)}" title="VIX ${esc(V.date || "")}">VIX <b class="num">${money(V.close)}</b> ${V.change >= 0 ? "+" : ""}${money(V.change)} · ${esc(V.label)}</span>` : "";
+  const head = `<div class="row between"><h2>🧭 주봉 지지선 나침반</h2>${age ? `<span class="chip warn">${esc(age)}</span>` : ""}</div>
+    <div class="wc-tabs" role="tablist">${order.map((k) => `<button type="button" class="btn ${k === sym ? "on" : ""}" role="tab" aria-selected="${k === sym}" data-wcsym="${esc(k)}">${esc(k)}</button>`).join("")}
+      <b class="num">$${money(x.price)}</b><small class="muted">${x.price_live ? "지금가" : esc((x.last_date || "") + " 주봉 종가")}</small>
+      <span class="chip ${wcStatusCls(x.status)}">${esc(x.status)}</span>${layout() === "pc" ? vixB : ""}</div>`;
+  if (layout() === "pc") {
+    const rg = S.wcRange || "5";
+    return `<div class="card">${head}
+      <div class="row" style="margin-top:6px;gap:6px">${[["1", "1년"], ["3", "3년"], ["5", "5년"]].map(([k, l]) => `<button type="button" class="btn ${rg === k ? "on" : ""}" data-wcrange="${k}">${l}</button>`).join("")}
+        <span class="grow"></span><span class="wc-legend"><span><i style="border-color:${WC_COLORS.ma120}"></i>120주선 $${money(x.ma120)} (${wcPct(x.gap120_pct)})</span>
+        <span><i style="border-color:${WC_COLORS.ma200}"></i>200주선 $${money(x.ma200)} (${wcPct(x.gap200_pct)})</span>
+        ${(x.supports || []).map((s) => `<span><i class="dash" style="border-color:${WC_COLORS.sup}"></i>${esc(s.name)}${s.note ? "(" + esc(s.note) + ")" : ""} $${money(s.price)} (${wcPct(s.gap_pct)})</span>`).join("")}
+        <span>RSI14 <b class="num">${x.rsi14 == null ? "-" : Number(x.rsi14).toFixed(1)}</b>${rt ? ` <span class="chip ${rt[1]}">${rt[0]}</span>` : ""}</span></span></div>
+      <div class="wc-tip" id="wc-tip"></div>
+      <div class="wc-chart" data-wcchart="${esc(sym)}"></div><div class="wc-rsi" data-wcrsi="${esc(sym)}"></div></div>`;
+  }
+  // 폰: 수평 방어선 게이지 — 눈금 위치는 값 비례 (지지선을 바꿔도 깨지지 않음)
+  const marks = [["200주선", x.ma200, x.gap200_pct], ...(x.supports || []).map((s) => [s.name, s.price, s.gap_pct]),
+                 ["120주선", x.ma120, x.gap120_pct], ["전고점", x.high_52w, x.gap_high_pct]].filter((m) => m[1] != null);
+  const all = marks.map((m) => Number(m[1])).concat([Number(x.price)]);
+  const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.06 || 1;
+  const pos = (v) => ((Number(v) - (lo - pad)) / ((hi + pad) - (lo - pad)) * 100).toFixed(2);
+  const sorted = marks.slice().sort((a, b) => a[1] - b[1]);
+  const gauge = `<div class="wc-gauge" role="img" aria-label="${esc(sym)} 주봉 방어선: ${esc(sorted.map((m) => m[0] + " " + money(m[1])).join(", "))}, 현재가 ${money(x.price)}">
+      <div class="bar"></div>
+      ${sorted.map((m, i) => `<div class="mk" style="left:${pos(m[1])}%"></div><div class="lb ${i % 2 ? "up" : "dn"}" style="left:${pos(m[1])}%">${esc(m[0])}<br>$${money(m[1], 0)} <span class="muted">${wcPct(m[2])}</span></div>`).join("")}
+      <div class="mk now" style="left:${pos(x.price)}%"></div><div class="lb now ${sorted.length % 2 ? "up" : "dn"}" style="left:${pos(x.price)}%">● 현재가<br>$${money(x.price)}</div>
+    </div>`;
+  const lines = `<div class="wc-line">주봉 RSI14 <b class="num">${x.rsi14 == null ? "-" : Number(x.rsi14).toFixed(1)}</b>${rt ? `<span class="chip ${rt[1]}">${rt[0]}</span>` : ""}</div>
+    ${V ? `<div class="wc-line">VIX <b class="num">${money(V.close)}</b> <span class="muted">(${V.change >= 0 ? "+" : ""}${money(V.change)})</span><span class="chip ${wcVixCls(V.label)}">${esc(V.label)}</span>${vage ? `<span class="small muted">${esc(vage)}</span>` : ""}</div>` : ""}`;
+  const open = !!S.wc2d;
+  return `<div class="card">${head}${gauge}${lines}
+    <div class="row" style="margin-top:6px"><button type="button" class="btn" data-wc2d="1" aria-expanded="${open}">2D 차트 ${open ? "접기 ▴" : "보기 ▾"}</button></div>
+    ${open ? `<div class="row" style="margin-top:6px;gap:6px">${[["1", "1년"], ["3", "3년"], ["5", "5년"]].map(([k, l]) => `<button type="button" class="btn ${(S.wcRange || "5") === k ? "on" : ""}" data-wcrange="${k}">${l}</button>`).join("")}</div>
+      <div class="wc-tip" id="wc-tip"></div><div class="wc-chart" style="height:240px" data-wcchart="${esc(sym)}"></div><div class="wc-rsi" data-wcrsi="${esc(sym)}"></div>` : ""}</div>`;
+}
+const WC_LIB = "https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js";
+function wcLib() {                                // 지연 로드 — 차트를 그릴 때만 한 번 받음
+  if (window.LightweightCharts) return Promise.resolve(window.LightweightCharts);
+  if (!wcLib._p) wcLib._p = new Promise((ok, bad) => { const s = document.createElement("script"); s.src = WC_LIB; s.async = true;
+    s.onload = () => ok(window.LightweightCharts); s.onerror = () => { wcLib._p = null; bad(new Error("차트 라이브러리를 받지 못했습니다")); }; document.head.appendChild(s); });
+  return wcLib._p;
+}
+function wcDraw() {
+  const el = document.querySelector("[data-wcchart]"), elR = document.querySelector("[data-wcrsi]");
+  (S.wcCharts || []).forEach((c) => { try { c.remove(); } catch (e) {} });
+  S.wcCharts = [];
+  if (!el || !S.snap) return;
+  const W = (S.snap.detail || {}).weekly_charts, x = W && W.symbols[el.dataset.wcchart];
+  if (!x || !(x.rows || []).length) return;
+  const yrs = Number(S.wcRange || "5"), cut = new Date(Date.now() - yrs * 365.25 * 86400000).toISOString().slice(0, 10);
+  const rows = x.rows.filter((r) => r.date >= cut);
+  const cs = getComputedStyle(document.body), ink = cs.getPropertyValue("--muted").trim() || "#666", line = cs.getPropertyValue("--line").trim() || "rgba(0,0,0,.1)";
+  wcLib().then((LW) => {
+    if (!document.body.contains(el)) return;
+    const base = { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: ink, fontSize: 11 },
+                   grid: { vertLines: { color: line }, horzLines: { color: line } }, rightPriceScale: { borderVisible: false },
+                   timeScale: { borderVisible: false }, crosshair: { mode: 0 }, handleScroll: false, handleScale: false };
+    const ch = LW.createChart(el, base);
+    const area = ch.addAreaSeries({ lineColor: cs.getPropertyValue("--accent").trim() || "#5b4bc9", topColor: "rgba(91,75,201,.25)", bottomColor: "rgba(91,75,201,0)", lineWidth: 2, priceLineVisible: false });
+    area.setData(rows.map((r) => ({ time: r.date, value: r.close })));
+    const s120 = ch.addLineSeries({ color: WC_COLORS.ma120, lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: "120주" });
+    s120.setData(rows.filter((r) => r.ma120 != null).map((r) => ({ time: r.date, value: r.ma120 })));
+    const s200 = ch.addLineSeries({ color: WC_COLORS.ma200, lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: "200주" });
+    s200.setData(rows.filter((r) => r.ma200 != null).map((r) => ({ time: r.date, value: r.ma200 })));
+    (x.supports || []).forEach((s) => area.createPriceLine({ price: s.price, color: WC_COLORS.sup, lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title: s.name }));
+    ch.timeScale().fitContent();
+    S.wcCharts.push(ch);
+    let rc = null;
+    if (elR) {
+      rc = LW.createChart(elR, { ...base, timeScale: { borderVisible: false, visible: false } });
+      const rs = rc.addLineSeries({ color: "#0ea5e9", lineWidth: 2, priceLineVisible: false, title: "RSI14" });
+      rs.setData(rows.filter((r) => r.rsi14 != null).map((r) => ({ time: r.date, value: r.rsi14 })));
+      [70, 30].forEach((v) => rs.createPriceLine({ price: v, color: v === 70 ? WC_COLORS.sup : "#22c55e", lineWidth: 1, lineStyle: LW.LineStyle.Dotted, axisLabelVisible: true, title: String(v) }));
+      rs.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+      rc.timeScale().fitContent();
+      const sync = (r) => { if (r) { try { rc.timeScale().setVisibleRange(r); } catch (e) {} } };   // 같은 기간 축
+      ch.timeScale().subscribeVisibleTimeRangeChange(sync);
+      sync(ch.timeScale().getVisibleRange());
+      S.wcCharts.push(rc);
+    }
+    const tip = document.getElementById("wc-tip"), byDate = Object.fromEntries(rows.map((r) => [r.date, r]));
+    ch.subscribeCrosshairMove((p) => {
+      if (!tip) return;
+      const r = p && p.time ? byDate[typeof p.time === "string" ? p.time : `${p.time.year}-${String(p.time.month).padStart(2, "0")}-${String(p.time.day).padStart(2, "0")}`] : null;
+      tip.textContent = r ? `${r.date} · 종가 $${money(r.close)} · 120주 $${money(r.ma120)} · 200주 $${money(r.ma200)} · RSI14 ${r.rsi14 == null ? "-" : Number(r.rsi14).toFixed(1)}` : "";
+    });
+  }).catch((e) => { el.innerHTML = `<div class="empty small">${esc(e.message)}</div>`; });
+}
 function viewHome(snap, mine) {
   if (!snap) return `<div class="card"><div class="empty">노트북 승인 봇이 켜지면 몇 분 안에 현황이 올라옵니다.</div>
     ${mine ? `<div class="small muted">처음 쓰는 사용자라면 노트북에 내 칸(프로필)이 먼저 있어야 합니다. 노트북 관리자에게 이 로그인 이메일을 알려 주세요. 칸이 생기면 '설정' 탭에서 계좌와 전략을 직접 추가합니다.</div>` : ""}</div>`;
@@ -1403,6 +1641,7 @@ function viewHome(snap, mine) {
   if (isPhone) phoneHome(s, d, strat, B);          // 작업 ㊹-C: 폰 현황 = 평가금 → 할 일 띠 → 시세 두 칸 → 오늘 밤 주문 → 전략 → 수익률 그래프
   else B.push(["strategies", "전략별 현황", `<section class="cards" aria-label="전략별 현황">${strat.map((g) => strategyCard(s, g)).join("")}</section>`]);
   if (!isPhone) B.push(["market", "시세", marketStrip(s)]);
+  B.push(["weekly", "주봉 지지선 나침반", weeklyCard(d)]);   // ADR 0076: SOXX·QQQ 120·200주선·지지선·RSI·VIX (표시만)
   B.push(["equity", "자산 추이", `<div class="card eqcard"><div class="row between">${isPhone ? "<h2>수익률</h2>" : "<h2>자산(USD)</h2>"}</div>${equityChart(d.equity || [])}</div>`]);
   return out + arrangeBlocks(B, mine);
 }
@@ -1995,8 +2234,8 @@ function realCount(d) {
   return Object.values(r).reduce((n, a) => n + (a.strategies || []).reduce((m, x) => m + (x.lines || []).length, 0), 0);
 }
 function allStrategies(s, withMock = false) {
-  const real = Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => ({ ...g, account: aid })));
-  return withMock ? real.concat((s.mock_strategies || []).map((g) => ({ ...g, mock_only: true }))) : real;   // 모의 전용 (11/07)
+  const real = Object.entries(s.accounts || {}).flatMap(([aid, a]) => a.strategies.map((g) => optStrat({ ...g, account: aid })));
+  return withMock ? real.concat((s.mock_strategies || []).map((g) => optStrat({ ...g, mock_only: true }))) : real;   // 모의 전용 (11/07)
 }
 function strategyCard(s, g) {
   const px = (s.closes || {})[g.symbol], plan = (s.plans || {})[g.id], vr = (s.vr || {})[g.id];
@@ -2154,18 +2393,19 @@ function autoWindowCards() {
   const s = S.snap ? S.snap.summary : {};
   const ko = SESS_RULES.session_ko;
   const rows = [];
-  Object.entries(s.accounts || {}).forEach(([aid, a]) => (a.strategies || []).forEach((g) => rows.push({ aid, g })));
+  Object.entries(s.accounts || {}).forEach(([aid, a]) => (a.strategies || []).forEach((g) => rows.push({ aid, g: optStrat(g) })));
   if (!rows.length) return `<div class="card"><div class="empty">운영 중인 전략이 없습니다.</div></div>`;
   const phone = autoPhone(), log = ((S.snap && S.snap.detail) || {}).order_log || [];
   return rows.map(({ aid, g }) => {
     const w = g.auto_window, pend = g.auto_window_pending, can = g.auto_selectable || [];
     const bt = autoButtons(g), has = (x) => bt.includes(x);
+    const syncing = isSyncing("strat:" + g.id), dis = syncing ? "disabled" : "";
     const ed = phone ? null : (S.awEdit || {})[g.id];
     const today = new Date().toISOString().slice(0, 10);
     const cur = ed || (w ? { start: w.start, end: w.end || "", sessions: w.sessions } : { start: today, end: "", sessions: [] });
     const pendTxt = pend ? `<div class="small" style="margin-top:6px">⏳ 넓히기 요청: <b>${esc(pend.target ? `${pend.target.start} ~ ${pend.target.end || "끝 없음"} · ${pend.target.sessions.map((x) => ko[x]).join("·")}` : "")}</b>
         <br>요청 ${esc(pend.asked_by || "")} · 계좌 주인 ${pend.owner ? "✅ " + esc(pend.owner.by) : "기다림"} · 관리자 ${pend.admin ? "✅ " + esc(pend.admin.by) : "기다림"}
-        ${has("ok") ? `<button class="btn" data-aw-ok="${esc(g.id)}" data-aw-val='${esc(JSON.stringify(pend.target))}'>확인</button>` : ""}</div>` : "";
+        ${has("ok") ? `<button class="btn" data-aw-ok="${esc(g.id)}" data-aw-val='${esc(JSON.stringify(pend.target))}' ${dis}>확인</button>` : ""}</div>` : "";
     const form = ed ? `<div class="small" style="margin-top:8px">
         <label>시작일 <input type="date" id="aw-start-${esc(g.id)}" value="${esc(cur.start)}"></label>
         <label style="margin-left:8px">끝일 <input type="date" id="aw-end-${esc(g.id)}" value="${esc(cur.end || "")}" ${cur.end ? "" : "disabled"}></label>
@@ -2173,13 +2413,14 @@ function autoWindowCards() {
         <div style="margin-top:6px">장: ${can.length ? can.map((x) => `<label style="margin-right:8px"><input type="checkbox" class="aw-sess" data-sid="${esc(g.id)}" value="${x}" ${cur.sessions.includes(x) ? "checked" : ""}> ${ko[x]}</label>`).join("") : "이 전략은 노트북이 넣는 주문이 없습니다"}</div>
         <div class="muted" style="margin-top:4px">고를 수 있는 장 = 이 전략의 운용 장·주문 방법에서 메리츠가 그 주문을 받는 장 (예: LOC·MOC 는 프리장·정규장).
           좁히기(기간 줄이기·장 빼기)는 바로, 넓히기(기간 늘리기·새로 시작·장 더하기)는 계좌 주인과 관리자 둘 다 확인해야 적용됩니다.</div>
-        <div class="row" style="margin-top:6px;gap:6px"><button class="btn primary" data-aw-save="${esc(g.id)}">저장</button><button class="btn" data-aw-cancel="${esc(g.id)}">취소</button></div></div>` : "";
+        <div class="row" style="margin-top:6px;gap:6px"><button class="btn primary" data-aw-save="${esc(g.id)}" ${dis}>저장</button><button class="btn" data-aw-cancel="${esc(g.id)}" ${dis}>취소</button></div></div>` : "";
     // 작업 ㉗ (ADR 0059): auto on/off — OFF 는 주인·관리자 바로, ON 은 둘 다 확인. 노트북 잠금이 꺼져 있으면 ON 이어도 안 나감
     const on = !!g.auto_on, op = g.auto_on_pending;
     const sw = `<div class="row" style="margin-top:6px;gap:6px;align-items:center"><b>auto</b>
         <span class="chip ${on ? "ok" : ""}">${on ? "ON" : "OFF"}</span>
-        ${has("off") ? `<button class="btn" data-ao-off="${esc(g.id)}">OFF</button>`
-             : has("on") ? `<button class="btn" data-ao-on="${esc(g.id)}">${op ? "ON 확인" : "ON 요청"}</button>` : phone || on ? "" : `<span class="small muted">기간·장을 먼저 정해야 켤 수 있습니다</span>`}
+        ${has("off") ? `<button class="btn" data-ao-off="${esc(g.id)}" ${dis}>OFF</button>`
+             : has("on") ? `<button class="btn" data-ao-on="${esc(g.id)}" ${dis}>${op ? "ON 확인" : "ON 요청"}</button>` : phone || on ? "" : `<span class="small muted">기간·장을 먼저 정해야 켤 수 있습니다</span>`}
+        ${syncBadge("strat:" + g.id)}
         ${on && !s.auto_live ? `<span class="chip warn">노트북 잠금 꺼짐 — 주문 안 나감</span>` : ""}</div>
       ${op ? `<div class="small" style="margin-top:4px">⏳ ON 요청 ${esc(op.asked_by || "")} · 계좌 주인 ${op.owner ? "✅ " + esc(op.owner.by) : "기다림"} · 관리자 ${op.admin ? "✅ " + esc(op.admin.by) : "기다림"}</div>` : ""}`;
     // 누가 언제 켰는지 + 오늘 낸 auto 주문 (폰·PC 모두 표시, 폰 안내 문구만 폰에서)
@@ -2188,7 +2429,7 @@ function autoWindowCards() {
       <div class="small" style="margin-top:4px">오늘 낸 auto 주문 (오전 7시 이후): ${todayAuto.length ? todayAuto.map((r) => { const ev = OH_EV[r.event] || [r.event, ""];
         return `<div>${esc(String(r.at || "").slice(11, 16))} ${esc(r.symbol || "")} <span class="${sideCls(r.side)}">${sideKo(r.side)}</span> ${r.price != null && r.price !== "종가" ? money(r.price) : r.kind === "MARKET" ? "시장가" : "종가"} × ${esc(String(r.qty ?? ""))} · <span class="res ${ev[1]}">${esc(ev[0])}</span></div>`; }).join("") : "없음"}</div>
       ${phone ? `<div class="small muted" style="margin-top:4px">📱 폰에서는 끄기·보기만 — ON·기간·장 바꾸기는 PC 에서</div>` : ""}` : "";
-    const tools = (has("edit") || has("end")) ? `<div class="row" style="margin-top:6px;gap:6px">${has("edit") ? `<button class="btn" data-aw-edit="${esc(g.id)}">기간·장 바꾸기</button>` : ""}${has("end") ? `<button class="btn" data-aw-off="${esc(g.id)}">auto 끝내기</button>` : ""}</div>` : "";
+    const tools = (has("edit") || has("end")) ? `<div class="row" style="margin-top:6px;gap:6px">${has("edit") ? `<button class="btn" data-aw-edit="${esc(g.id)}" ${dis}>기간·장 바꾸기</button>` : ""}${has("end") ? `<button class="btn" data-aw-off="${esc(g.id)}" ${dis}>auto 끝내기</button>` : ""}</div>` : "";
     return `<div class="card"><div class="row between"><b>${esc(stratName(g))} · ${esc(g.symbol || "")} · ${esc(ACC_NAME[aid] || aid)}</b>
         <span class="chip ${w ? "ok" : ""}">${w ? "auto 범위 있음" : "manual 만"}</span></div>
       <div class="small">${esc(g.auto_window_text || "auto 대상 아님")}</div>${sw}${info}${pendTxt}
@@ -3081,16 +3322,17 @@ function myStrategies(s) {
   const strat = allStrategies(s, true);              // 모의 전용 전략도 (수정 합의·비상 정지)
   return `
     <div class="card"><h2>전략</h2>
-      ${strat.length ? strat.map((g) => `<div class="strat">
+      ${strat.length ? strat.map((g) => { const sync = isSyncing("strat:" + g.id), dis = sync ? "disabled" : "";
+        return `<div class="strat">
         <div class="row between"><span><button type="button" class="linkbtn" data-detail="${esc(g.id)}"><b>${esc(stratName(g, (s.plans || {})[g.id]))}</b></button> <span class="muted small">${esc(g.symbol)} · ${esc(kindKo(g.kind))}${g.multiplier > 1 ? " · " + g.multiplier + "배수" : ""}${g.mock_only ? ' · <span class="chip">가투 전용</span>' : ""}</span></span>
           ${g.active ? (S.stopAsk === g.id
-            ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}">정지</button><button class="btn" data-stopno="1">취소</button></span>`
-            : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}">⛔ 비상 정지</button></span>`)
-            : `<span class="chip bad" title="다시 켜기는 계좌 주인·관리자·공동 운영자 합의 (ADR 0037)">꺼짐 · 다시 켜기는 합의</span>`}</div>
+            ? `<span class="row small"><b class="sell">비상 정지할까요?</b><button class="btn danger" data-stop="${esc(g.id)}" ${dis}>정지</button><button class="btn" data-stopno="1" ${dis}>취소</button>${syncBadge("strat:" + g.id)}</span>`
+            : `<span class="row small"><span class="chip ok">켜짐</span><button class="btn danger" data-stopask="${esc(g.id)}" ${dis}>⛔ 비상 정지</button>${syncBadge("strat:" + g.id)}</span>`)
+            : `<span class="row small"><span class="chip bad" title="다시 켜기는 계좌 주인·관리자·공동 운영자 합의 (ADR 0037)">꺼짐 · 다시 켜기는 합의</span>${syncBadge("strat:" + g.id)}</span>`}</div>
         ${cycleBanner(s, g)}
-        ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}">✍ 수정·다시 켜기 제안</button></div>`}
+        ${S.editSid === g.id ? changeForm(g, accs) : `<div class="row"><button class="btn" data-propose="${esc(g.id)}" ${dis}>✍ 수정·다시 켜기 제안</button></div>`}
         <div class="row small"><span class="muted">계좌</span><span>${esc(ACC_NAME[g.account] || g.account)}</span></div>
-        ${sessLine(g)}</div>`).join("")
+        ${sessLine(g)}</div>`; }).join("")
         : `<div class="empty">아직 전략이 없습니다. <button class="btn primary" data-tab="addstrat">전략 추가</button></div>`}
     </div>
 ` + (strat.length ? `<div class="small muted">전략 이름을 누르면 상세(보유·주문·기록)를 봅니다.<br>
@@ -3100,9 +3342,10 @@ function myStrategies(s) {
 function cycleBanner(s, g) {
   const c = (s.cycle_gates || {})[g.id];
   if (!c || !(c.real || c.mock)) return "";
+  const dis = isSyncing("strat:" + g.id) ? "disabled" : "";
   return `<div class="card warn-note" style="margin:6px 0"><b>🔁 싸이클 ${c.no} 끝</b> <span class="small">(전량 매도${c.ended ? ", 미국 " + esc(c.ended) : ""}${c.real ? "" : " · 모의만"})</span>
     <div class="small">새 싸이클 규칙을 정할 때까지 이 전략의 <b>새 매수를 멈춥니다</b>. 종전 규칙 계속은 당사자 누구나, 새 규칙은 합의로 정합니다.</div>
-    <div class="row"><button class="btn primary" data-cycle-same="${esc(g.id)}">종전 규칙으로 계속</button><button class="btn" data-propose="${esc(g.id)}" data-cyclenew="1">새 규칙 제안 (합의)</button></div></div>`;
+    <div class="row"><button class="btn primary" data-cycle-same="${esc(g.id)}" ${dis}>종전 규칙으로 계속</button>${syncBadge("strat:" + g.id)}<button class="btn" data-propose="${esc(g.id)}" data-cyclenew="1" ${dis}>새 규칙 제안 (합의)</button></div></div>`;
 }
 function allStrategiesFlat() {
   return allStrategies(S.snap ? S.snap.summary : {}, true);
@@ -4589,6 +4832,11 @@ function renderLogin() {
 function bind() {
   bindArrange();
   bindMfa();
+  // ADR 0076: 주봉 나침반 — 종목·기간·폰 2D 펼치기 (이 화면 안에서만 기억), 차트는 그려진 칸이 있을 때만 (폰은 펼쳤을 때만 = 지연 렌더)
+  document.querySelectorAll("[data-wcsym]").forEach((b) => b.onclick = () => { S.wcSym = b.dataset.wcsym; render(); });
+  document.querySelectorAll("[data-wcrange]").forEach((b) => b.onclick = () => { S.wcRange = b.dataset.wcrange; render(); });
+  document.querySelectorAll("[data-wc2d]").forEach((b) => b.onclick = () => { S.wc2d = !S.wc2d; render(); });
+  wcDraw();
   document.querySelectorAll("[data-eqkind]").forEach((b) => b.onclick = () => { S.eqKind = b.dataset.eqkind; render(); });
   // 작업 ㊹-A: 수익률 그래프 단위·기간 (PC·폰 현황), 폰 기록 → 수익률 (기간·단위·전략 고르기) — 이 화면 안에서만 기억
   document.querySelectorAll("[data-equnit]").forEach((b) => b.onclick = () => { S.eqUnit = b.dataset.equnit; render(); });
